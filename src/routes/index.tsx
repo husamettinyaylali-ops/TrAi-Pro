@@ -142,7 +142,7 @@ function Capabilities() {
       </Reveal>
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {t.caps.map(([h, d], i) => {
-          const I = icons[i];
+          const I = icons[i] ?? Zap;
           return (
             <Reveal key={h} delay={i * 80}>
               <div className="glass glow-border h-full rounded-3xl p-7 transition hover:-translate-y-1">
@@ -218,7 +218,7 @@ function Trusted() {
               <div className="flex">{[1, 2, 3, 4, 5].map((s) => <Star key={s} className="h-4 w-4 fill-magenta text-magenta" />)}</div>
               <blockquote className="mt-4">"{q}"</blockquote>
               <figcaption className="mt-6 flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-brand font-bold text-primary-foreground">{n[0]}</span>
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-brand font-bold text-primary-foreground">{n?.[0]}</span>
                 <span><b className="block text-sm">{n}</b><span className="text-xs text-muted-foreground">{r}</span></span>
               </figcaption>
             </figure>

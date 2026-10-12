@@ -34,7 +34,7 @@ export function NeuralCanvas() {
       }
       for (let i = 0; i < pts.length; i++) {
         for (let j = i + 1; j < pts.length; j++) {
-          const a = pts[i], b = pts[j];
+          const a = pts[i]!, b = pts[j]!;
           const d = Math.hypot(a.x - b.x, a.y - b.y);
           if (d < D) {
             ctx.strokeStyle = violet;
@@ -42,13 +42,14 @@ export function NeuralCanvas() {
             ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
           }
         }
-        const dm = Math.hypot(pts[i].x - mouse.x, pts[i].y - mouse.y);
+        const q = pts[i]!;
+        const dm = Math.hypot(q.x - mouse.x, q.y - mouse.y);
         if (dm < D * 1.5) {
           ctx.strokeStyle = cyan; ctx.globalAlpha = (1 - dm / (D * 1.5)) * 0.8;
-          ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(mouse.x, mouse.y); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(mouse.x, mouse.y); ctx.stroke();
         }
         ctx.globalAlpha = 0.9; ctx.fillStyle = cyan;
-        ctx.beginPath(); ctx.arc(pts[i].x, pts[i].y, 1.6 * devicePixelRatio, 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.arc(q.x, q.y, 1.6 * devicePixelRatio, 0, 7); ctx.fill();
       }
       raf = requestAnimationFrame(tick);
     };
@@ -81,7 +82,7 @@ export function Reveal({ children, className = "", delay = 0 }: { children: Reac
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current!;
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { el.classList.add("in"); io.disconnect(); } }, { threshold: 0.12 });
+    const io = new IntersectionObserver(([e]) => { if (e?.isIntersecting) { el.classList.add("in"); io.disconnect(); } }, { threshold: 0.12 });
     io.observe(el);
     return () => io.disconnect();
   }, []);
