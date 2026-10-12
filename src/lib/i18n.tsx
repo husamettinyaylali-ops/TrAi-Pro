@@ -1,0 +1,158 @@
+import { createContext, useContext, useState, type ReactNode } from "react";
+
+export type Lang = "tr" | "en";
+
+const dict = {
+  tr: {
+    nav: ["Özellikler", "Ses Klonlama", "Görsel & Video", "Fiyatlandırma", "İletişim"],
+    login: "Giriş Yap / Üye Ol",
+    heroBadge: "Yeni: Ses Klonlama v3 yayında",
+    heroTitle: "Yapay Zeka ile İçerik Üretiminde Sınırları Aşın",
+    heroSub: "1000+ Gerçekçi Yapay Zeka Sesi, Ses Klonlama, Metinden Videoya ve Görsel Üretimi. Hepsi tek bir profesyonel platformda.",
+    start: "Ücretsiz Başla",
+    explore: "Keşfet",
+    tts: "Metinden Ses",
+    ttsSample: "Merhaba! Ben TrAi Pro, içeriklerinize hayat veriyorum.",
+    imgGen: "Görsel Üret",
+    imgPrompt: "neon İstanbul, gün batımı, sinematik",
+    generate: "Üret",
+    generating: "Üretiliyor…",
+    toolsKicker: "Temel Araçlar",
+    toolsTitle: "Dört güçlü yapay zeka aracı",
+    try: "Dene",
+    t1: "Yapay Zeka Sesleri", t1d: "70+ dilde 1000+ doğal ses. Aksan, ton ve duygu kontrolü.",
+    t2: "Ses Klonlama", t2d: "30 saniyelik kayıtla kendi sesinizin dijital ikizini oluşturun.",
+    t3: "Metinden Videoya", t3d: "Bir cümle yazın, sinematik videoya dönüştürün.",
+    t4: "Görsel Üretimi", t4d: "Hayalinizdeki görseli saniyeler içinde yüksek çözünürlükte üretin.",
+    voice: "Ses", male: "Erkek", female: "Kadın", child: "Çocuk",
+    dropTitle: "Ses dosyanızı sürükleyin",
+    dropSub: "veya tıklayıp eğitimi başlatın (MP3, WAV)",
+    cloneSteps: ["Yükleme", "Analiz", "Eğitim", "Hazır"],
+    cloneDone: "Ses klonunuz hazır!",
+    close: "Kapat",
+    styles: ["Sinematik", "Anime", "3D", "Belgesel"],
+    videoPrompt: "Boğaz'da süzülen fütüristik bir gemi",
+    imagine: "Imagine",
+    capKicker: "Neden TrAi Pro",
+    capTitle: "Hız, dil ve gerçekçilikte yeni standart",
+    caps: [
+      ["10x Hız", "Saniyeler içinde stüdyo kalitesinde çıktı."],
+      ["70+ Dil", "Türkçe dahil tüm büyük dillerde doğal telaffuz."],
+      ["Hiper Gerçekçilik", "İnsan sesinden ayırt edilemeyen sonuçlar."],
+      ["Ticari Lisans", "Ürettiğiniz her içerik tamamen sizindir."],
+    ],
+    priceKicker: "Kredi Tabanlı Fiyatlandırma",
+    priceTitle: "Kullandıkça öde, sınırsız yarat",
+    month: "/ay",
+    popular: "En Popüler",
+    buy: "Kredi Paketi Al",
+    plans: [
+      { name: "Başlangıç", credits: "50.000 kredi", feats: ["1000+ ses", "Standart kalite", "5 görsel/gün", "E-posta destek"] },
+      { name: "Pro", credits: "500.000 kredi", feats: ["Ses klonlama (5 ses)", "Metinden video", "Sınırsız görsel", "Ticari lisans", "Öncelikli destek"] },
+      { name: "Enterprise", credits: "Sınırsız kredi", feats: ["Sınırsız klon", "API erişimi", "Özel model", "SLA & hesap yöneticisi"] },
+    ],
+    custom: "Özel",
+    trusted: "Binlerce içerik üreticisi ve markanın tercihi",
+    testimonials: [
+      ["Ayşe K.", "YouTuber", "Seslendirme maliyetim %90 düştü. Türkçe sesler inanılmaz doğal."],
+      ["Mert D.", "Ajans Sahibi", "Müşteri videolarını artık saatler yerine dakikalarda teslim ediyoruz."],
+      ["Elif S.", "Podcaster", "Ses klonum o kadar gerçekçi ki dinleyiciler fark etmiyor."],
+    ],
+    faqTitle: "Sıkça Sorulan Sorular",
+    faqs: [
+      ["Kredi sistemi nasıl çalışır?", "Her karakter, görsel veya video saniyesi belirli kredi harcar. Kullanmadığınız krediler bir sonraki aya devreder."],
+      ["Ses klonlama yasal mı?", "Yalnızca kendi sesinizi veya izinli sesleri klonlayabilirsiniz. Doğrulama adımı zorunludur."],
+      ["Ürettiğim içerikleri ticari kullanabilir miyim?", "Evet, Pro ve Enterprise paketlerde tam ticari lisans dahildir."],
+      ["Ücretsiz deneme var mı?", "Kayıt olduğunuzda 5.000 ücretsiz kredi hesabınıza tanımlanır."],
+    ],
+    ctaTitle: "Geleceğin içeriğini bugün üretin",
+    footerTag: "Yapay zeka ile içerik üretiminin profesyonel platformu.",
+    product: "Ürün", company: "Şirket", legal: "Yasal",
+    legalLinks: ["Gizlilik Politikası", "Kullanım Şartları", "KVKK", "Çerezler"],
+    companyLinks: ["Hakkımızda", "Blog", "Kariyer", "İletişim"],
+    rights: "Tüm hakları saklıdır.",
+  },
+  en: {
+    nav: ["Features", "Voice Cloning", "AI Video & Image", "Pricing", "Contact"],
+    login: "Login / Register",
+    heroBadge: "New: Voice Cloning v3 is live",
+    heroTitle: "Overpass the Boundaries of Content Creation with",
+    heroSub: "1000+ realistic AI voices, voice cloning, text-to-video and image generation. All in one professional platform.",
+    start: "Start Free",
+    explore: "Explore",
+    tts: "Text to Speech",
+    ttsSample: "Hello! I'm TrAi Pro, bringing your content to life.",
+    imgGen: "Generate Image",
+    imgPrompt: "neon Istanbul, sunset, cinematic",
+    generate: "Generate",
+    generating: "Generating…",
+    toolsKicker: "Core Tools",
+    toolsTitle: "Four powerful AI tools",
+    try: "Try",
+    t1: "AI Voices", t1d: "1000+ natural voices in 70+ languages. Accent, tone and emotion control.",
+    t2: "Voice Cloning", t2d: "Create a digital twin of your voice from a 30-second sample.",
+    t3: "Text to Video", t3d: "Type a sentence, turn it into a cinematic video.",
+    t4: "Image Generation", t4d: "Generate the image of your dreams in seconds, in high resolution.",
+    voice: "Voice", male: "Male", female: "Female", child: "Child",
+    dropTitle: "Drag your audio file here",
+    dropSub: "or click to start training (MP3, WAV)",
+    cloneSteps: ["Upload", "Analyze", "Train", "Ready"],
+    cloneDone: "Your voice clone is ready!",
+    close: "Close",
+    styles: ["Cinematic", "Anime", "3D", "Documentary"],
+    videoPrompt: "A futuristic ship gliding over the Bosphorus",
+    imagine: "Imagine",
+    capKicker: "Why TrAi Pro",
+    capTitle: "A new standard in speed, language and realism",
+    caps: [
+      ["10x Speed", "Studio-quality output in seconds."],
+      ["70+ Languages", "Natural pronunciation in every major language."],
+      ["Hyper-Realism", "Results indistinguishable from human voice."],
+      ["Commercial License", "Everything you create is fully yours."],
+    ],
+    priceKicker: "Credit-Based Pricing",
+    priceTitle: "Pay as you go, create without limits",
+    month: "/mo",
+    popular: "Most Popular",
+    buy: "Buy Credit Pack",
+    plans: [
+      { name: "Starter", credits: "50,000 credits", feats: ["1000+ voices", "Standard quality", "5 images/day", "Email support"] },
+      { name: "Pro", credits: "500,000 credits", feats: ["Voice cloning (5 voices)", "Text to video", "Unlimited images", "Commercial license", "Priority support"] },
+      { name: "Enterprise", credits: "Unlimited credits", feats: ["Unlimited clones", "API access", "Custom model", "SLA & account manager"] },
+    ],
+    custom: "Custom",
+    trusted: "Trusted by thousands of creators and brands",
+    testimonials: [
+      ["Ayşe K.", "YouTuber", "My voiceover costs dropped 90%. The Turkish voices are incredibly natural."],
+      ["Mert D.", "Agency Owner", "We now deliver client videos in minutes instead of hours."],
+      ["Elif S.", "Podcaster", "My voice clone is so realistic listeners can't tell."],
+    ],
+    faqTitle: "Frequently Asked Questions",
+    faqs: [
+      ["How does the credit system work?", "Each character, image or second of video uses credits. Unused credits roll over to next month."],
+      ["Is voice cloning legal?", "You can only clone your own voice or voices you have permission for. Verification is required."],
+      ["Can I use my content commercially?", "Yes, Pro and Enterprise plans include a full commercial license."],
+      ["Is there a free trial?", "You get 5,000 free credits when you sign up."],
+    ],
+    ctaTitle: "Create the content of the future, today",
+    footerTag: "The professional platform for AI content creation.",
+    product: "Product", company: "Company", legal: "Legal",
+    legalLinks: ["Privacy Policy", "Terms of Use", "GDPR", "Cookies"],
+    companyLinks: ["About", "Blog", "Careers", "Contact"],
+    rights: "All rights reserved.",
+  },
+};
+
+export type Dict = (typeof dict)["tr"];
+const Ctx = createContext<{ lang: Lang; t: Dict; setLang: (l: Lang) => void } | null>(null);
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [lang, setLang] = useState<Lang>("tr");
+  return <Ctx.Provider value={{ lang, t: dict[lang] as Dict, setLang }}>{children}</Ctx.Provider>;
+}
+
+export function useI18n() {
+  const c = useContext(Ctx);
+  if (!c) throw new Error("useI18n outside provider");
+  return c;
+}
