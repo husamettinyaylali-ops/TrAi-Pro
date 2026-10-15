@@ -15,7 +15,7 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 | `/account`                                                                         | Hesabım: ad, şifre, Google bağlantısı, diğer oturumları kapatma, hesabı silme |
 | `/forgot-password`, `/reset-password`                                              | Şifremi unuttum: e-postayla sıfırlama bağlantısı ve yeni şifre                |
 | `/verify-email`                                                                    | E-posta doğrulama bağlantısının açıldığı sayfa                                |
-| `/admin`                                                                           | Yönetim: özet, kullanıcı arama, bakiye düzeltme, yönetici işlem kaydı         |
+| `/admin`                                                                           | Yönetim: özet, kullanıcı/ödeme arama, bakiye düzeltme, elle tamamlama, kayıt  |
 | `/terms-of-service`, `/privacy-policy`, `/refund-policy`, `/acceptable-use-policy` | Yasal şablon metinler                                                         |
 
 ## Durum
@@ -53,7 +53,7 @@ Ortam değişkenleri için `.env.example` dosyasına bakın. Hiçbiri zorunlu de
 2. Kullanıcı tutar seçer; ona 1 saat geçerli, kuruşuna kadar benzersiz bir tutar (ör. 10,0347 USDT), adres ve QR gösterilir.
 3. Kullanıcı gönderdikten sonra işlem kimliğini (tx hash) yapıştırır. Sunucu BSC düğümünden işlemi doğrular: başarılı mı, USDT sözleşmesi mi (`0x55d3…7955`), alıcı sizin adresiniz mi, tutar o kullanıcının bekleyen benzersiz tutarıyla aynı mı, yeterli onay (varsayılan 12 blok) var mı ve talepten sonra mı yapılmış. Hepsi tutarsa bakiye yüklenir; aynı işlem ikinci kez kullanılamaz.
 
-Zincir herkese açık olduğu için eşleşme yalnız işlem kimliğine değil benzersiz tutara dayanır: adresinizi izleyen biri başkasının işlemini kendi hesabına yazdıramaz. Farklı tutar gönderen ya da süresi dolduktan sonra ödeyen kullanıcı otomatik eşleşmez; destekle işlem kimliği üzerinden elle çözülür.
+Zincir herkese açık olduğu için eşleşme yalnız işlem kimliğine değil benzersiz tutara dayanır: adresinizi izleyen biri başkasının işlemini kendi hesabına yazdıramaz. Farklı tutar gönderen ya da süresi dolduktan sonra ödeyen kullanıcı otomatik eşleşmez; yönetim panelinden çözülür (süresi dolan talep elle tamamlanır, farklı tutar bakiye düzeltmesiyle yazılır).
 
 ## Binance Pay ile bakiye yükleme
 
@@ -62,7 +62,7 @@ Zincir herkese açık olduğu için eşleşme yalnız işlem kimliğine değil b
 3. Kullanıcı tutar seçer; ona 1 saat geçerli, 2 ondalıklı benzersiz bir tutar (ör. 10,37 USDT) ve Binance kimliğiniz gösterilir. Binance uygulamasında Pay > Gönder ile bu tutarı gönderir ve "Ödemeyi yaptım" düğmesine basar; sayfa açık kaldıkça 30 saniyede bir kendiliğinden kontrol edilir.
 4. Sunucu Binance Pay geçmişini (`GET /sapi/v1/pay/transactions`, imzalı) okur ve hesabınıza gelen C2C USDT ödemeleri arasında kullanıcının bekleyen tutarını, talepten sonra yapılmış ve daha önce kullanılmamış işlemi arar. Bulursa bakiye yüklenir.
 
-Binance geçmişi ödeme notunu döndürmediği için eşleşme yalnız benzersiz tutar ve zamanla yapılır; Binance uygulamasında güvenle girilebilen 2 ondalık kullanılır. Geçmiş sorgusu ağır olduğundan liste 20 saniye önbellekte tutulur ve kullanıcılar arasında paylaşılır. USDT dışında bir para birimiyle ya da farklı tutarla yapılan ödeme otomatik eşleşmez; destekle elle çözülür.
+Binance geçmişi ödeme notunu döndürmediği için eşleşme yalnız benzersiz tutar ve zamanla yapılır; Binance uygulamasında güvenle girilebilen 2 ondalık kullanılır. Geçmiş sorgusu ağır olduğundan liste 20 saniye önbellekte tutulur ve kullanıcılar arasında paylaşılır. USDT dışında bir para birimiyle ya da farklı tutarla yapılan ödeme otomatik eşleşmez; yönetim panelinden çözülür.
 
 ## PayPal ve kartla bakiye yükleme
 
@@ -83,6 +83,8 @@ Kripto yöntemlerde benzersizlik için eklenen kuruşlar kullanıcıda kalır: b
 
 - **Özet:** aktif ve silinmiş hesaplar, toplam kullanıcı bakiyesi (kullanıcılara borç), son 24 saatin gerçek yüklemeleri, bekleyen ödeme talepleri.
 - **Kullanıcı arama:** e-posta, ad ya da kullanıcı kimliğiyle. Ayrıntıda bakiye defteri, ödeme talepleri (sağlayıcı işlem kimliğiyle), paket alımları ve o kullanıcıdaki yönetici işlemleri görünür.
+- **Ödeme talebi arama:** tutar başı (ör. `10.37`), sağlayıcı işlem kimliği, talep kimliği ya da e-postayla. Sahibi belli olmayan bir ödemeyi tutarından bulup kullanıcıya gitmek için.
+- **Elle tamamlama:** ödemesi sağlayıcıda (BscScan, Binance, PayPal) doğrulanmış ama otomatik eşleşmemiş talep (ör. süresi dolduktan sonra ödenmiş) işlem kimliği ve gerekçeyle tamamlanır; bakiyeye talebin tutarı yazılır. İşlem kimliği otomatik akışın biçimine getirilir, bu yüzden aynı ödeme hem elle hem kullanıcının kendi doğrulamasıyla iki kez yazılamaz.
 - **Bakiye düzeltme:** farklı tutar gönderilen ya da yanlış yazılan ödemeler için. Deftere "Düzeltme" kaydı düşer; gerekçe zorunludur, bakiye eksiye düşürülemez, yönetici kendi bakiyesini düzeltemez. Her işlem `admin_actions` tablosuna kim, ne zaman, ne kadar ve neden bilgisiyle yazılır; bu kayıt değiştirilmez ve hesap silinince de kalır.
 
 ## Ses üretimi (ElevenLabs) kurulumu
