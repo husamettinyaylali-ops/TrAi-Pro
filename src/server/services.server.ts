@@ -1485,20 +1485,35 @@ export async function deleteAccount(
     for (const table of [
       sessions,
       creditGrants,
-      orders,
       generations,
       voiceClones,
       oauthAccounts,
       emailTokens,
-      walletEntries,
-      paymentIntents,
     ]) {
       await tx.delete(table).where(eq(table.userId, userId));
     }
-    await tx.delete(users).where(eq(users.id, userId));
+    // Mali kayıtlar (siparişler, bakiye defteri, ödeme talepleri) yasal saklama
+    // için kalır; kişisel bilgi taşımazlar ve anonim kullanıcı satırına bağlı kalır.
+    await tx
+      .update(paymentIntents)
+      .set({ status: "expired" })
+      .where(and(eq(paymentIntents.userId, userId), eq(paymentIntents.status, "pending")));
+    await tx
+      .update(users)
+      .set({
+        name: "",
+        email: deletedEmail(userId),
+        passwordHash: null,
+        emailVerifiedAt: null,
+        deletedAt: now.toISOString(),
+      })
+      .where(eq(users.id, userId));
   });
   return { ok: true };
 }
+
+/** Silinmiş hesabın e-posta yeri: benzersiz, gönderilemez (.invalid) ve gerçek adresi taşımaz. */
+export const deletedEmail = (userId: string) => `deleted-${userId}@invalid`;
 
 // ---------------------------------------------------------------- e-posta: doğrulama ve şifre sıfırlama
 

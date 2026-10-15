@@ -1,6 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent, type ReactNode } from "react";
-import { AlertCircle, CheckCircle2, KeyRound, Loader2, LogOut, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  KeyRound,
+  Loader2,
+  LogOut,
+  Trash2,
+} from "lucide-react";
 
 import { GoogleMark } from "@/components/site/google-mark";
 import { RequireAuth } from "@/components/site/require-auth";
@@ -307,6 +315,7 @@ function SessionsSection() {
 
 function DangerSection() {
   const { t } = useI18n();
+  const f = useFormat();
   const { user, data, deleteAccount, forget } = useApp();
   const navigate = useNavigate();
   const errorText = useErrorText();
@@ -342,6 +351,12 @@ function DangerSection() {
         {t.accountPage.danger}
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">{t.accountPage.dangerSub}</p>
+      {data.wallet.balanceCents > 0 && (
+        <p className="mt-4 flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          {t.accountPage.balanceWarning(f.usd(data.wallet.balanceCents / 100))}
+        </p>
+      )}
       <form onSubmit={submit} className="mt-6 space-y-4">
         <div>
           <label htmlFor="acc-confirm" className={label}>

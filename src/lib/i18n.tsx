@@ -427,7 +427,9 @@ const tr = {
     signedOutOthers: "Diğer cihazlardaki oturumlar kapatıldı.",
     danger: "Hesabı sil",
     dangerSub:
-      "Hesabın, kredilerin, siparişlerin ve üretim geçmişin kalıcı olarak silinir. Bu işlem geri alınamaz.",
+      "Hesabın, kredilerin, ses klonların ve üretim geçmişin kalıcı olarak silinir. Ödeme ve sipariş kayıtları yasal saklama süresince adın ve e-postan olmadan tutulur. Bu işlem geri alınamaz.",
+    balanceWarning: (amount: string) =>
+      `Bakiyende ${amount} var. Hesabı silersen bu bakiye kullanılamaz hale gelir; silmeden önce harca ya da destekle iletişime geç.`,
     confirmEmail: "Onaylamak için e-posta adresini yaz",
     deleteButton: "Hesabımı kalıcı olarak sil",
     deleting: "Siliniyor…",
@@ -887,7 +889,9 @@ const en: Dict = {
     signedOutOthers: "Sessions on other devices were signed out.",
     danger: "Delete account",
     dangerSub:
-      "Your account, credits, orders and generation history are permanently deleted. This can't be undone.",
+      "Your account, credits, voice clones and generation history are permanently deleted. Payment and order records are kept without your name or email for the legally required period. This can't be undone.",
+    balanceWarning: (amount) =>
+      `You have ${amount} in your balance. If you delete your account it can no longer be used; spend it or contact support first.`,
     confirmEmail: "Type your email address to confirm",
     deleteButton: "Permanently delete my account",
     deleting: "Deleting…",

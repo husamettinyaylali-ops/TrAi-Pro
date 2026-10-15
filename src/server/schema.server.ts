@@ -18,6 +18,12 @@ export const users = sqliteTable("users", {
   /** E-posta sahipliği kanıtlandığında (doğrulama bağlantısı, şifre sıfırlama ya da Google). */
   emailVerifiedAt: text("email_verified_at"),
   createdAt: text("created_at").notNull(),
+  /**
+   * Hesap silindiğinde dolar. Satır, mali kayıtlar (sipariş, bakiye defteri,
+   * ödeme talepleri) yasal saklama süresince bağlı kalsın diye kişisel bilgisi
+   * silinerek (ad boş, e-posta deleted-<id>@invalid, şifre yok) tutulur.
+   */
+  deletedAt: text("deleted_at"),
 });
 
 /** Dış kimlik sağlayıcı bağlantısı (şimdilik yalnız Google). */

@@ -15,7 +15,9 @@ import {
   addVoiceClone,
   authenticate,
   changePassword,
+  createTopUp,
   deleteAccount,
+  deletedEmail,
   demoTopUp,
   linkGoogle,
   createSession,
@@ -460,13 +462,14 @@ describe("hesap yönetimi", () => {
     expect((await loadUserData(db, a)).security.googleLinked).toBe(false);
   });
 
-  it("hesap silme e-posta onayı ve şifre ister; tüm veriyi siler", async () => {
+  it("hesap silme e-posta onayı ve şifre ister; kişisel veriyi siler, mali kayıtları anonim saklar", async () => {
     const id = await newUser();
     const other = await newUser("b@example.com");
     await createSession(db, id, now);
     await buy(id, "media-2d");
     await generateContent(db, id, { type: "image", text: "kedi", count: 1 }, now);
     await addVoiceClone(db, id, "Sesim", now);
+    await createTopUp(db, id, { method: "usdt_bep20", amountCents: 1_000 }, now);
 
     expect(
       await deleteAccount(
@@ -502,20 +505,47 @@ describe("hesap yönetimi", () => {
       ),
     ).toEqual({ ok: true });
 
-    for (const table of [
-      "users",
-      "sessions",
-      "credit_grants",
-      "orders",
-      "generations",
-      "voice_clones",
-    ]) {
+    const count = async (table: string, where = "user_id = ?") => {
       const rows = await db.$client.execute({
-        sql: `select count(*) n from ${table} where ${table === "users" ? "id" : "user_id"} = ?`,
+        sql: `select count(*) n from ${table} where ${where}`,
         args: [id],
       });
-      expect(Number(rows.rows[0]!["n"]), table).toBe(0);
+      return Number(rows.rows[0]!["n"]);
+    };
+    for (const table of [
+      "sessions",
+      "credit_grants",
+      "generations",
+      "voice_clones",
+      "oauth_accounts",
+      "email_tokens",
+    ]) {
+      expect(await count(table), table).toBe(0);
     }
+    // Mali kayıtlar kalır; bekleyen talep kapanır.
+    expect(await count("orders")).toBe(1);
+    expect(await count("wallet_entries")).toBe(2);
+    expect(await count("payment_intents", "user_id = ? and status = 'pending'")).toBe(0);
+    expect(await count("payment_intents")).toBe(2);
+
+    const row = await db.$client.execute({
+      sql: "select name, email, password_hash, email_verified_at, deleted_at from users where id = ?",
+      args: [id],
+    });
+    expect(row.rows[0]).toMatchObject({
+      name: "",
+      email: deletedEmail(id),
+      password_hash: null,
+      email_verified_at: null,
+      deleted_at: now.toISOString(),
+    });
+    expect(
+      (await authenticate(db, { email: "ayse@example.com", password: "gizli-sifre-1" })).ok,
+    ).toBe(false);
+    // Aynı e-postayla yeniden kayıt olunabilir; yeni hesap eski kayıtları görmez.
+    const again = await newUser();
+    expect(again).not.toBe(id);
+    expect((await loadUserData(db, again)).orders).toHaveLength(0);
     // Diğer kullanıcıya dokunulmaz.
     expect((await loadUserData(db, other)).grants).toHaveLength(1);
   });

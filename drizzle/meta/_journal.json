@@ -43,6 +43,13 @@
       "when": 1792089226865,
       "tag": "0005_bakiye",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792099443279,
+      "tag": "0006_hesap_silme_saklama",
+      "breakpoints": true
     }
   ]
 }
