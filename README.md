@@ -15,6 +15,7 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 | `/account`                                                                         | Hesabım: ad, şifre, Google bağlantısı, diğer oturumları kapatma, hesabı silme |
 | `/forgot-password`, `/reset-password`                                              | Şifremi unuttum: e-postayla sıfırlama bağlantısı ve yeni şifre                |
 | `/verify-email`                                                                    | E-posta doğrulama bağlantısının açıldığı sayfa                                |
+| `/admin`                                                                           | Yönetim: özet, kullanıcı arama, bakiye düzeltme, yönetici işlem kaydı         |
 | `/terms-of-service`, `/privacy-policy`, `/refund-policy`, `/acceptable-use-policy` | Yasal şablon metinler                                                         |
 
 ## Durum
@@ -75,6 +76,14 @@ Sandbox'ta deneme için **Sandbox accounts**'taki kişisel test hesabıyla ya da
 ## Bakiyeye yazılan tutar
 
 Kripto yöntemlerde benzersizlik için eklenen kuruşlar kullanıcıda kalır: bakiyeye, ödenen tutar sente aşağı yuvarlanarak yazılır (10,37 USDT → $10,37; 10,0347 USDT → $10,03). Bir talebin tutarı, o talebe ödeme gelebileceği sürece (talep beklerken, kullanıcı yeni tutar istediğinde ve süresi dolduktan sonraki 5 dakika) başka bir kullanıcıya verilmez.
+
+## Yönetim paneli
+
+`.env`'e `ADMIN_EMAILS` (virgülle ayrılmış e-postalar) yazın. Bu adreslerle açılmış ve e-postası doğrulanmış hesaplar kullanıcı menüsünde **Yönetim** bağlantısını görür (`/admin`). Yetki her istekte sunucuda denetlenir; listeden çıkarılan adres hemen yetkisini kaybeder.
+
+- **Özet:** aktif ve silinmiş hesaplar, toplam kullanıcı bakiyesi (kullanıcılara borç), son 24 saatin gerçek yüklemeleri, bekleyen ödeme talepleri.
+- **Kullanıcı arama:** e-posta, ad ya da kullanıcı kimliğiyle. Ayrıntıda bakiye defteri, ödeme talepleri (sağlayıcı işlem kimliğiyle), paket alımları ve o kullanıcıdaki yönetici işlemleri görünür.
+- **Bakiye düzeltme:** farklı tutar gönderilen ya da yanlış yazılan ödemeler için. Deftere "Düzeltme" kaydı düşer; gerekçe zorunludur, bakiye eksiye düşürülemez, yönetici kendi bakiyesini düzeltemez. Her işlem `admin_actions` tablosuna kim, ne zaman, ne kadar ve neden bilgisiyle yazılır; bu kayıt değiştirilmez ve hesap silinince de kalır.
 
 ## Ses üretimi (ElevenLabs) kurulumu
 
