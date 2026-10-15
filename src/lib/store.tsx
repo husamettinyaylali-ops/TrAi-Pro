@@ -13,10 +13,12 @@ import type {
   GenerateInput,
   Generation,
   Order,
-  PaymentMethod,
   RateLimited,
   SessionPayload,
   TokenErrorCode,
+  TopUpErrorCode,
+  TopUpIntent,
+  TopUpMethod,
   UserData,
 } from "./types";
 
@@ -42,10 +44,13 @@ interface Store {
     password: string;
   }) => Promise<Outcome<object, AuthErrorCode> | RateLimited>;
   signOut: () => Promise<void>;
-  purchase: (
-    packageId: string,
-    method: PaymentMethod,
-  ) => Promise<Outcome<{ order: Order }, ActionErrorCode>>;
+  /** Paketi USD bakiyeden alır. */
+  purchase: (packageId: string) => Promise<Outcome<{ order: Order }, ActionErrorCode>>;
+  /** Bakiye yükleme talebi; demo yöntemi hemen tamamlanır. */
+  topUp: (
+    method: TopUpMethod,
+    amountCents: number,
+  ) => Promise<Outcome<{ intent: TopUpIntent }, TopUpErrorCode>>;
   generate: (
     input: GenerateInput,
   ) => Promise<Outcome<{ generation: Generation }, ActionErrorCode> | RateLimited>;
@@ -93,6 +98,7 @@ const emptyData: UserData = {
   generations: [],
   clones: [],
   security: { hasPassword: false, googleLinked: false, emailVerified: false },
+  wallet: { balanceCents: 0, entries: [], pending: [] },
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -133,7 +139,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await call(() => api.signOut());
         put(null);
       },
-      purchase: (packageId, method) => call(() => api.purchase({ data: { packageId, method } })),
+      purchase: (packageId) => call(() => api.purchase({ data: { packageId } })),
+      topUp: (method, amountCents) => call(() => api.topUp({ data: { method, amountCents } })),
       generate: (input) => call(() => api.generate({ data: input })),
       deleteGeneration: async (id) => {
         await call(() => api.deleteGeneration({ data: { id } }));

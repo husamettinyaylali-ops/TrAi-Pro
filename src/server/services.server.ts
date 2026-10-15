@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 
-import { and, asc, count, desc, eq, gt, isNotNull, isNull, lt, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNotNull, isNull, lt, lte, ne, sum } from "drizzle-orm";
 
 import {
   MAX_CLONES,
@@ -13,8 +13,16 @@ import {
   type CreditKind,
   type Grant,
 } from "@/lib/credits";
+import { clock } from "@/lib/clock";
 import { findPackage, signupBonus } from "@/lib/packages";
 import { LIMITS, checkLimit, retryMinutes, type Limit } from "@/lib/rate-limit";
+import {
+  MAX_TOPUP_CENTS,
+  MIN_TOPUP_CENTS,
+  TOPUP_TTL_MS,
+  formatCents,
+  uniqueCryptoAmount,
+} from "@/lib/wallet";
 import type {
   Account,
   ActionErrorCode,
@@ -24,9 +32,10 @@ import type {
   GoogleErrorCode,
   Generation,
   Order,
-  PaymentMethod,
   RateLimited,
   TokenErrorCode,
+  TopUpIntent,
+  TopUpMethod,
   UserData,
 } from "@/lib/types";
 import { stockVoices } from "@/lib/voices";
@@ -50,9 +59,11 @@ import {
   generations,
   oauthAccounts,
   orders,
+  paymentIntents,
   sessions,
   users,
   voiceClones,
+  walletEntries,
 } from "./schema.server";
 import { SESSION_DAYS, hashToken, newSessionToken } from "./session.server";
 import type { CloneFile, ProviderVoice, TtsProvider } from "./tts.server";
@@ -339,8 +350,8 @@ const toGeneration = (g: GenerationRow): Generation => ({
   createdAt: g.createdAt,
 });
 
-export async function loadUserData(db: Db, userId: string): Promise<UserData> {
-  const [grantRows, orderRows, genRows, cloneRows, auth, google] = await Promise.all([
+export async function loadUserData(db: Db, userId: string, now: Date = clock()): Promise<UserData> {
+  const [grantRows, orderRows, genRows, cloneRows, auth, google, wallet] = await Promise.all([
     db
       .select()
       .from(creditGrants)
@@ -372,6 +383,7 @@ export async function loadUserData(db: Db, userId: string): Promise<UserData> {
       .from(oauthAccounts)
       .where(and(eq(oauthAccounts.userId, userId), eq(oauthAccounts.provider, "google")))
       .get(),
+    loadWallet(db, userId, now),
   ]);
   return {
     grants: grantRows.map(toGrant),
@@ -386,23 +398,190 @@ export async function loadUserData(db: Db, userId: string): Promise<UserData> {
       googleLinked: Boolean(google),
       emailVerified: Boolean(auth?.verifiedAt),
     },
+    wallet,
   };
 }
 
-// ---------------------------------------------------------------- satın alma
+// ---------------------------------------------------------------- bakiye ve satın alma
+
+type IntentRow = typeof paymentIntents.$inferSelect;
+
+const toIntent = (r: IntentRow): TopUpIntent => ({
+  id: r.id,
+  method: r.method,
+  amountCents: r.amountCents,
+  payAmount: r.payAmount,
+  payCurrency: r.payCurrency,
+  status: r.status,
+  createdAt: r.createdAt,
+  expiresAt: r.expiresAt,
+});
+
+const CRYPTO_METHODS: ReadonlySet<TopUpMethod> = new Set(["usdt_bep20", "binance_pay"]);
+
+export async function walletBalance(conn: Conn, userId: string): Promise<number> {
+  const row = await conn
+    .select({ total: sum(walletEntries.amountCents) })
+    .from(walletEntries)
+    .where(eq(walletEntries.userId, userId))
+    .get();
+  return Number(row?.total ?? 0);
+}
+
+/** Süresi dolan bekleyen talepler "expired" olur (ödeme gelirse eşleşmez; destekle çözülür). */
+async function expireIntents(conn: Conn, now: Date) {
+  await conn
+    .update(paymentIntents)
+    .set({ status: "expired" })
+    .where(
+      and(eq(paymentIntents.status, "pending"), lte(paymentIntents.expiresAt, now.toISOString())),
+    );
+}
 
 /**
- * Demo satın alma: sipariş anında "ödendi" sayılır. Gerçek ödeme sağlayıcısı
- * bağlandığında kredi yalnız sağlayıcının onay bildirimiyle tanımlanmalı.
+ * Bakiye yükleme talebi. Kripto yöntemlerinde aynı yöntemde bekleyen taleplerle
+ * çakışmayan benzersiz tutar atanır. Kullanıcının aynı yöntemde bekleyen eski
+ * talebi geçersiz olur (tek bekleyen tutar).
  */
+export async function createTopUp(
+  db: Db,
+  userId: string,
+  input: { method: TopUpMethod; amountCents: number },
+  now: Date,
+  rand: () => number = Math.random,
+): Promise<Result<{ intent: TopUpIntent }, "invalidInput" | "busy">> {
+  const cents = input.amountCents;
+  if (!Number.isInteger(cents) || cents < MIN_TOPUP_CENTS || cents > MAX_TOPUP_CENTS) {
+    return { ok: false, error: "invalidInput" };
+  }
+  return db.transaction(async (tx) => {
+    await expireIntents(tx, now);
+    await tx
+      .update(paymentIntents)
+      .set({ status: "expired" })
+      .where(
+        and(
+          eq(paymentIntents.userId, userId),
+          eq(paymentIntents.method, input.method),
+          eq(paymentIntents.status, "pending"),
+        ),
+      );
+
+    let payAmount: string;
+    let payCurrency: "USDT" | "USD";
+    if (CRYPTO_METHODS.has(input.method)) {
+      const pending = await tx
+        .select({ amount: paymentIntents.payAmount })
+        .from(paymentIntents)
+        .where(and(eq(paymentIntents.method, input.method), eq(paymentIntents.status, "pending")));
+      const unique = uniqueCryptoAmount(cents, new Set(pending.map((p) => p.amount)), rand);
+      if (!unique) return { ok: false, error: "busy" } as const;
+      payAmount = unique;
+      payCurrency = "USDT";
+    } else {
+      payAmount = formatCents(cents);
+      payCurrency = "USD";
+    }
+
+    const row: IntentRow = {
+      id: randomUUID(),
+      userId,
+      method: input.method,
+      amountCents: cents,
+      payAmount,
+      payCurrency,
+      status: "pending",
+      providerRef: null,
+      createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + TOPUP_TTL_MS).toISOString(),
+      completedAt: null,
+    };
+    await tx.insert(paymentIntents).values(row);
+    return { ok: true, intent: toIntent(row) } as const;
+  });
+}
+
+/**
+ * Doğrulanmış ödemeyle talebi tamamlar ve bakiyeye yazar. Aynı talep aynı işlem
+ * kimliğiyle tekrar gelirse sonuç değişmez (idempotent); işlem kimliği başka bir
+ * talepte kullanılmışsa reddedilir.
+ */
+export async function completeTopUp(
+  db: Db,
+  intentId: string,
+  providerRef: string,
+  now: Date,
+): Promise<
+  Result<{ intent: TopUpIntent; userId: string }, "notFound" | "notPending" | "duplicateRef">
+> {
+  return db.transaction(async (tx) => {
+    const intent = await tx
+      .select()
+      .from(paymentIntents)
+      .where(eq(paymentIntents.id, intentId))
+      .get();
+    if (!intent) return { ok: false, error: "notFound" } as const;
+    if (intent.status === "completed") {
+      return intent.providerRef === providerRef
+        ? ({ ok: true, intent: toIntent(intent), userId: intent.userId } as const)
+        : ({ ok: false, error: "notPending" } as const);
+    }
+    if (intent.status !== "pending") return { ok: false, error: "notPending" } as const;
+    const used = await tx
+      .select({ id: paymentIntents.id })
+      .from(paymentIntents)
+      .where(
+        and(eq(paymentIntents.method, intent.method), eq(paymentIntents.providerRef, providerRef)),
+      )
+      .get();
+    if (used) return { ok: false, error: "duplicateRef" } as const;
+
+    const done: IntentRow = {
+      ...intent,
+      status: "completed",
+      providerRef,
+      completedAt: now.toISOString(),
+    };
+    await tx
+      .update(paymentIntents)
+      .set({ status: "completed", providerRef, completedAt: done.completedAt })
+      .where(and(eq(paymentIntents.id, intentId), eq(paymentIntents.status, "pending")));
+    await tx.insert(walletEntries).values({
+      id: randomUUID(),
+      userId: intent.userId,
+      kind: "topup",
+      amountCents: intent.amountCents,
+      reference: intent.id,
+      createdAt: now.toISOString(),
+    });
+    return { ok: true, intent: toIntent(done), userId: intent.userId } as const;
+  });
+}
+
+/** Geliştirme/demo: talep açılır ve hemen tamamlanır. Üretimde API katmanı kapatır. */
+export async function demoTopUp(
+  db: Db,
+  userId: string,
+  amountCents: number,
+  now: Date,
+): Promise<Result<{ intent: TopUpIntent }, "invalidInput" | "busy">> {
+  const created = await createTopUp(db, userId, { method: "demo", amountCents }, now);
+  if (!created.ok) return created;
+  const done = await completeTopUp(db, created.intent.id, `demo-${created.intent.id}`, now);
+  if (!done.ok) return { ok: false, error: "invalidInput" };
+  return { ok: true, intent: done.intent };
+}
+
+/** Paketi USD bakiyeden alır: düşüm, sipariş ve kredi tek transaction'dadır. */
 export async function purchasePackage(
   db: Db,
   userId: string,
-  input: { packageId: string; method: PaymentMethod },
+  input: { packageId: string },
   now: Date,
 ): Promise<Result<{ order: Order }, ActionErrorCode>> {
   const pkg = findPackage(input.packageId);
   if (!pkg) return { ok: false, error: "invalidInput" };
+  const price = Math.round(pkg.priceUsd * 100);
   const grant = createGrant(
     { id: randomUUID(), kind: pkg.kind, packageId: pkg.id, credits: pkg.credits, days: pkg.days },
     now,
@@ -414,17 +593,56 @@ export async function purchasePackage(
     kind: pkg.kind,
     credits: pkg.credits,
     days: pkg.days,
-    amountCents: Math.round(pkg.priceUsd * 100),
-    method: input.method,
+    amountCents: price,
+    method: "balance",
     status: "paid",
     createdAt: grant.grantedAt,
     expiresAt: grant.expiresAt,
   };
-  await db.transaction(async (tx) => {
+  const ok = await db.transaction(async (tx) => {
+    if ((await walletBalance(tx, userId)) < price) return false;
+    await tx.insert(walletEntries).values({
+      id: randomUUID(),
+      userId,
+      kind: "purchase",
+      amountCents: -price,
+      reference: row.id,
+      createdAt: now.toISOString(),
+    });
     await tx.insert(orders).values(row);
     await tx.insert(creditGrants).values({ ...grant, userId });
+    return true;
   });
+  if (!ok) return { ok: false, error: "insufficientBalance" };
   return { ok: true, order: toOrder(row) };
+}
+
+async function loadWallet(db: Db, userId: string, now: Date): Promise<UserData["wallet"]> {
+  const [entries, pending, balanceCents] = await Promise.all([
+    db
+      .select()
+      .from(walletEntries)
+      .where(eq(walletEntries.userId, userId))
+      .orderBy(desc(walletEntries.createdAt))
+      .limit(100),
+    db
+      .select()
+      .from(paymentIntents)
+      .where(
+        and(
+          eq(paymentIntents.userId, userId),
+          eq(paymentIntents.status, "pending"),
+          gt(paymentIntents.expiresAt, now.toISOString()),
+        ),
+      )
+      .orderBy(desc(paymentIntents.createdAt)),
+    walletBalance(db, userId),
+  ]);
+  return {
+    balanceCents,
+    entries: entries.map(({ userId: _u, ...e }) => e),
+    pending: pending.map(toIntent),
+  };
 }
 
 // ---------------------------------------------------------------- üretim
@@ -984,6 +1202,8 @@ export async function deleteAccount(
       voiceClones,
       oauthAccounts,
       emailTokens,
+      walletEntries,
+      paymentIntents,
     ]) {
       await tx.delete(table).where(eq(table.userId, userId));
     }

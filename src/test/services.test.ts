@@ -7,6 +7,8 @@ import { join } from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { balance } from "@/lib/credits";
+import { findPackage } from "@/lib/packages";
+import { MIN_TOPUP_CENTS } from "@/lib/wallet";
 import { openDb, type Db } from "@/server/db.server";
 import { hashPassword, verifyPassword } from "@/server/password.server";
 import {
@@ -14,6 +16,7 @@ import {
   authenticate,
   changePassword,
   deleteAccount,
+  demoTopUp,
   linkGoogle,
   createSession,
   deleteSession,
@@ -59,6 +62,21 @@ async function newUser(email = "ayse@example.com", { verified = true } = {}) {
   if (!res.ok) throw new Error(res.error);
   if (verified) await markEmailVerified(db, res.userId, now);
   return res.userId;
+}
+
+/** Paket fiyatı kadar demo bakiye yükleyip paketi bakiyeden alır. */
+async function buy(userId: string, packageId: string) {
+  const pkg = findPackage(packageId);
+  if (pkg) {
+    const res = await demoTopUp(
+      db,
+      userId,
+      Math.max(MIN_TOPUP_CENTS, Math.round(pkg.priceUsd * 100)),
+      now,
+    );
+    if (!res.ok) throw new Error(res.error);
+  }
+  return purchasePackage(db, userId, { packageId }, now);
 }
 
 describe("şifre", () => {
@@ -133,7 +151,7 @@ describe("oturum", () => {
 describe("satın alma ve üretim", () => {
   it("paket alınınca sipariş ve kredi eklenir", async () => {
     const id = await newUser();
-    const res = await purchasePackage(db, id, { packageId: "voice-1m", method: "card" }, now);
+    const res = await buy(id, "voice-1m");
     expect(res.ok && res.order.amountUsd).toBe(22);
     const data = await loadUserData(db, id);
     expect(data.orders).toHaveLength(1);
@@ -142,7 +160,7 @@ describe("satın alma ve üretim", () => {
 
   it("bilinmeyen paket reddedilir", async () => {
     const id = await newUser();
-    expect(await purchasePackage(db, id, { packageId: "bedava", method: "card" }, now)).toEqual({
+    expect(await buy(id, "bedava")).toEqual({
       ok: false,
       error: "invalidInput",
     });
@@ -150,7 +168,7 @@ describe("satın alma ve üretim", () => {
 
   it("seslendirme maliyeti sunucuda hesaplanır ve önce erken dolan paketten düşer", async () => {
     const id = await newUser();
-    await purchasePackage(db, id, { packageId: "voice-250k", method: "card" }, now);
+    await buy(id, "voice-250k");
     const res = await generateContent(
       db,
       id,
@@ -174,7 +192,7 @@ describe("satın alma ve üretim", () => {
 
   it("geçersiz girdiler reddedilir", async () => {
     const id = await newUser();
-    await purchasePackage(db, id, { packageId: "media-2d", method: "card" }, now);
+    await buy(id, "media-2d");
     const bad = [
       { type: "tts", text: "   ", voiceId: "defne" },
       { type: "tts", text: "merhaba", voiceId: "baskasinin-klonu" },
@@ -190,7 +208,7 @@ describe("satın alma ve üretim", () => {
 
   it("görsel 1, video 5 kredi düşer", async () => {
     const id = await newUser();
-    await purchasePackage(db, id, { packageId: "media-2d", method: "card" }, now);
+    await buy(id, "media-2d");
     await generateContent(db, id, { type: "image", text: "kedi", count: 4 }, now);
     await generateContent(db, id, { type: "video", text: "gemi", styleIndex: 1 }, now);
     expect(balance((await loadUserData(db, id)).grants, "media", now)).toBe(91);
@@ -446,7 +464,7 @@ describe("hesap yönetimi", () => {
     const id = await newUser();
     const other = await newUser("b@example.com");
     await createSession(db, id, now);
-    await purchasePackage(db, id, { packageId: "media-2d", method: "card" }, now);
+    await buy(id, "media-2d");
     await generateContent(db, id, { type: "image", text: "kedi", count: 1 }, now);
     await addVoiceClone(db, id, "Sesim", now);
 

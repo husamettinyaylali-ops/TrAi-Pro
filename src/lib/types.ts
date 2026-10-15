@@ -1,7 +1,39 @@
 import type { CreditKind, Grant } from "./credits";
 
-export type PaymentMethod = "card" | "crypto" | "bank";
+/** Siparişin ödeme biçimi. "balance": bakiyeden; diğerleri demo dönemin kayıtları. */
+export type PaymentMethod = "card" | "crypto" | "bank" | "balance";
 export type GenerationType = "tts" | "image" | "video";
+
+/** Bakiye yükleme yöntemleri (genaipro.io'daki seçenekler) ve geliştirme için demo. */
+export type TopUpMethod = "usdt_bep20" | "binance_pay" | "paypal" | "demo";
+
+export interface WalletEntry {
+  id: string;
+  kind: "topup" | "purchase" | "adjust";
+  amountCents: number;
+  reference: string | null;
+  createdAt: string;
+}
+
+export interface TopUpIntent {
+  id: string;
+  method: TopUpMethod;
+  amountCents: number;
+  /** Gönderilecek tutar; kripto yöntemlerde benzersiz 4 ondalıklı tutar (ör. "10.0347"). */
+  payAmount: string;
+  payCurrency: "USDT" | "USD";
+  status: "pending" | "completed" | "expired";
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** Ödeme sayfasında hangi yöntemlerin açık olduğu ve alıcı bilgileri; sunucudan gelir. */
+export interface PaymentConfig {
+  demo: boolean;
+  usdtBep20: { address: string } | null;
+  binancePay: { binanceId: string } | null;
+  paypal: { clientId: string; sandbox: boolean } | null;
+}
 
 export interface Account {
   id: string;
@@ -60,6 +92,7 @@ export interface UserData {
   generations: Generation[];
   clones: ClonedVoice[];
   security: { hasPassword: boolean; googleLinked: boolean; emailVerified: boolean };
+  wallet: { balanceCents: number; entries: WalletEntry[]; pending: TopUpIntent[] };
 }
 
 export interface SessionPayload {
@@ -101,4 +134,14 @@ export type ActionErrorCode =
   | "limit"
   | "paymentsDisabled"
   /** Ses servisi yanıt vermedi ya da hata döndü; kredi düşülmez. */
-  | "providerFailed";
+  | "providerFailed"
+  /** USD bakiye paket fiyatını karşılamıyor. */
+  | "insufficientBalance";
+
+export type TopUpErrorCode =
+  | "unauthorized"
+  | "invalidInput"
+  /** Bu yöntem kapalı (yapılandırılmamış). */
+  | "methodDisabled"
+  /** Benzersiz kripto tutarı üretilemedi (çok fazla bekleyen talep). */
+  | "busy";

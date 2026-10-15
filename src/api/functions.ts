@@ -11,7 +11,7 @@ import { z } from "zod";
 import { resolveAppUrl } from "@/lib/app-url";
 import { clock } from "@/lib/clock";
 import type { Lang } from "@/lib/i18n";
-import type { Account, SessionPayload, StudioConfig } from "@/lib/types";
+import type { Account, PaymentConfig, SessionPayload, StudioConfig } from "@/lib/types";
 
 import { audioStorage } from "@/server/audio-storage.server";
 import { getDb } from "@/server/db.server";
@@ -77,7 +77,7 @@ async function currentUser(): Promise<Account | null> {
 }
 
 async function payloadFor(user: Account): Promise<SessionPayload> {
-  return { user, data: await svc.loadUserData(await getDb(), user.id) };
+  return { user, data: await svc.loadUserData(await getDb(), user.id, clock()) };
 }
 
 async function startSession(userId: string): Promise<SessionPayload> {
@@ -126,14 +126,60 @@ export const signOut = createServerFn({ method: "POST" }).handler(async () => {
 /** Demo ödemeler üretimde yalnız DEMO_PAYMENTS=on ise açıktır. */
 const demoPaymentsEnabled = () => !isProduction() || env("DEMO_PAYMENTS") === "on";
 
-export const purchase = createServerFn({ method: "POST" })
+/**
+ * Açık ödeme yöntemleri ve alıcı bilgileri. Alıcı bilgileri (cüzdan adresi,
+ * Binance kimliği, PayPal istemci kimliği) yalnız sunucu ortamından gelir.
+ * Gerçek yöntemler kendi aşamalarında bağlanır; o zamana kadar kapalıdır.
+ */
+function paymentConfig(): PaymentConfig {
+  return {
+    demo: demoPaymentsEnabled(),
+    usdtBep20: null,
+    binancePay: null,
+    paypal: null,
+  };
+}
+
+export const getPaymentConfig = createServerFn({ method: "GET" }).handler(
+  async (): Promise<PaymentConfig> => paymentConfig(),
+);
+
+/** Bakiye yükleme talebi. Demo yöntemi (yalnız geliştirmede) talebi hemen tamamlar. */
+export const topUp = createServerFn({ method: "POST" })
   .validator(
-    parse(z.object({ packageId: z.string().max(40), method: z.enum(["card", "crypto", "bank"]) })),
+    parse(
+      z.object({
+        method: z.enum(["usdt_bep20", "binance_pay", "paypal", "demo"]),
+        amountCents: z.number().int(),
+      }),
+    ),
   )
   .handler(async ({ data }) => {
     const user = await currentUser();
     if (!user) return { ok: false as const, error: "unauthorized" as const };
-    if (!demoPaymentsEnabled()) return { ok: false as const, error: "paymentsDisabled" as const };
+    const cfg = paymentConfig();
+    const db = await getDb();
+    if (data.method === "demo") {
+      if (!cfg.demo) return { ok: false as const, error: "methodDisabled" as const };
+      const res = await svc.demoTopUp(db, user.id, data.amountCents, clock());
+      if (!res.ok) return res;
+      return { ok: true as const, intent: res.intent, session: await payloadFor(user) };
+    }
+    const enabled = { usdt_bep20: cfg.usdtBep20, binance_pay: cfg.binancePay, paypal: cfg.paypal }[
+      data.method
+    ];
+    if (!enabled) return { ok: false as const, error: "methodDisabled" as const };
+    const res = await svc.createTopUp(db, user.id, data, clock());
+    if (!res.ok) return res;
+    return { ok: true as const, intent: res.intent, session: await payloadFor(user) };
+  });
+
+/** Paketi USD bakiyeden alır. */
+export const purchase = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ packageId: z.string().max(40) })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
     const res = await svc.purchasePackage(await getDb(), user.id, data, clock());
     if (!res.ok) return res;
     return { ok: true as const, order: res.order, session: await payloadFor(user) };

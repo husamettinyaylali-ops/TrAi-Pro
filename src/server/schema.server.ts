@@ -1,4 +1,11 @@
-import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 // Tarihler ISO-8601 UTC metni olarak saklanır; para birimi kuruş/sent tamsayısıdır.
 
@@ -73,7 +80,8 @@ export const orders = sqliteTable(
     credits: integer("credits").notNull(),
     days: integer("days").notNull(),
     amountCents: integer("amount_cents").notNull(),
-    method: text("method", { enum: ["card", "crypto", "bank"] }).notNull(),
+    /** "balance": bakiyeden alım. Eski değerler demo dönemin kayıtları içindir. */
+    method: text("method", { enum: ["card", "crypto", "bank", "balance"] }).notNull(),
     status: text("status", { enum: ["paid"] }).notNull(),
     createdAt: text("created_at").notNull(),
     expiresAt: text("expires_at").notNull(),
@@ -148,4 +156,53 @@ export const emailTokens = sqliteTable(
     usedAt: text("used_at"),
   },
   (t) => [index("email_tokens_user_idx").on(t.userId)],
+);
+
+/**
+ * USD bakiye defteri. Kayıtlar değiştirilmez; düzeltme yeni kayıtla yapılır
+ * ("adjust"). Bakiye, kullanıcının kayıtlarının toplamıdır (sent).
+ */
+export const walletEntries = sqliteTable(
+  "wallet_entries",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["topup", "purchase", "adjust"] }).notNull(),
+    /** Artı: yükleme; eksi: harcama. */
+    amountCents: integer("amount_cents").notNull(),
+    /** Yükleme talebi ya da sipariş kimliği. */
+    reference: text("reference"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("wallet_entries_user_idx").on(t.userId)],
+);
+
+/**
+ * Bakiye yükleme talebi. Kripto yöntemlerinde ödemeyi kullanıcıya bağlayan
+ * benzersiz tutar (payAmount) tutulur. Sağlayıcı işlem kimliği (providerRef)
+ * yöntem başına benzersizdir: aynı ödeme iki kez bakiyeye yazılamaz.
+ */
+export const paymentIntents = sqliteTable(
+  "payment_intents",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    method: text("method", { enum: ["usdt_bep20", "binance_pay", "paypal", "demo"] }).notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    payAmount: text("pay_amount").notNull(),
+    payCurrency: text("pay_currency", { enum: ["USDT", "USD"] }).notNull(),
+    status: text("status", { enum: ["pending", "completed", "expired"] }).notNull(),
+    providerRef: text("provider_ref"),
+    createdAt: text("created_at").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    completedAt: text("completed_at"),
+  },
+  (t) => [
+    index("payment_intents_user_idx").on(t.userId),
+    uniqueIndex("payment_intents_ref_idx").on(t.method, t.providerRef),
+  ],
 );
