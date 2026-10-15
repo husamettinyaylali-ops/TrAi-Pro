@@ -245,6 +245,44 @@ const tr = {
     pickFirst: "Devam etmek için bir paket seç.",
     failed: "İşlem tamamlanamadı. Tekrar dene.",
     disabled: "Bu ödeme yöntemi şu an kapalı.",
+    crypto: {
+      title: "USDT ile öde",
+      steps:
+        "Cüzdanından aşağıdaki adrese tam olarak gösterilen tutarı gönder, sonra işlem kimliğini yapıştırıp doğrula.",
+      network: "Ağ",
+      networkValue: "BSC – Binance Smart Chain (BEP20)",
+      address: "Cüzdan adresi",
+      amount: "Gönderilecek tutar",
+      exactNote:
+        "Tam bu tutarı gönder: kuruş hanesi ödemeni hesabına bağlar. Farklı tutar otomatik eşleşmez.",
+      warning:
+        "Yalnız BSC (BEP20) ağında USDT gönder. Yanlış ağa ya da yanlış tokene gönderilen ödemeler geri alınamaz.",
+      expiresIn: (time: string) => `Bu tutar ${time} daha geçerli.`,
+      expired: "Bu ödeme talebinin süresi doldu. Yeni bir tutar oluştur.",
+      qrAlt: "Cüzdan adresinin QR kodu",
+      copy: "Kopyala",
+      copied: "Kopyalandı",
+      txHash: "İşlem kimliği (Txn Hash)",
+      txHashHint: "Cüzdanında ya da BscScan'de işlemin ayrıntılarında görünür; 0x ile başlar.",
+      verify: "Ödemeyi doğrula",
+      verifying: "Zincirde kontrol ediliyor…",
+      newAmount: "Başka tutar",
+      done: (amount: string) => `Ödemen doğrulandı; bakiyene ${amount} eklendi.`,
+      errors: {
+        invalidInput: "İşlem kimliği 0x ile başlayan 66 karakter olmalı.",
+        methodDisabled: "USDT ile ödeme şu an kapalı.",
+        noPending: "Bekleyen bir USDT talebin yok ya da süresi doldu. Yeni bir tutar oluştur.",
+        notFound: "Bu işlem BSC ağında bulunamadı. Ağı ve işlem kimliğini kontrol et.",
+        failed: "Bu işlem zincirde başarısız olmuş.",
+        noTransfer: "Bu işlem, adresimize yapılmış bir USDT (BEP20) transferi değil.",
+        unconfirmed: "İşlem henüz yeterince onaylanmadı. Bir dakika sonra tekrar dene.",
+        amountMismatch:
+          "Gönderilen tutar bekleyen tutarınla eşleşmiyor. Farklı tutar gönderdiysen destekle iletişime geç.",
+        tooOld: "Bu işlem, ödeme talebinden önce yapılmış.",
+        duplicateRef: "Bu işlem daha önce kullanılmış.",
+        providerFailed: "BSC ağına şu an ulaşılamıyor. Biraz sonra tekrar dene.",
+      },
+    },
   },
 
   history: {
@@ -612,6 +650,44 @@ const en: Dict = {
     pickFirst: "Pick a pack to continue.",
     failed: "Couldn't complete that. Try again.",
     disabled: "This payment method is currently unavailable.",
+    crypto: {
+      title: "Pay with USDT",
+      steps:
+        "Send exactly the amount shown to the address below from your wallet, then paste the transaction hash and verify.",
+      network: "Network",
+      networkValue: "BSC – Binance Smart Chain (BEP20)",
+      address: "Wallet address",
+      amount: "Amount to send",
+      exactNote:
+        "Send exactly this amount: the decimals link the payment to your account. A different amount won't match automatically.",
+      warning:
+        "Send USDT on the BSC (BEP20) network only. Payments sent on the wrong network or token can't be recovered.",
+      expiresIn: (time) => `This amount is valid for ${time}.`,
+      expired: "This payment request has expired. Create a new amount.",
+      qrAlt: "QR code of the wallet address",
+      copy: "Copy",
+      copied: "Copied",
+      txHash: "Transaction hash (Txn Hash)",
+      txHashHint: "Shown in your wallet or in the transaction details on BscScan; starts with 0x.",
+      verify: "Verify payment",
+      verifying: "Checking on chain…",
+      newAmount: "Different amount",
+      done: (amount) => `Payment verified; ${amount} was added to your balance.`,
+      errors: {
+        invalidInput: "The transaction hash must be 66 characters starting with 0x.",
+        methodDisabled: "USDT payments are currently unavailable.",
+        noPending: "You have no pending USDT request, or it has expired. Create a new amount.",
+        notFound: "This transaction wasn't found on BSC. Check the network and the hash.",
+        failed: "This transaction failed on chain.",
+        noTransfer: "This transaction isn't a USDT (BEP20) transfer to our address.",
+        unconfirmed: "The transaction isn't confirmed enough yet. Try again in a minute.",
+        amountMismatch:
+          "The amount sent doesn't match your pending amount. If you sent a different amount, contact support.",
+        tooOld: "This transaction was made before the payment request.",
+        duplicateRef: "This transaction has already been used.",
+        providerFailed: "The BSC network is unreachable right now. Try again shortly.",
+      },
+    },
   },
 
   history: {

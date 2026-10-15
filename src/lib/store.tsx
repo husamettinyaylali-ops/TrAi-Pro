@@ -9,6 +9,7 @@ import type {
   AccountErrorCode,
   ActionErrorCode,
   AuthErrorCode,
+  ClaimErrorCode,
   EmailErrorCode,
   GenerateInput,
   Generation,
@@ -44,6 +45,10 @@ interface Store {
     password: string;
   }) => Promise<Outcome<object, AuthErrorCode> | RateLimited>;
   signOut: () => Promise<void>;
+  /** USDT (BEP20) ödemesini işlem kimliğiyle doğrulayıp bakiyeye yazar. */
+  claimUsdt: (
+    txHash: string,
+  ) => Promise<Outcome<{ intent: TopUpIntent }, ClaimErrorCode> | RateLimited>;
   /** Paketi USD bakiyeden alır. */
   purchase: (packageId: string) => Promise<Outcome<{ order: Order }, ActionErrorCode>>;
   /** Bakiye yükleme talebi; demo yöntemi hemen tamamlanır. */
@@ -141,6 +146,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       purchase: (packageId) => call(() => api.purchase({ data: { packageId } })),
       topUp: (method, amountCents) => call(() => api.topUp({ data: { method, amountCents } })),
+      claimUsdt: (txHash) => call(() => api.claimUsdt({ data: { txHash } })),
       generate: (input) => call(() => api.generate({ data: input })),
       deleteGeneration: async (id) => {
         await call(() => api.deleteGeneration({ data: { id } }));

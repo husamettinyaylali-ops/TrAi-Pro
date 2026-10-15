@@ -145,3 +145,27 @@ export type TopUpErrorCode =
   | "methodDisabled"
   /** Benzersiz kripto tutarı üretilemedi (çok fazla bekleyen talep). */
   | "busy";
+
+/** Kripto ödeme doğrulamasının sonuçları. */
+export type ClaimErrorCode =
+  | "unauthorized"
+  | "invalidInput"
+  | "methodDisabled"
+  /** Kullanıcının bu yöntemde bekleyen talebi yok (süresi dolmuş olabilir). */
+  | "noPending"
+  /** İşlem zincirde/serviste bulunamadı. */
+  | "notFound"
+  /** İşlem başarısız olmuş. */
+  | "failed"
+  /** İşlem, alıcıya USDT transferi değil. */
+  | "noTransfer"
+  /** Henüz yeterli onay yok; biraz sonra tekrar denenir. */
+  | "unconfirmed"
+  /** Gönderilen tutar bekleyen benzersiz tutarla eşleşmiyor. */
+  | "amountMismatch"
+  /** İşlem, talepten önce yapılmış. */
+  | "tooOld"
+  /** Bu işlem daha önce kullanılmış. */
+  | "duplicateRef"
+  /** Zincire/servise ulaşılamadı. */
+  | "providerFailed";

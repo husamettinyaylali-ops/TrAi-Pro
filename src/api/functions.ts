@@ -14,6 +14,7 @@ import type { Lang } from "@/lib/i18n";
 import type { Account, PaymentConfig, SessionPayload, StudioConfig } from "@/lib/types";
 
 import { audioStorage } from "@/server/audio-storage.server";
+import { checkUsdtTransfer, rpcClient, usdtConfig } from "@/server/bsc.server";
 import { getDb } from "@/server/db.server";
 import { getMailer } from "@/server/email.server";
 import { env, isProduction } from "@/server/env.server";
@@ -134,7 +135,10 @@ const demoPaymentsEnabled = () => !isProduction() || env("DEMO_PAYMENTS") === "o
 function paymentConfig(): PaymentConfig {
   return {
     demo: demoPaymentsEnabled(),
-    usdtBep20: null,
+    usdtBep20: (() => {
+      const usdt = usdtConfig();
+      return usdt ? { address: usdt.address } : null;
+    })(),
     binancePay: null,
     paypal: null,
   };
@@ -170,6 +174,29 @@ export const topUp = createServerFn({ method: "POST" })
     ];
     if (!enabled) return { ok: false as const, error: "methodDisabled" as const };
     const res = await svc.createTopUp(db, user.id, data, clock());
+    if (!res.ok) return res;
+    return { ok: true as const, intent: res.intent, session: await payloadFor(user) };
+  });
+
+/**
+ * USDT (BEP20) ödemesini işlem kimliğiyle doğrular. Zincir herkese açık BSC
+ * düğümünden sorgulanır; eşleşme kullanıcının bekleyen benzersiz tutarıyla yapılır.
+ */
+export const claimUsdt = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ txHash: z.string().max(100) })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    const cfg = usdtConfig();
+    if (!cfg) return { ok: false as const, error: "methodDisabled" as const };
+    const client = rpcClient(cfg.rpcUrl);
+    const res = await svc.claimUsdtTopUp(
+      await getDb(),
+      user.id,
+      data.txHash,
+      (hash) => checkUsdtTransfer(client, hash, cfg.address, cfg.confirmations),
+      clock(),
+    );
     if (!res.ok) return res;
     return { ok: true as const, intent: res.intent, session: await payloadFor(user) };
   });

@@ -11,6 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { CryptoPayPanel } from "@/components/site/crypto-pay";
 import { RequireAuth } from "@/components/site/require-auth";
 import {
   DemoNote,
@@ -24,7 +25,7 @@ import { useFormat, useI18n } from "@/lib/i18n";
 import { allPackages, findPackage, type CreditPackage } from "@/lib/packages";
 import { usePaymentConfig } from "@/lib/payment-config";
 import { useApp, type Order } from "@/lib/store";
-import type { PaymentConfig, TopUpMethod } from "@/lib/types";
+import type { PaymentConfig, TopUpIntent, TopUpMethod } from "@/lib/types";
 import { MIN_TOPUP_CENTS } from "@/lib/wallet";
 
 export const Route = createFileRoute("/payment")({
@@ -79,13 +80,19 @@ function Note({ ok, text }: { ok: boolean; text: string }) {
 function TopUpPanel({ amount, setAmount }: { amount: string; setAmount: (v: string) => void }) {
   const { t } = useI18n();
   const f = useFormat();
-  const { topUp } = useApp();
+  const { topUp, data } = useApp();
   const config = usePaymentConfig();
   const methods = enabledMethods(config.data);
   const [method, setMethod] = useState<TopUpMethod | null>(null);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const chosen = method && methods.includes(method) ? method : (methods[0] ?? null);
+  // Süresi dolmamış USDT talebi varsa (sayfaya geri dönüldüğünde) ödeme paneli açık gelir.
+  const pendingUsdt = data.wallet.pending.find((p) => p.method === "usdt_bep20") ?? null;
+  const [active, setActive] = useState<TopUpIntent | null>(null);
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const shown = active ?? (pendingUsdt && pendingUsdt.id !== dismissed ? pendingUsdt : null);
+  const usdtAddress = config.data?.usdtBep20?.address;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -106,7 +113,14 @@ function TopUpPanel({ amount, setAmount }: { amount: string; setAmount: (v: stri
     }
     if (res.intent.status === "completed") {
       setNote({ ok: true, text: t.payment.topUpDone(f.usd(res.intent.amountCents / 100)) });
+    } else if (res.intent.method === "usdt_bep20") {
+      setActive(res.intent);
     }
+  };
+
+  const closePanel = () => {
+    if (shown) setDismissed(shown.id);
+    setActive(null);
   };
 
   return (
@@ -119,6 +133,16 @@ function TopUpPanel({ amount, setAmount }: { amount: string; setAmount: (v: stri
           <div className="shimmer h-11 rounded-xl" />
           <div className="shimmer h-24 rounded-2xl" />
         </div>
+      ) : shown && usdtAddress ? (
+        <CryptoPayPanel
+          intent={shown}
+          address={usdtAddress}
+          onClose={closePanel}
+          onDone={(text) => {
+            closePanel();
+            setNote({ ok: true, text });
+          }}
+        />
       ) : methods.length === 0 ? (
         <Note ok={false} text={t.payment.noMethods} />
       ) : (

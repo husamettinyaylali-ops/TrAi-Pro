@@ -27,6 +27,7 @@ import type {
   Account,
   ActionErrorCode,
   AuthErrorCode,
+  ClaimErrorCode,
   EmailErrorCode,
   GenerateInput,
   GoogleErrorCode,
@@ -43,6 +44,7 @@ import { stockVoices } from "@/lib/voices";
 import type { Lang } from "@/lib/i18n";
 
 import type { AudioStorage } from "./audio-storage.server";
+import { TX_HASH_RE, type TransferCheck } from "./bsc.server";
 import type { Db } from "./db.server";
 import type { EmailMessage, Mailer } from "./email.server";
 import {
@@ -615,6 +617,65 @@ export async function purchasePackage(
   });
   if (!ok) return { ok: false, error: "insufficientBalance" };
   return { ok: true, order: toOrder(row) };
+}
+
+/** Talep oluşturulmadan bu kadar önceki işlemler kabul edilmez (saat farkı payı). */
+const CLAIM_CLOCK_SKEW_MS = 5 * 60_000;
+
+/**
+ * USDT (BEP20) ödemesini işlem kimliğiyle doğrular ve kullanıcının bekleyen
+ * talebini tamamlar. Eşleşme benzersiz tutarla yapılır: zincir herkese açık
+ * olduğundan yalnız işlem kimliğine güvenilseydi, alıcı adresi izleyen biri
+ * başkasının ödemesini sahiplenebilirdi.
+ */
+export async function claimUsdtTopUp(
+  db: Db,
+  userId: string,
+  txHash: string,
+  check: (hash: string) => Promise<TransferCheck>,
+  now: Date,
+): Promise<Result<{ intent: TopUpIntent }, ClaimErrorCode> | RateLimited> {
+  const hash = txHash.trim().toLowerCase();
+  if (!TX_HASH_RE.test(hash)) return { ok: false, error: "invalidInput" };
+
+  const key = `claim:user:${userId}`;
+  const stop = await blocked(db, [[key, LIMITS.claimPerUser]], now);
+  if (stop) return stop;
+  await recordAttempt(db, key, now);
+
+  const pending = await db
+    .select()
+    .from(paymentIntents)
+    .where(
+      and(
+        eq(paymentIntents.userId, userId),
+        eq(paymentIntents.method, "usdt_bep20"),
+        eq(paymentIntents.status, "pending"),
+        gt(paymentIntents.expiresAt, now.toISOString()),
+      ),
+    );
+  if (!pending.length) return { ok: false, error: "noPending" };
+
+  let res: TransferCheck;
+  try {
+    res = await check(hash);
+  } catch (err) {
+    console.error("[ödeme] BSC sorgusu başarısız:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "providerFailed" };
+  }
+  if (!res.ok)
+    return { ok: false, error: res.error === "oddAmount" ? "amountMismatch" : res.error };
+
+  const intent = pending.find((p) => p.payAmount === res.amount);
+  if (!intent) return { ok: false, error: "amountMismatch" };
+  if (res.blockTime * 1000 < Date.parse(intent.createdAt) - CLAIM_CLOCK_SKEW_MS) {
+    return { ok: false, error: "tooOld" };
+  }
+
+  const done = await completeTopUp(db, intent.id, hash, now);
+  if (!done.ok)
+    return { ok: false, error: done.error === "duplicateRef" ? "duplicateRef" : "noPending" };
+  return { ok: true, intent: done.intent };
 }
 
 async function loadWallet(db: Db, userId: string, now: Date): Promise<UserData["wallet"]> {

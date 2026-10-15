@@ -23,6 +23,8 @@ export const LIMITS = {
   ttsPerUser: { max: 20, windowMs: MINUTE },
   /** Aynı kullanıcı saatte en fazla 5 ses klonlama denemesi. */
   clonePerUser: { max: 5, windowMs: 60 * MINUTE },
+  /** Aynı kullanıcı saatte en fazla 20 ödeme doğrulama denemesi (zincir/servis sorgusu). */
+  claimPerUser: { max: 20, windowMs: 60 * MINUTE },
 } as const satisfies Record<string, Limit>;
 
 export type LimitCheck = { allowed: true } | { allowed: false; retryAfterMs: number };
