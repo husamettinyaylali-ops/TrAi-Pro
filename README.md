@@ -21,7 +21,7 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 
 **Hazır:** Hesaplar, oturumlar, krediler, siparişler ve üretim geçmişi sunucuda, SQLite veritabanında tutulur (Drizzle ORM + libSQL). Şifreler scrypt ile özetlenir; oturum `httpOnly` çerezle taşınır, veritabanında yalnız token özeti durur. Kredi maliyeti sunucuda hesaplanır ve tek transaction içinde düşülür. E-posta/şifreye ek olarak Google ile giriş ve kayıt vardır (aşağıdaki kuruluma bakın). Kaba kuvvete karşı deneme sınırı uygulanır: aynı e-postaya 15 dakikada 5, aynı IP'den 15 dakikada 20 başarısız şifre denemesi; aynı IP'den saatte 5 kayıt (`src/lib/rate-limit.ts`). Proxy arkasında `TRUST_PROXY=on` ayarlanmalıdır. Hesap sayfasında şifre değişince diğer cihazlardaki oturumlar kapanır; şifreyle açılmış hesaba Google kullanıcının kendi isteğiyle bağlanabilir; hesap silme e-posta onayı (şifreli hesapta şifre de) ister ve kullanıcının tüm verisini siler. Kayıtta doğrulama e-postası gider; **5.000 deneme kredisi e-posta doğrulanınca** tanımlanır (Google ile açılan hesaplar doğrulanmış sayılır). Şifremi unuttum bağlantısı 1 saat, doğrulama bağlantısı 24 saat geçerlidir; ikisi de tek kullanımlıktır ve veritabanında yalnız özetleri durur. Şifre değişince "şifren değiştirildi" bildirimi gider.
 
-**Ödeme modeli (genaipro.io ile aynı):** Kullanıcı önce USD bakiye yükler (en az $5), paketleri bakiyeden alır. Bakiye, değiştirilemez bir defterde tutulur (`wallet_entries`): yükleme artı, alım eksi kayıt; düzeltme yeni kayıtla yapılır. Bakiye yükleme talepleri (`payment_intents`) 1 saat geçerlidir; kripto yöntemlerinde ödemeyi kullanıcıya bağlamak için kuruşuna kadar benzersiz tutar atanır (ör. 10,0347 USDT). Sağlayıcı işlem kimliği benzersizdir, aynı ödeme iki kez bakiyeye yazılamaz. Yöntemler: USDT (BEP20), Binance Pay, PayPal/kart (PayPal kendi aşamasında bağlanır). Geliştirmede (üretimde yalnız `DEMO_PAYMENTS=on` ile) "Demo bakiye" yöntemi gerçek ödeme almadan bakiye yükler.
+**Ödeme modeli (genaipro.io ile aynı):** Kullanıcı önce USD bakiye yükler (en az $5), paketleri bakiyeden alır. Bakiye, değiştirilemez bir defterde tutulur (`wallet_entries`): yükleme artı, alım eksi kayıt; düzeltme yeni kayıtla yapılır. Bakiye yükleme talepleri (`payment_intents`) 1 saat geçerlidir; kripto yöntemlerinde ödemeyi kullanıcıya bağlamak için kuruşuna kadar benzersiz tutar atanır (ör. 10,0347 USDT). Sağlayıcı işlem kimliği benzersizdir, aynı ödeme iki kez bakiyeye yazılamaz. Yöntemler: USDT (BEP20), Binance Pay, PayPal/kart. Geliştirmede (üretimde yalnız `DEMO_PAYMENTS=on` ile) "Demo bakiye" yöntemi gerçek ödeme almadan bakiye yükler.
 
 **Demo olan kısımlar:**
 
@@ -62,6 +62,15 @@ Zincir herkese açık olduğu için eşleşme yalnız işlem kimliğine değil b
 4. Sunucu Binance Pay geçmişini (`GET /sapi/v1/pay/transactions`, imzalı) okur ve hesabınıza gelen C2C USDT ödemeleri arasında kullanıcının bekleyen tutarını, talepten sonra yapılmış ve daha önce kullanılmamış işlemi arar. Bulursa bakiye yüklenir.
 
 Binance geçmişi ödeme notunu döndürmediği için eşleşme yalnız benzersiz tutar ve zamanla yapılır; Binance uygulamasında güvenle girilebilen 2 ondalık kullanılır. Geçmiş sorgusu ağır olduğundan liste 20 saniye önbellekte tutulur ve kullanıcılar arasında paylaşılır. USDT dışında bir para birimiyle ya da farklı tutarla yapılan ödeme otomatik eşleşmez; destekle elle çözülür.
+
+## PayPal ve kartla bakiye yükleme
+
+1. [developer.paypal.com](https://developer.paypal.com)'da **Apps & Credentials** altında bir REST uygulaması oluşturun. Önce **Sandbox** sekmesindeki bilgilerle deneyin.
+2. `.env`'e `PAYPAL_CLIENT_ID` ve `PAYPAL_CLIENT_SECRET` yazın. `PAYPAL_ENV` boşken sandbox kullanılır; canlıya geçerken **Live** bilgilerini yazıp `PAYPAL_ENV=live` yapın.
+3. Kullanıcı tutar seçer ve PayPal düğmesiyle PayPal hesabından ya da "Banka/Kredi kartı" seçeneğiyle kartla öder. Sipariş sunucuda talep tutarıyla açılır (`custom_id` = talep kimliği); kullanıcı onaylayınca sunucu siparişi okur, talep bu kullanıcının mı, tutar aynı mı ve talep hâlâ geçerli mi diye bakar, sonra tahsil edip bakiyeye yazar. Tutmazsa tahsil edilmez, kullanıcıdan para alınmaz.
+4. (Önerilir) **Webhooks** bölümünde `https://<alan-adınız>/webhooks/paypal` adresine `PAYMENT.CAPTURE.COMPLETED` olayını ekleyin ve verilen kimliği `PAYPAL_WEBHOOK_ID` olarak yazın. İncelemeye düşüp sonradan tamamlanan ödemeler böylece kendiliğinden bakiyeye yazılır. Webhook imzası PayPal'ın doğrulama API'siyle denetlenir.
+
+Sandbox'ta deneme için **Sandbox accounts**'taki kişisel test hesabıyla ya da PayPal'ın test kartlarıyla ödeyin.
 
 ## Bakiyeye yazılan tutar
 
