@@ -245,6 +245,31 @@ const tr = {
     pickFirst: "Devam etmek için bir paket seç.",
     failed: "İşlem tamamlanamadı. Tekrar dene.",
     disabled: "Bu ödeme yöntemi şu an kapalı.",
+    creditNote: (amount: string) => `Ödemen doğrulanınca bakiyene ${amount} eklenir.`,
+    binance: {
+      title: "Binance Pay ile öde",
+      steps:
+        "Binance uygulamasında Pay > Gönder bölümüne gir, alıcı olarak Binance kimliğimizi yaz ve tam olarak gösterilen tutarda USDT gönder. Sonra aşağıdaki düğmeye bas.",
+      binanceId: "Binance kimliği (Pay ID)",
+      amount: "Gönderilecek tutar",
+      exactNote:
+        "Tam bu tutarı gönder: kuruş hanesi ödemeni hesabına bağlar. Farklı tutar otomatik eşleşmez.",
+      warning:
+        "Yalnız USDT gönder. Başka bir para birimiyle (ör. USDC, BNB) yapılan ödemeler otomatik eşleşmez.",
+      check: "Ödemeyi yaptım, kontrol et",
+      checking: "Kontrol ediliyor…",
+      watching: "Ödemeni bekliyoruz; bu sayfa 30 saniyede bir kendiliğinden kontrol ediyor.",
+      errors: {
+        methodDisabled: "Binance Pay ile ödeme şu an kapalı.",
+        noPending:
+          "Bekleyen bir Binance Pay talebin yok ya da süresi doldu. Yeni bir tutar oluştur.",
+        notFound:
+          "Ödemen henüz görünmüyor. Tam tutarı USDT olarak gönderdiysen birkaç saniye içinde görünür.",
+        duplicateRef:
+          "Bu tutardaki ödeme daha önce kullanılmış. Yeni bir ödeme yaptıysan destekle iletişime geç.",
+        providerFailed: "Binance'e şu an ulaşılamıyor. Biraz sonra tekrar kontrol edeceğiz.",
+      },
+    },
     crypto: {
       title: "USDT ile öde",
       steps:
@@ -650,6 +675,31 @@ const en: Dict = {
     pickFirst: "Pick a pack to continue.",
     failed: "Couldn't complete that. Try again.",
     disabled: "This payment method is currently unavailable.",
+    creditNote: (amount) => `Once your payment is verified, ${amount} is added to your balance.`,
+    binance: {
+      title: "Pay with Binance Pay",
+      steps:
+        "In the Binance app, open Pay > Send, enter our Binance ID as the recipient and send exactly the USDT amount shown. Then press the button below.",
+      binanceId: "Binance ID (Pay ID)",
+      amount: "Amount to send",
+      exactNote:
+        "Send exactly this amount: the decimals link the payment to your account. A different amount won't match automatically.",
+      warning:
+        "Send USDT only. Payments in any other currency (e.g. USDC, BNB) won't match automatically.",
+      check: "I've paid, check now",
+      checking: "Checking…",
+      watching: "Waiting for your payment; this page checks automatically every 30 seconds.",
+      errors: {
+        methodDisabled: "Binance Pay payments are currently unavailable.",
+        noPending:
+          "You have no pending Binance Pay request, or it has expired. Create a new amount.",
+        notFound:
+          "Your payment isn't showing yet. If you sent the exact amount in USDT, it appears within seconds.",
+        duplicateRef:
+          "A payment of this amount has already been used. If you paid again, contact support.",
+        providerFailed: "Binance is unreachable right now. We'll check again shortly.",
+      },
+    },
     crypto: {
       title: "Pay with USDT",
       steps:

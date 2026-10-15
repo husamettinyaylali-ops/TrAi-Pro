@@ -49,6 +49,8 @@ interface Store {
   claimUsdt: (
     txHash: string,
   ) => Promise<Outcome<{ intent: TopUpIntent }, ClaimErrorCode> | RateLimited>;
+  /** Binance Pay ödemesini kontrol edip bakiyeye yazar (bekleyen benzersiz tutarla). */
+  claimBinance: () => Promise<Outcome<{ intent: TopUpIntent }, ClaimErrorCode> | RateLimited>;
   /** Paketi USD bakiyeden alır. */
   purchase: (packageId: string) => Promise<Outcome<{ order: Order }, ActionErrorCode>>;
   /** Bakiye yükleme talebi; demo yöntemi hemen tamamlanır. */
@@ -147,6 +149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       purchase: (packageId) => call(() => api.purchase({ data: { packageId } })),
       topUp: (method, amountCents) => call(() => api.topUp({ data: { method, amountCents } })),
       claimUsdt: (txHash) => call(() => api.claimUsdt({ data: { txHash } })),
+      claimBinance: () => call(() => api.claimBinance()),
       generate: (input) => call(() => api.generate({ data: input })),
       deleteGeneration: async (id) => {
         await call(() => api.deleteGeneration({ data: { id } }));

@@ -25,6 +25,11 @@ export const LIMITS = {
   clonePerUser: { max: 5, windowMs: 60 * MINUTE },
   /** Aynı kullanıcı saatte en fazla 20 ödeme doğrulama denemesi (zincir/servis sorgusu). */
   claimPerUser: { max: 20, windowMs: 60 * MINUTE },
+  /**
+   * Binance Pay kontrolü: panel açıkken 30 sn'de bir otomatik denenir; 1 saatlik
+   * talep süresini karşılar. Geçmiş listesi kullanıcılar arasında önbellekten paylaşılır.
+   */
+  binanceCheckPerUser: { max: 150, windowMs: 60 * MINUTE },
 } as const satisfies Record<string, Limit>;
 
 export type LimitCheck = { allowed: true } | { allowed: false; retryAfterMs: number };

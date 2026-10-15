@@ -14,6 +14,7 @@ import type { Lang } from "@/lib/i18n";
 import type { Account, PaymentConfig, SessionPayload, StudioConfig } from "@/lib/types";
 
 import { audioStorage } from "@/server/audio-storage.server";
+import { binanceConfig, sharedIncoming } from "@/server/binance.server";
 import { checkUsdtTransfer, rpcClient, usdtConfig } from "@/server/bsc.server";
 import { getDb } from "@/server/db.server";
 import { getMailer } from "@/server/email.server";
@@ -139,7 +140,10 @@ function paymentConfig(): PaymentConfig {
       const usdt = usdtConfig();
       return usdt ? { address: usdt.address } : null;
     })(),
-    binancePay: null,
+    binancePay: (() => {
+      const binance = binanceConfig();
+      return binance ? { binanceId: binance.binanceId } : null;
+    })(),
     paypal: null,
   };
 }
@@ -200,6 +204,20 @@ export const claimUsdt = createServerFn({ method: "POST" })
     if (!res.ok) return res;
     return { ok: true as const, intent: res.intent, session: await payloadFor(user) };
   });
+
+/**
+ * Binance Pay ödemesini kontrol eder: hesabımıza gelen ödemeler arasında
+ * kullanıcının bekleyen benzersiz tutarı aranır. Panel açıkken düzenli çağrılır.
+ */
+export const claimBinance = createServerFn({ method: "POST" }).handler(async () => {
+  const user = await currentUser();
+  if (!user) return { ok: false as const, error: "unauthorized" as const };
+  const cfg = binanceConfig();
+  if (!cfg) return { ok: false as const, error: "methodDisabled" as const };
+  const res = await svc.claimBinanceTopUp(await getDb(), user.id, sharedIncoming(cfg), clock());
+  if (!res.ok) return res;
+  return { ok: true as const, intent: res.intent, session: await payloadFor(user) };
+});
 
 /** Paketi USD bakiyeden alır. */
 export const purchase = createServerFn({ method: "POST" })

@@ -19,8 +19,10 @@ export interface TopUpIntent {
   id: string;
   method: TopUpMethod;
   amountCents: number;
-  /** Gönderilecek tutar; kripto yöntemlerde benzersiz 4 ondalıklı tutar (ör. "10.0347"). */
+  /** Gönderilecek tutar; kripto yöntemlerde benzersiz tutar (USDT BEP20 "10.0347", Binance Pay "10.37"). */
   payAmount: string;
+  /** Ödeme doğrulanınca bakiyeye yazılacak tutar (sent); kriptoda ödenen tutar sente aşağı yuvarlanır. */
+  creditCents: number;
   payCurrency: "USDT" | "USD";
   status: "pending" | "completed" | "expired";
   createdAt: string;

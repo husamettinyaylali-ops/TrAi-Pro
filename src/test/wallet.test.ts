@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   balanceCents,
+  centsFromAmount,
   formatCents,
   formatUnits,
+  normalizeAmount,
   uniqueCryptoAmount,
   unitsFromWei,
 } from "@/lib/wallet";
@@ -44,5 +46,37 @@ describe("birim dönüşümleri", () => {
       balanceCents([{ amountCents: 1_000 }, { amountCents: -800 }, { amountCents: 500 }]),
     ).toBe(700);
     expect(formatCents(2_200)).toBe("22.00");
+  });
+});
+
+describe("Binance Pay tutarları ve bakiyeye yazılan karşılık", () => {
+  it("2 ondalıkta 0,01–0,99 arası ek", () => {
+    expect(uniqueCryptoAmount(1_000, new Set(), () => 0, 2)).toBe("10.01");
+    expect(uniqueCryptoAmount(1_000, new Set(), () => 0.9999, 2)).toBe("10.99");
+    expect(
+      uniqueCryptoAmount(
+        1_000,
+        new Set(["10.01"]),
+        (() => {
+          let i = 0;
+          return () => [0, 0.5][i++ % 2]!;
+        })(),
+        2,
+      ),
+    ).toBe("10.50");
+  });
+
+  it("servisin tutar metni kayıpsız indirgenir; daha hassas tutar eşleşmez", () => {
+    expect(normalizeAmount("10.37000000", 2)).toBe("10.37");
+    expect(normalizeAmount("10.3", 2)).toBe("10.30");
+    expect(normalizeAmount("10", 4)).toBe("10.0000");
+    expect(normalizeAmount("10.371", 2)).toBeNull();
+    expect(normalizeAmount("-1", 2)).toBeNull();
+  });
+
+  it("ödenen tutar sente aşağı yuvarlanarak bakiyeye yazılır", () => {
+    expect(centsFromAmount("10.0347")).toBe(1_003);
+    expect(centsFromAmount("10.37")).toBe(1_037);
+    expect(centsFromAmount("5.0001")).toBe(500);
   });
 });

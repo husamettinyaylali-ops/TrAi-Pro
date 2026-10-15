@@ -195,14 +195,14 @@ describe("USDT ödemesiyle bakiye yükleme", () => {
       now,
     );
     expect(res.ok && res.intent.status).toBe("completed");
-    expect(await walletBalance(db, id)).toBe(1_000);
+    expect(await walletBalance(db, id)).toBe(1_003);
 
     await intent(id, 1_000, extra(347));
     expect(await claimUsdtTopUp(db, id, hash(1), checker(chain), now)).toEqual({
       ok: false,
       error: "duplicateRef",
     });
-    expect(await walletBalance(db, id)).toBe(1_000);
+    expect(await walletBalance(db, id)).toBe(1_003);
   });
 
   it("başkasının işlemini sahiplenmeye çalışan kullanıcı reddedilir", async () => {
@@ -218,7 +218,7 @@ describe("USDT ödemesiyle bakiye yükleme", () => {
     });
     expect(await walletBalance(db, attacker)).toBe(0);
     expect((await claimUsdtTopUp(db, victim, hash(1), checker(chain), now)).ok).toBe(true);
-    expect(await walletBalance(db, victim)).toBe(1_000);
+    expect(await walletBalance(db, victim)).toBe(1_003);
   });
 
   it("bekleyen talep yoksa, tutar tutmazsa ya da işlem talepten önceyse yüklenmez", async () => {

@@ -1,10 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AlertTriangle, Check, Clock, Copy, Loader2 } from "lucide-react";
 import { toDataURL } from "qrcode";
 
 import { useFormat, useI18n } from "@/lib/i18n";
 import { useApp } from "@/lib/store";
-import type { TopUpIntent } from "@/lib/types";
+import type { ClaimErrorCode, TopUpIntent } from "@/lib/types";
 
 import { btnOutline, btnPrimary, field } from "./shell";
 
@@ -66,6 +66,30 @@ const mmss = (ms: number) => {
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 };
 
+function ExpiryLine({ remaining }: { remaining: number }) {
+  const { t } = useI18n();
+  const c = t.payment.crypto;
+  const expired = remaining <= 0;
+  return (
+    <p
+      className={`flex items-center gap-2 text-sm ${expired ? "text-destructive" : "text-muted-foreground"}`}
+      aria-live="polite"
+    >
+      <Clock className="h-4 w-4" aria-hidden />
+      {expired ? c.expired : c.expiresIn(mmss(remaining))}
+    </p>
+  );
+}
+
+function Warning({ text }: { text: string }) {
+  return (
+    <p className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      {text}
+    </p>
+  );
+}
+
 /**
  * USDT (BEP20) ile bakiye yükleme: adres, benzersiz tutar, QR ve işlem
  * kimliğiyle doğrulama. Alıcı adresi sunucu yapılandırmasından gelir.
@@ -108,7 +132,7 @@ export function CryptoPayPanel({
     setBusy(true);
     const res = await claimUsdt(hash);
     setBusy(false);
-    if (res.ok) return onDone(c.done(f.usd(res.intent.amountCents / 100)));
+    if (res.ok) return onDone(c.done(f.usd(res.intent.creditCents / 100)));
     if (res.error === "tooManyAttempts")
       return setError(t.auth.errors.tooManyAttempts(res.retryAfterMinutes));
     if (res.error === "network" || res.error === "unauthorized")
@@ -142,20 +166,12 @@ export function CryptoPayPanel({
       </div>
 
       <CopyRow label={c.amount} value={`${intent.payAmount} USDT`} strong />
-      <p className="text-xs text-muted-foreground">{c.exactNote}</p>
-
-      <p className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-xs text-destructive">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-        {c.warning}
+      <p className="text-xs text-muted-foreground">
+        {c.exactNote} {t.payment.creditNote(f.usd(intent.creditCents / 100))}
       </p>
 
-      <p
-        className={`flex items-center gap-2 text-sm ${expired ? "text-destructive" : "text-muted-foreground"}`}
-        aria-live="polite"
-      >
-        <Clock className="h-4 w-4" aria-hidden />
-        {expired ? c.expired : c.expiresIn(mmss(remaining))}
-      </p>
+      <Warning text={c.warning} />
+      <ExpiryLine remaining={remaining} />
 
       {!expired && (
         <form onSubmit={submit} noValidate className="space-y-3">
@@ -192,6 +208,132 @@ export function CryptoPayPanel({
 
       <button type="button" onClick={onClose} className={`${btnOutline} w-full`}>
         {c.newAmount}
+      </button>
+    </div>
+  );
+}
+
+/** Otomatik kontrolün aralığı; sunucu da aynı sıklığı sınırlar. */
+const BINANCE_POLL_MS = 30_000;
+/** Bu hatalarda otomatik kontrol durur; diğerlerinde (ödeme henüz yok, servis yanıt vermedi) sürer. */
+const STOP_ON: ReadonlySet<string> = new Set([
+  "noPending",
+  "duplicateRef",
+  "methodDisabled",
+  "unauthorized",
+  "tooManyAttempts",
+]);
+
+/**
+ * Binance Pay ile bakiye yükleme: Binance kimliği ve 2 ondalıklı benzersiz
+ * tutar. Kullanıcı "ödemeyi yaptım" dedikten sonra ödeme, panel açık kaldıkça
+ * düzenli aralıklarla kontrol edilir. Binance kimliği sunucu yapılandırmasından gelir.
+ */
+export function BinancePayPanel({
+  intent,
+  binanceId,
+  onClose,
+  onDone,
+}: {
+  intent: TopUpIntent;
+  binanceId: string;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const { t } = useI18n();
+  const f = useFormat();
+  const { claimBinance } = useApp();
+  const b = t.payment.binance;
+  const [watching, setWatching] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; soft: boolean } | null>(null);
+  const remaining = useRemaining(intent.expiresAt);
+  const expired = remaining <= 0;
+  const inFlight = useRef(false);
+
+  const check = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    const res = await claimBinance();
+    inFlight.current = false;
+    setBusy(false);
+    if (res.ok) return onDone(t.payment.crypto.done(f.usd(res.intent.creditCents / 100)));
+    if (STOP_ON.has(res.error)) setWatching(false);
+    if (res.error === "tooManyAttempts")
+      return setMessage({
+        text: t.auth.errors.tooManyAttempts(res.retryAfterMinutes),
+        soft: false,
+      });
+    if (res.error === "network" || res.error === "unauthorized")
+      return setMessage({ text: t.auth.errors.network, soft: res.error === "network" });
+    const errors: Partial<Record<ClaimErrorCode, string>> = b.errors;
+    setMessage({
+      text: errors[res.error] ?? t.payment.failed,
+      soft: res.error === "notFound" || res.error === "providerFailed",
+    });
+  };
+  // Geri sayım her saniye yeniden çizdirir; aralık her seferinde kurulmasın diye son fonksiyon ref'te.
+  const latest = useRef(check);
+  useEffect(() => {
+    latest.current = check;
+  });
+
+  useEffect(() => {
+    if (!watching || expired) return;
+    const id = window.setInterval(() => {
+      if (!document.hidden) void latest.current();
+    }, BINANCE_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [watching, expired]);
+
+  const start = async () => {
+    setWatching(true);
+    setMessage(null);
+    await check();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="font-semibold">{b.title}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{b.steps}</p>
+      </div>
+
+      <CopyRow label={b.binanceId} value={binanceId} />
+      <CopyRow label={b.amount} value={`${intent.payAmount} USDT`} strong />
+      <p className="text-xs text-muted-foreground">
+        {b.exactNote} {t.payment.creditNote(f.usd(intent.creditCents / 100))}
+      </p>
+
+      <Warning text={b.warning} />
+      <ExpiryLine remaining={remaining} />
+
+      {!expired && (
+        <div className="space-y-3">
+          {message && (
+            <p
+              role={message.soft ? "status" : "alert"}
+              className={`text-sm ${message.soft ? "text-muted-foreground" : "text-destructive"}`}
+            >
+              {message.text}
+            </p>
+          )}
+          {watching && (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              {b.watching}
+            </p>
+          )}
+          <button type="button" onClick={start} disabled={busy} className={`${btnPrimary} w-full`}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+            {busy ? b.checking : b.check}
+          </button>
+        </div>
+      )}
+
+      <button type="button" onClick={onClose} className={`${btnOutline} w-full`}>
+        {t.payment.crypto.newAmount}
       </button>
     </div>
   );

@@ -20,8 +20,11 @@ import {
   MAX_TOPUP_CENTS,
   MIN_TOPUP_CENTS,
   TOPUP_TTL_MS,
+  centsFromAmount,
   formatCents,
+  normalizeAmount,
   uniqueCryptoAmount,
+  type AmountDecimals,
 } from "@/lib/wallet";
 import type {
   Account,
@@ -44,6 +47,7 @@ import { stockVoices } from "@/lib/voices";
 import type { Lang } from "@/lib/i18n";
 
 import type { AudioStorage } from "./audio-storage.server";
+import type { BinanceIncome, IncomingFetcher } from "./binance.server";
 import { TX_HASH_RE, type TransferCheck } from "./bsc.server";
 import type { Db } from "./db.server";
 import type { EmailMessage, Mailer } from "./email.server";
@@ -408,18 +412,32 @@ export async function loadUserData(db: Db, userId: string, now: Date = clock()):
 
 type IntentRow = typeof paymentIntents.$inferSelect;
 
+/** Bakiyeye yazılacak tutar: kriptoda ödenen benzersiz tutar (sente aşağı), diğerlerinde istenen tutar. */
+const creditCentsFor = (r: Pick<IntentRow, "payCurrency" | "payAmount" | "amountCents">) =>
+  r.payCurrency === "USDT" ? centsFromAmount(r.payAmount) : r.amountCents;
+
 const toIntent = (r: IntentRow): TopUpIntent => ({
   id: r.id,
   method: r.method,
   amountCents: r.amountCents,
   payAmount: r.payAmount,
+  creditCents: creditCentsFor(r),
   payCurrency: r.payCurrency,
   status: r.status,
   createdAt: r.createdAt,
   expiresAt: r.expiresAt,
 });
 
-const CRYPTO_METHODS: ReadonlySet<TopUpMethod> = new Set(["usdt_bep20", "binance_pay"]);
+/** Talep oluşturulmadan bu kadar önceki işlemler kabul edilmez (saat farkı payı). */
+const CLAIM_CLOCK_SKEW_MS = 5 * 60_000;
+
+type CryptoMethod = "usdt_bep20" | "binance_pay";
+const CRYPTO_METHODS: ReadonlySet<TopUpMethod> = new Set<CryptoMethod>([
+  "usdt_bep20",
+  "binance_pay",
+]);
+/** Binance uygulamasında güvenle girilebilen 2 ondalık; zincirde 4. */
+const AMOUNT_DECIMALS: Record<CryptoMethod, AmountDecimals> = { usdt_bep20: 4, binance_pay: 2 };
 
 export async function walletBalance(conn: Conn, userId: string): Promise<number> {
   const row = await conn
@@ -441,9 +459,11 @@ async function expireIntents(conn: Conn, now: Date) {
 }
 
 /**
- * Bakiye yükleme talebi. Kripto yöntemlerinde aynı yöntemde bekleyen taleplerle
- * çakışmayan benzersiz tutar atanır. Kullanıcının aynı yöntemde bekleyen eski
- * talebi geçersiz olur (tek bekleyen tutar).
+ * Bakiye yükleme talebi. Kripto yöntemlerinde, aynı yöntemde ödemesi hâlâ
+ * gelebilecek taleplerle çakışmayan benzersiz tutar atanır: bekleyenler, yeni
+ * talep yüzünden geçersiz kalanlar ve süresi az önce dolanlar. Böylece eski
+ * talebe yapılmış bir ödeme, aynı tutarı alan başka bir kullanıcıya yazılamaz.
+ * Kullanıcının aynı yöntemde bekleyen eski talebi geçersiz olur (tek bekleyen tutar).
  */
 export async function createTopUp(
   db: Db,
@@ -472,11 +492,25 @@ export async function createTopUp(
     let payAmount: string;
     let payCurrency: "USDT" | "USD";
     if (CRYPTO_METHODS.has(input.method)) {
-      const pending = await tx
+      const recent = await tx
         .select({ amount: paymentIntents.payAmount })
         .from(paymentIntents)
-        .where(and(eq(paymentIntents.method, input.method), eq(paymentIntents.status, "pending")));
-      const unique = uniqueCryptoAmount(cents, new Set(pending.map((p) => p.amount)), rand);
+        .where(
+          and(
+            eq(paymentIntents.method, input.method),
+            ne(paymentIntents.status, "completed"),
+            gt(
+              paymentIntents.expiresAt,
+              new Date(now.getTime() - CLAIM_CLOCK_SKEW_MS).toISOString(),
+            ),
+          ),
+        );
+      const unique = uniqueCryptoAmount(
+        cents,
+        new Set(recent.map((p) => p.amount)),
+        rand,
+        AMOUNT_DECIMALS[input.method as CryptoMethod],
+      );
       if (!unique) return { ok: false, error: "busy" } as const;
       payAmount = unique;
       payCurrency = "USDT";
@@ -552,7 +586,7 @@ export async function completeTopUp(
       id: randomUUID(),
       userId: intent.userId,
       kind: "topup",
-      amountCents: intent.amountCents,
+      amountCents: creditCentsFor(intent),
       reference: intent.id,
       createdAt: now.toISOString(),
     });
@@ -619,9 +653,6 @@ export async function purchasePackage(
   return { ok: true, order: toOrder(row) };
 }
 
-/** Talep oluşturulmadan bu kadar önceki işlemler kabul edilmez (saat farkı payı). */
-const CLAIM_CLOCK_SKEW_MS = 5 * 60_000;
-
 /**
  * USDT (BEP20) ödemesini işlem kimliğiyle doğrular ve kullanıcının bekleyen
  * talebini tamamlar. Eşleşme benzersiz tutarla yapılır: zincir herkese açık
@@ -676,6 +707,64 @@ export async function claimUsdtTopUp(
   if (!done.ok)
     return { ok: false, error: done.error === "duplicateRef" ? "duplicateRef" : "noPending" };
   return { ok: true, intent: done.intent };
+}
+
+/**
+ * Binance Pay ödemesini doğrular: hesabımıza gelen C2C USDT ödemeleri arasında
+ * kullanıcının bekleyen 2 ondalıklı benzersiz tutarıyla eşleşen ve talepten
+ * sonra yapılmış ilk kullanılmamış işlem talebi tamamlar. Binance geçmişi not
+ * alanı döndürmediği için eşleşme tutar ve zamanla yapılır.
+ */
+export async function claimBinanceTopUp(
+  db: Db,
+  userId: string,
+  incoming: IncomingFetcher,
+  now: Date,
+): Promise<Result<{ intent: TopUpIntent }, ClaimErrorCode> | RateLimited> {
+  const key = `binance:user:${userId}`;
+  const stop = await blocked(db, [[key, LIMITS.binanceCheckPerUser]], now);
+  if (stop) return stop;
+  await recordAttempt(db, key, now);
+
+  const pending = await db
+    .select()
+    .from(paymentIntents)
+    .where(
+      and(
+        eq(paymentIntents.userId, userId),
+        eq(paymentIntents.method, "binance_pay"),
+        eq(paymentIntents.status, "pending"),
+        gt(paymentIntents.expiresAt, now.toISOString()),
+      ),
+    );
+  if (!pending.length) return { ok: false, error: "noPending" };
+
+  let list: BinanceIncome[];
+  try {
+    // Sabit pencere: tüm kullanıcılar aynı önbelleği paylaşır.
+    list = await incoming(new Date(now.getTime() - TOPUP_TTL_MS - CLAIM_CLOCK_SKEW_MS), now);
+  } catch (err) {
+    console.error(
+      "[ödeme] Binance Pay sorgusu başarısız:",
+      err instanceof Error ? err.message : err,
+    );
+    return { ok: false, error: "providerFailed" };
+  }
+
+  let duplicate = false;
+  for (const intent of pending) {
+    const since = Date.parse(intent.createdAt) - CLAIM_CLOCK_SKEW_MS;
+    const matches = list
+      .filter((i) => i.time >= since && normalizeAmount(i.amount, 2) === intent.payAmount)
+      .sort((a, b) => a.time - b.time);
+    for (const income of matches) {
+      const done = await completeTopUp(db, intent.id, `binance:${income.transactionId}`, now);
+      if (done.ok) return { ok: true, intent: done.intent };
+      if (done.error !== "duplicateRef") return { ok: false, error: "noPending" };
+      duplicate = true;
+    }
+  }
+  return { ok: false, error: duplicate ? "duplicateRef" : "notFound" };
 }
 
 async function loadWallet(db: Db, userId: string, now: Date): Promise<UserData["wallet"]> {

@@ -11,7 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { CryptoPayPanel } from "@/components/site/crypto-pay";
+import { BinancePayPanel, CryptoPayPanel } from "@/components/site/crypto-pay";
 import { RequireAuth } from "@/components/site/require-auth";
 import {
   DemoNote,
@@ -87,12 +87,17 @@ function TopUpPanel({ amount, setAmount }: { amount: string; setAmount: (v: stri
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const chosen = method && methods.includes(method) ? method : (methods[0] ?? null);
-  // Süresi dolmamış USDT talebi varsa (sayfaya geri dönüldüğünde) ödeme paneli açık gelir.
-  const pendingUsdt = data.wallet.pending.find((p) => p.method === "usdt_bep20") ?? null;
-  const [active, setActive] = useState<TopUpIntent | null>(null);
-  const [dismissed, setDismissed] = useState<string | null>(null);
-  const shown = active ?? (pendingUsdt && pendingUsdt.id !== dismissed ? pendingUsdt : null);
   const usdtAddress = config.data?.usdtBep20?.address;
+  const binanceId = config.data?.binancePay?.binanceId;
+  const hasPanel = (m: TopUpMethod) =>
+    (m === "usdt_bep20" && !!usdtAddress) || (m === "binance_pay" && !!binanceId);
+  // Süresi dolmamış kripto talebi varsa (sayfaya geri dönüldüğünde) ödeme paneli açık gelir.
+  const [active, setActive] = useState<TopUpIntent | null>(null);
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const shown =
+    active ??
+    data.wallet.pending.find((p) => hasPanel(p.method) && !dismissed.includes(p.id)) ??
+    null;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -112,15 +117,19 @@ function TopUpPanel({ amount, setAmount }: { amount: string; setAmount: (v: stri
       });
     }
     if (res.intent.status === "completed") {
-      setNote({ ok: true, text: t.payment.topUpDone(f.usd(res.intent.amountCents / 100)) });
-    } else if (res.intent.method === "usdt_bep20") {
+      setNote({ ok: true, text: t.payment.topUpDone(f.usd(res.intent.creditCents / 100)) });
+    } else if (hasPanel(res.intent.method)) {
       setActive(res.intent);
     }
   };
 
   const closePanel = () => {
-    if (shown) setDismissed(shown.id);
+    if (shown) setDismissed((d) => [...d, shown.id]);
     setActive(null);
+  };
+  const finish = (text: string) => {
+    closePanel();
+    setNote({ ok: true, text });
   };
 
   return (
@@ -133,15 +142,14 @@ function TopUpPanel({ amount, setAmount }: { amount: string; setAmount: (v: stri
           <div className="shimmer h-11 rounded-xl" />
           <div className="shimmer h-24 rounded-2xl" />
         </div>
-      ) : shown && usdtAddress ? (
-        <CryptoPayPanel
+      ) : shown?.method === "usdt_bep20" && usdtAddress ? (
+        <CryptoPayPanel intent={shown} address={usdtAddress} onClose={closePanel} onDone={finish} />
+      ) : shown?.method === "binance_pay" && binanceId ? (
+        <BinancePayPanel
           intent={shown}
-          address={usdtAddress}
+          binanceId={binanceId}
           onClose={closePanel}
-          onDone={(text) => {
-            closePanel();
-            setNote({ ok: true, text });
-          }}
+          onDone={finish}
         />
       ) : methods.length === 0 ? (
         <Note ok={false} text={t.payment.noMethods} />

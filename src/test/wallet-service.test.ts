@@ -74,7 +74,26 @@ describe("bakiye yükleme talebi", () => {
       status: "pending",
     });
     const paypal = await createTopUp(db, id, { method: "paypal", amountCents: 1_000 }, now);
-    expect(paypal.ok && paypal.intent).toMatchObject({ payAmount: "10.00", payCurrency: "USD" });
+    expect(paypal.ok && paypal.intent).toMatchObject({
+      payAmount: "10.00",
+      payCurrency: "USD",
+      creditCents: 1_000,
+    });
+  });
+
+  it("Binance Pay talebine 2 ondalıklı benzersiz tutar atanır; ödenen tutar bakiyeye yazılır", async () => {
+    const id = await newUser();
+    const t = await createTopUp(
+      db,
+      id,
+      { method: "binance_pay", amountCents: 1_000 },
+      now,
+      () => 0.5,
+    );
+    if (!t.ok) throw new Error(t.error);
+    expect(t.intent).toMatchObject({ payAmount: "10.50", payCurrency: "USDT", creditCents: 1_050 });
+    expect((await completeTopUp(db, t.intent.id, "binance:1", now)).ok).toBe(true);
+    expect(await walletBalance(db, id)).toBe(1_050);
   });
 
   it("aynı yöntemde bekleyen iki talep aynı tutarı alamaz", async () => {
@@ -100,6 +119,30 @@ describe("bakiye yükleme talebi", () => {
     expect(second.ok && second.intent.payAmount).toBe("10.0250");
   });
 
+  it("bırakılan ya da süresi az önce dolan tutar başkasına hemen verilmez", async () => {
+    const a = await newUser("a@example.com");
+    const b = await newUser("b@example.com");
+    const topUpAt = (user: string, at: Date, ...seq: number[]) => {
+      let i = 0;
+      return createTopUp(
+        db,
+        user,
+        { method: "binance_pay", amountCents: 1_000 },
+        at,
+        () => seq[i++]!,
+      );
+    };
+    expect(await topUpAt(a, now, 0.5)).toMatchObject({ intent: { payAmount: "10.50" } });
+    // a yeni tutar istedi; eski 10.50'ye ödeme hâlâ gelebilir.
+    await createTopUp(db, a, { method: "binance_pay", amountCents: 2_000 }, now, () => 0.5);
+    expect(await topUpAt(b, now, 0.5, 0.25)).toMatchObject({ intent: { payAmount: "10.25" } });
+    // Süre dolalı 4 dakika: hâlâ ayrılmış; 6 dakika: yeniden kullanılabilir.
+    expect(await topUpAt(b, later(64), 0.5, 0.75)).toMatchObject({
+      intent: { payAmount: "10.75" },
+    });
+    expect(await topUpAt(b, later(66), 0.5)).toMatchObject({ intent: { payAmount: "10.50" } });
+  });
+
   it("yeni talep aynı yöntemdeki eski bekleyen talebi geçersiz kılar; süre 1 saat", async () => {
     const id = await newUser();
     const old = await createTopUp(db, id, { method: "usdt_bep20", amountCents: 1_000 }, now);
@@ -117,13 +160,20 @@ describe("bakiye yükleme talebi", () => {
 });
 
 describe("talebin tamamlanması", () => {
-  it("bakiyeye yazar; aynı işlemle tekrar gelirse ikinci kez yazmaz", async () => {
+  it("ödenen tutarı (sente aşağı) bakiyeye yazar; aynı işlemle tekrar gelirse ikinci kez yazmaz", async () => {
     const id = await newUser();
-    const t = await createTopUp(db, id, { method: "usdt_bep20", amountCents: 1_000 }, now);
+    const t = await createTopUp(
+      db,
+      id,
+      { method: "usdt_bep20", amountCents: 1_000 },
+      now,
+      () => 0.5,
+    );
     if (!t.ok) throw new Error(t.error);
+    expect(t.intent).toMatchObject({ payAmount: "10.0500", creditCents: 1_005 });
     expect((await completeTopUp(db, t.intent.id, "0xtx1", now)).ok).toBe(true);
     expect((await completeTopUp(db, t.intent.id, "0xtx1", now)).ok).toBe(true);
-    expect(await walletBalance(db, id)).toBe(1_000);
+    expect(await walletBalance(db, id)).toBe(1_005);
   });
 
   it("aynı işlem kimliği başka talebe yazılamaz", async () => {
