@@ -14,14 +14,15 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 | `/payment-history` | Siparişler ve kalan krediler |
 | `/terms-of-service`, `/privacy-policy`, `/refund-policy`, `/acceptable-use-policy` | Yasal şablon metinler |
 
-## Durum: demo modu
+## Durum
 
-Arka uç henüz yok. Hesap, kredi, sipariş ve üretim geçmişi tarayıcının `localStorage` alanında tutulur; gerçek ödeme alınmaz, şifre saklanmaz. Seslendirme önizlemesi tarayıcının konuşma sentezini, görsel/video sonuçları örnek görselleri kullanır. Yayına almak için gereken bağlantılar:
+**Hazır:** Hesaplar, oturumlar, krediler, siparişler ve üretim geçmişi sunucuda, SQLite veritabanında tutulur (Drizzle ORM + libSQL). Şifreler scrypt ile özetlenir; oturum `httpOnly` çerezle taşınır, veritabanında yalnız token özeti durur. Kredi maliyeti sunucuda hesaplanır ve tek transaction içinde düşülür.
 
-- Kimlik doğrulama (sunucu tarafı oturum)
-- Ödeme sağlayıcısı (ör. iyzico, Stripe)
-- Ses, görsel ve video üretimi için yapay zeka API'leri
-- Kredi ve siparişlerin sunucuda tutulması
+**Demo olan kısımlar:**
+
+- Ödeme: sipariş anında "ödendi" sayılır. Üretimde yalnız `DEMO_PAYMENTS=on` ile açıktır; gerçek sağlayıcı (ör. iyzico, Stripe) bağlanınca kredi, sağlayıcının onay bildirimiyle tanımlanmalı.
+- Üretim: seslendirme önizlemesi tarayıcının konuşma sentezini, görsel/video sonuçları örnek görselleri kullanır. Yapay zeka API'leri henüz bağlı değil.
+- Ses klonlama: yüklenen dosya saklanmaz; yalnız klon adı kaydedilir.
 
 ## Geliştirme
 
@@ -29,12 +30,21 @@ Node.js 22+ gerekir.
 
 ```sh
 npm i
-npm run dev        # http://localhost:8080
-npm test           # vitest
+npm run dev          # http://localhost:8080 — ilk açılışta data/trai-pro.db oluşur ve migration'lar uygulanır
+npm test             # vitest (sunucu testleri geçici SQLite dosyalarıyla çalışır)
 npm run lint
 npx tsc --noEmit
 npm run build
+npm run db:generate  # şema değişince yeni migration üretir (drizzle/)
+npm run db:studio    # veritabanını tarayıcıda incele
 ```
+
+Ortam değişkenleri için `.env.example` dosyasına bakın. Hiçbiri zorunlu değildir; varsayılan veritabanı `data/trai-pro.db`'dir.
+
+## Veritabanı ve yayın
+
+- Şema: `src/server/schema.server.ts`. Değişiklikten sonra `npm run db:generate` ile migration üretilir ve `drizzle/` klasörüyle birlikte commit edilir. Migration'lar sunucu ilk veritabanı bağlantısında otomatik uygulanır.
+- Varsayılan derleme hedefi Cloudflare Workers'tır (`npm run build`). Workers'ta yerel SQLite dosyası çalışmaz; orada uzak bir libSQL veritabanı (ör. Turso, `DATABASE_URL` + `DATABASE_AUTH_TOKEN`) ve `@libsql/client/web` sürücüsü gerekir. Node sunucusunda (VPS) yerel dosya olduğu gibi çalışır. Postgres'e geçişte şema `drizzle-orm/pg-core` ile yeniden tanımlanır; servis katmanı büyük ölçüde aynı kalır.
 
 ## Yapı
 
@@ -42,7 +52,10 @@ npm run build
 - `src/lib/credits.ts` — kredi hesapları (saf fonksiyonlar, `src/test/credits.test.ts` ile korunur)
 - `src/lib/packages.ts` — paket fiyatları, kayıt bonusu, iletişim bilgileri
 - `src/lib/i18n.tsx` — tüm arayüz metinleri (TR/EN)
-- `src/lib/store.tsx` — demo hesap ve kredi durumu
+- `src/lib/store.tsx` — istemci durumu: oturum ve kullanıcı verisini sunucudan çeker (React Query)
+- `src/lib/types.ts` — istemci ve sunucunun paylaştığı tipler
+- `src/api/functions.ts` — istemcinin çağırdığı sunucu fonksiyonları (oturum çerezi, yetki kontrolü)
+- `src/server/*.server.ts` — yalnız sunucuda çalışan kod: veritabanı, şema, şifre, oturum, servisler. İstemci koduna import edilemez.
 - `src/components/site/` — site iskeleti, paket kartları, giriş formu, yasal sayfa
 - `src/components/labs/` — stüdyo araçları
 - `src/styles.css` — renk token'ları (koyu varsayılan, `html.light` açık tema)
