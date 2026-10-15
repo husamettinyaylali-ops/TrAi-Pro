@@ -5,6 +5,7 @@ import { toDataURL } from "qrcode";
 import { useFormat, useI18n } from "@/lib/i18n";
 import { useApp } from "@/lib/store";
 import type { ClaimErrorCode, TopUpIntent } from "@/lib/types";
+import { useRemaining } from "@/lib/use-remaining";
 
 import { btnOutline, btnPrimary, field } from "./shell";
 
@@ -49,24 +50,12 @@ function CopyRow({
   );
 }
 
-/** Talebin bitişine kalan süre (ms); saniyede bir güncellenir. */
-function useRemaining(expiresAt: string): number {
-  const [left, setLeft] = useState(() => Date.parse(expiresAt) - Date.now());
-  useEffect(() => {
-    const tick = () => setLeft(Date.parse(expiresAt) - Date.now());
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-  }, [expiresAt]);
-  return left;
-}
-
 const mmss = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 };
 
-function ExpiryLine({ remaining }: { remaining: number }) {
+export function ExpiryLine({ remaining }: { remaining: number }) {
   const { t } = useI18n();
   const c = t.payment.crypto;
   const expired = remaining <= 0;
@@ -137,7 +126,8 @@ export function CryptoPayPanel({
       return setError(t.auth.errors.tooManyAttempts(res.retryAfterMinutes));
     if (res.error === "network" || res.error === "unauthorized")
       return setError(t.auth.errors.network);
-    setError(c.errors[res.error]);
+    const errors: Partial<Record<ClaimErrorCode, string>> = c.errors;
+    setError(errors[res.error] ?? t.payment.failed);
   };
 
   return (

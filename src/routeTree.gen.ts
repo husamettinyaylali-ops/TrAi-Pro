@@ -25,6 +25,7 @@ import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AuthGoogleRouteImport } from './routes/auth/google'
+import { Route as WebhooksPaypalRouteImport } from './routes/webhooks/paypal'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as MediaAudioIdRouteImport } from './routes/media/audio/$id'
 
@@ -108,6 +109,11 @@ const AuthGoogleRoute = AuthGoogleRouteImport.update({
   path: '/auth/google',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WebhooksPaypalRoute = WebhooksPaypalRouteImport.update({
+  id: '/webhooks/paypal',
+  path: '/webhooks/paypal',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
@@ -136,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
+  '/webhooks/paypal': typeof WebhooksPaypalRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
 }
@@ -156,6 +163,7 @@ export interface FileRoutesByTo {
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
+  '/webhooks/paypal': typeof WebhooksPaypalRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
 }
@@ -177,6 +185,7 @@ export interface FileRoutesById {
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
+  '/webhooks/paypal': typeof WebhooksPaypalRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
 }
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
+    | '/webhooks/paypal'
     | '/auth/google/callback'
     | '/media/audio/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
+    | '/webhooks/paypal'
     | '/auth/google/callback'
     | '/media/audio/$id'
   id:
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
+    | '/webhooks/paypal'
     | '/auth/google/callback'
     | '/media/audio/$id'
   fileRoutesById: FileRoutesById
@@ -260,6 +272,7 @@ export interface RootRouteChildren {
   TermsOfServiceRoute: typeof TermsOfServiceRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AuthGoogleRoute: typeof AuthGoogleRouteWithChildren
+  WebhooksPaypalRoute: typeof WebhooksPaypalRoute
   MediaAudioIdRoute: typeof MediaAudioIdRoute
 }
 
@@ -377,6 +390,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthGoogleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/webhooks/paypal': {
+      id: '/webhooks/paypal'
+      path: '/webhooks/paypal'
+      fullPath: '/webhooks/paypal'
+      preLoaderRoute: typeof WebhooksPaypalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/google/callback': {
       id: '/auth/google/callback'
       path: '/callback'
@@ -423,6 +443,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsOfServiceRoute: TermsOfServiceRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AuthGoogleRoute: AuthGoogleRouteWithChildren,
+  WebhooksPaypalRoute: WebhooksPaypalRoute,
   MediaAudioIdRoute: MediaAudioIdRoute,
 }
 export const routeTree = rootRouteImport

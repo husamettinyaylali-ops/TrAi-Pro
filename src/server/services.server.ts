@@ -48,6 +48,12 @@ import type { Lang } from "@/lib/i18n";
 
 import type { AudioStorage } from "./audio-storage.server";
 import type { BinanceIncome, IncomingFetcher } from "./binance.server";
+import {
+  ORDER_ID_RE,
+  type PaypalCapture,
+  type PaypalClient,
+  type PaypalMoney,
+} from "./paypal.server";
 import { TX_HASH_RE, type TransferCheck } from "./bsc.server";
 import type { Db } from "./db.server";
 import type { EmailMessage, Mailer } from "./email.server";
@@ -547,6 +553,8 @@ export async function completeTopUp(
   intentId: string,
   providerRef: string,
   now: Date,
+  /** Para tahsil edildiyse (PayPal) talep bu arada geçersiz kalmış olsa da bakiyeye yazılır. */
+  opts: { allowExpired?: boolean } = {},
 ): Promise<
   Result<{ intent: TopUpIntent; userId: string }, "notFound" | "notPending" | "duplicateRef">
 > {
@@ -562,7 +570,8 @@ export async function completeTopUp(
         ? ({ ok: true, intent: toIntent(intent), userId: intent.userId } as const)
         : ({ ok: false, error: "notPending" } as const);
     }
-    if (intent.status !== "pending") return { ok: false, error: "notPending" } as const;
+    const open = intent.status === "pending" || (opts.allowExpired && intent.status === "expired");
+    if (!open) return { ok: false, error: "notPending" } as const;
     const used = await tx
       .select({ id: paymentIntents.id })
       .from(paymentIntents)
@@ -581,7 +590,7 @@ export async function completeTopUp(
     await tx
       .update(paymentIntents)
       .set({ status: "completed", providerRef, completedAt: done.completedAt })
-      .where(and(eq(paymentIntents.id, intentId), eq(paymentIntents.status, "pending")));
+      .where(and(eq(paymentIntents.id, intentId), ne(paymentIntents.status, "completed")));
     await tx.insert(walletEntries).values({
       id: randomUUID(),
       userId: intent.userId,
@@ -765,6 +774,135 @@ export async function claimBinanceTopUp(
     }
   }
   return { ok: false, error: duplicate ? "duplicateRef" : "notFound" };
+}
+
+/** PayPal sipariş açıklaması (ödeme ekranında görünür). */
+const PAYPAL_DESCRIPTION = "TrAi Pro bakiye yükleme";
+
+/**
+ * Kullanıcının bekleyen PayPal talebi için PayPal siparişi açar. Tutar ve
+ * talep kimliği sunucudan gelir; sipariş talebe custom_id ile bağlanır.
+ */
+export async function startPaypalOrder(
+  db: Db,
+  userId: string,
+  intentId: string,
+  paypal: Pick<PaypalClient, "createOrder">,
+  now: Date,
+): Promise<Result<{ orderId: string }, "noPending" | "providerFailed"> | RateLimited> {
+  const key = `paypal:user:${userId}`;
+  const stop = await blocked(db, [[key, LIMITS.paypalOrderPerUser]], now);
+  if (stop) return stop;
+
+  const intent = await db
+    .select()
+    .from(paymentIntents)
+    .where(and(eq(paymentIntents.id, intentId), eq(paymentIntents.userId, userId)))
+    .get();
+  if (
+    !intent ||
+    intent.method !== "paypal" ||
+    intent.status !== "pending" ||
+    intent.expiresAt <= now.toISOString()
+  ) {
+    return { ok: false, error: "noPending" };
+  }
+  await recordAttempt(db, key, now);
+  try {
+    const orderId = await paypal.createOrder({
+      reference: intent.id,
+      value: intent.payAmount,
+      description: PAYPAL_DESCRIPTION,
+    });
+    return { ok: true, orderId };
+  } catch (err) {
+    console.error("[ödeme] PayPal siparişi açılamadı:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "providerFailed" };
+  }
+}
+
+const isUsd = (m: PaypalMoney | null, value: string) => m?.currency === "USD" && m.value === value;
+
+/**
+ * Tahsil edilmiş PayPal ödemesini talebe yazar. Para alındığı için talep bu
+ * arada geçersiz kalmış olsa da yazılır; tutar tutmazsa yazılmaz ve loglanır.
+ */
+export async function creditPaypalCapture(
+  db: Db,
+  intentId: string,
+  capture: PaypalCapture,
+  now: Date,
+): Promise<Result<{ intent: TopUpIntent; userId: string }, ClaimErrorCode>> {
+  if (capture.status === "PENDING") return { ok: false, error: "unconfirmed" };
+  if (capture.status !== "COMPLETED") return { ok: false, error: "failed" };
+  const intent = await db
+    .select()
+    .from(paymentIntents)
+    .where(eq(paymentIntents.id, intentId))
+    .get();
+  if (!intent || intent.method !== "paypal") return { ok: false, error: "notFound" };
+  if (!isUsd(capture.amount, intent.payAmount)) {
+    console.error(
+      `[ödeme] PayPal tahsilat tutarı talep ${intent.id} ile eşleşmiyor; elle incelenmeli.`,
+    );
+    return { ok: false, error: "amountMismatch" };
+  }
+  const done = await completeTopUp(db, intent.id, `paypal:${capture.id}`, now, {
+    allowExpired: true,
+  });
+  if (done.ok) return done;
+  return { ok: false, error: done.error === "duplicateRef" ? "duplicateRef" : "noPending" };
+}
+
+/**
+ * Kullanıcının onayladığı PayPal siparişini tahsil edip bakiyeye yazar.
+ * Tahsilattan önce sipariş okunur: talep bu kullanıcının mı, tutar aynı mı,
+ * talep hâlâ geçerli mi. Tutmazsa tahsil edilmez (kullanıcıdan para alınmaz).
+ * Tekrar çağrılması zararsızdır (zaten tahsil edilmiş sipariş yeniden yazılmaz).
+ */
+export async function capturePaypalTopUp(
+  db: Db,
+  userId: string,
+  orderId: string,
+  paypal: Pick<PaypalClient, "getOrder" | "captureOrder">,
+  now: Date,
+): Promise<Result<{ intent: TopUpIntent }, ClaimErrorCode> | RateLimited> {
+  if (!ORDER_ID_RE.test(orderId)) return { ok: false, error: "invalidInput" };
+  const key = `claim:user:${userId}`;
+  const stop = await blocked(db, [[key, LIMITS.claimPerUser]], now);
+  if (stop) return stop;
+  await recordAttempt(db, key, now);
+
+  try {
+    let order = await paypal.getOrder(orderId);
+    if (!order?.customId) return { ok: false, error: "notFound" };
+    const intent = await db
+      .select()
+      .from(paymentIntents)
+      .where(eq(paymentIntents.id, order.customId))
+      .get();
+    if (!intent || intent.userId !== userId || intent.method !== "paypal") {
+      return { ok: false, error: "notFound" };
+    }
+    if (!isUsd(order.amount, intent.payAmount)) return { ok: false, error: "amountMismatch" };
+
+    if (order.status === "APPROVED") {
+      if (intent.status !== "pending" || intent.expiresAt <= now.toISOString()) {
+        return { ok: false, error: "noPending" };
+      }
+      const captured = await paypal.captureOrder(orderId);
+      if (captured === "declined") return { ok: false, error: "declined" };
+      order = captured;
+    }
+    if (order.status === "VOIDED") return { ok: false, error: "failed" };
+    if (!order.capture) return { ok: false, error: "unconfirmed" };
+
+    const res = await creditPaypalCapture(db, intent.id, order.capture, now);
+    return res.ok ? { ok: true, intent: res.intent } : res;
+  } catch (err) {
+    console.error("[ödeme] PayPal tahsilatı başarısız:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "providerFailed" };
+  }
 }
 
 async function loadWallet(db: Db, userId: string, now: Date): Promise<UserData["wallet"]> {

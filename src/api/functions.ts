@@ -18,6 +18,7 @@ import { binanceConfig, sharedIncoming } from "@/server/binance.server";
 import { checkUsdtTransfer, rpcClient, usdtConfig } from "@/server/bsc.server";
 import { getDb } from "@/server/db.server";
 import { getMailer } from "@/server/email.server";
+import { paypalConfig, sharedPaypal } from "@/server/paypal.server";
 import { env, isProduction } from "@/server/env.server";
 import * as svc from "@/server/services.server";
 import { SESSION_COOKIE } from "@/server/session.server";
@@ -131,7 +132,7 @@ const demoPaymentsEnabled = () => !isProduction() || env("DEMO_PAYMENTS") === "o
 /**
  * Açık ödeme yöntemleri ve alıcı bilgileri. Alıcı bilgileri (cüzdan adresi,
  * Binance kimliği, PayPal istemci kimliği) yalnız sunucu ortamından gelir.
- * Gerçek yöntemler kendi aşamalarında bağlanır; o zamana kadar kapalıdır.
+ * Yöntem, gerekli ortam değişkenleri tam değilse kapalıdır.
  */
 function paymentConfig(): PaymentConfig {
   return {
@@ -144,7 +145,10 @@ function paymentConfig(): PaymentConfig {
       const binance = binanceConfig();
       return binance ? { binanceId: binance.binanceId } : null;
     })(),
-    paypal: null,
+    paypal: (() => {
+      const paypal = paypalConfig();
+      return paypal ? { clientId: paypal.clientId, sandbox: paypal.sandbox } : null;
+    })(),
   };
 }
 
@@ -218,6 +222,36 @@ export const claimBinance = createServerFn({ method: "POST" }).handler(async () 
   if (!res.ok) return res;
   return { ok: true as const, intent: res.intent, session: await payloadFor(user) };
 });
+
+/** Bekleyen PayPal talebi için PayPal siparişi açar (PayPal düğmesinin createOrder'ı). */
+export const startPaypal = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ intentId: z.string().max(64) })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    const cfg = paypalConfig();
+    if (!cfg) return { ok: false as const, error: "methodDisabled" as const };
+    return svc.startPaypalOrder(await getDb(), user.id, data.intentId, sharedPaypal(cfg), clock());
+  });
+
+/** Kullanıcının onayladığı PayPal siparişini tahsil edip bakiyeye yazar (onApprove). */
+export const capturePaypal = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ orderId: z.string().max(64) })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    const cfg = paypalConfig();
+    if (!cfg) return { ok: false as const, error: "methodDisabled" as const };
+    const res = await svc.capturePaypalTopUp(
+      await getDb(),
+      user.id,
+      data.orderId,
+      sharedPaypal(cfg),
+      clock(),
+    );
+    if (!res.ok) return res;
+    return { ok: true as const, intent: res.intent, session: await payloadFor(user) };
+  });
 
 /** Paketi USD bakiyeden alır. */
 export const purchase = createServerFn({ method: "POST" })

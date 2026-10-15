@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { BinancePayPanel, CryptoPayPanel } from "@/components/site/crypto-pay";
+import { PaypalPayPanel } from "@/components/site/paypal-pay";
 import { RequireAuth } from "@/components/site/require-auth";
 import {
   DemoNote,
@@ -89,9 +90,12 @@ function TopUpPanel({ amount, setAmount }: { amount: string; setAmount: (v: stri
   const chosen = method && methods.includes(method) ? method : (methods[0] ?? null);
   const usdtAddress = config.data?.usdtBep20?.address;
   const binanceId = config.data?.binancePay?.binanceId;
+  const paypal = config.data?.paypal;
   const hasPanel = (m: TopUpMethod) =>
-    (m === "usdt_bep20" && !!usdtAddress) || (m === "binance_pay" && !!binanceId);
-  // Süresi dolmamış kripto talebi varsa (sayfaya geri dönüldüğünde) ödeme paneli açık gelir.
+    (m === "usdt_bep20" && !!usdtAddress) ||
+    (m === "binance_pay" && !!binanceId) ||
+    (m === "paypal" && !!paypal);
+  // Süresi dolmamış talep varsa (sayfaya geri dönüldüğünde) ödeme paneli açık gelir.
   const [active, setActive] = useState<TopUpIntent | null>(null);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const shown =
@@ -148,6 +152,14 @@ function TopUpPanel({ amount, setAmount }: { amount: string; setAmount: (v: stri
         <BinancePayPanel
           intent={shown}
           binanceId={binanceId}
+          onClose={closePanel}
+          onDone={finish}
+        />
+      ) : shown?.method === "paypal" && paypal ? (
+        <PaypalPayPanel
+          intent={shown}
+          clientId={paypal.clientId}
+          sandbox={paypal.sandbox}
           onClose={closePanel}
           onDone={finish}
         />

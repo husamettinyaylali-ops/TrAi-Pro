@@ -170,4 +170,6 @@ export type ClaimErrorCode =
   /** Bu işlem daha önce kullanılmış. */
   | "duplicateRef"
   /** Zincire/servise ulaşılamadı. */
-  | "providerFailed";
+  | "providerFailed"
+  /** Kart ya da PayPal hesabı ödemeyi reddetti; başka bir kaynakla denenir. */
+  | "declined";

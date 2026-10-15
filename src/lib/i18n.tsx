@@ -246,6 +246,34 @@ const tr = {
     failed: "İşlem tamamlanamadı. Tekrar dene.",
     disabled: "Bu ödeme yöntemi şu an kapalı.",
     creditNote: (amount: string) => `Ödemen doğrulanınca bakiyene ${amount} eklenir.`,
+    paypal: {
+      title: "PayPal ya da kartla öde",
+      steps:
+        "Aşağıdaki düğmeyle PayPal hesabınla ya da banka/kredi kartınla öde. Ödeme alınınca tutar bakiyene hemen eklenir.",
+      amount: "Ödenecek tutar",
+      sandbox: "Test (sandbox) modu: gerçek ödeme alınmaz.",
+      loading: "PayPal yükleniyor",
+      unavailable:
+        "PayPal yüklenemedi. Reklam engelleyiciyi kapatıp sayfayı yenile ya da başka bir yöntem seç.",
+      capturing: "Ödeme alınıyor…",
+      cancelled:
+        "Ödeme penceresi kapatıldı; senden ödeme alınmadı. İstediğinde tekrar deneyebilirsin.",
+      recheck: "Tekrar kontrol et",
+      errors: {
+        methodDisabled: "PayPal ile ödeme şu an kapalı.",
+        noPending:
+          "Bu ödeme talebinin süresi doldu; senden ödeme alınmadı. Yeni bir tutar oluştur.",
+        notFound: "PayPal siparişi bulunamadı. Tekrar dene.",
+        amountMismatch:
+          "Ödeme tutarı talep ile eşleşmiyor; ödeme alınmadı. Yeni bir tutar oluştur.",
+        declined: "Kartın ya da PayPal hesabın ödemeyi reddetti. Başka bir kart ya da yöntem dene.",
+        unconfirmed:
+          "Ödemen PayPal'da inceleniyor. Onaylanınca bakiyene eklenir; birkaç dakika sonra tekrar kontrol edebilirsin.",
+        failed: "PayPal ödemeyi tamamlamadı. Tekrar dene.",
+        duplicateRef: "Bu ödeme daha önce bakiyene yazılmış.",
+        providerFailed: "PayPal'a şu an ulaşılamıyor. Biraz sonra tekrar dene.",
+      },
+    },
     binance: {
       title: "Binance Pay ile öde",
       steps:
@@ -676,6 +704,32 @@ const en: Dict = {
     failed: "Couldn't complete that. Try again.",
     disabled: "This payment method is currently unavailable.",
     creditNote: (amount) => `Once your payment is verified, ${amount} is added to your balance.`,
+    paypal: {
+      title: "Pay with PayPal or card",
+      steps:
+        "Use the button below to pay with your PayPal account or a debit/credit card. The amount is added to your balance as soon as the payment is taken.",
+      amount: "Amount to pay",
+      sandbox: "Test (sandbox) mode: no real payment is taken.",
+      loading: "Loading PayPal",
+      unavailable:
+        "PayPal couldn't load. Turn off your ad blocker and refresh, or choose another method.",
+      capturing: "Taking payment…",
+      cancelled: "The payment window was closed; you weren't charged. You can try again any time.",
+      recheck: "Check again",
+      errors: {
+        methodDisabled: "PayPal payments are currently unavailable.",
+        noPending: "This payment request has expired; you weren't charged. Create a new amount.",
+        notFound: "The PayPal order wasn't found. Try again.",
+        amountMismatch:
+          "The payment amount doesn't match the request; you weren't charged. Create a new amount.",
+        declined: "Your card or PayPal account declined the payment. Try another card or method.",
+        unconfirmed:
+          "Your payment is under review at PayPal. It's added to your balance once approved; you can check again in a few minutes.",
+        failed: "PayPal didn't complete the payment. Try again.",
+        duplicateRef: "This payment has already been added to your balance.",
+        providerFailed: "PayPal is unreachable right now. Try again shortly.",
+      },
+    },
     binance: {
       title: "Pay with Binance Pay",
       steps:

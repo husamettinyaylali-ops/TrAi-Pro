@@ -51,6 +51,20 @@ interface Store {
   ) => Promise<Outcome<{ intent: TopUpIntent }, ClaimErrorCode> | RateLimited>;
   /** Binance Pay ödemesini kontrol edip bakiyeye yazar (bekleyen benzersiz tutarla). */
   claimBinance: () => Promise<Outcome<{ intent: TopUpIntent }, ClaimErrorCode> | RateLimited>;
+  /** PayPal düğmesi için sipariş açar. */
+  startPaypal: (
+    intentId: string,
+  ) => Promise<
+    | Outcome<
+        { orderId: string },
+        "unauthorized" | "noPending" | "providerFailed" | "methodDisabled"
+      >
+    | RateLimited
+  >;
+  /** Onaylanan PayPal siparişini tahsil edip bakiyeye yazar. */
+  capturePaypal: (
+    orderId: string,
+  ) => Promise<Outcome<{ intent: TopUpIntent }, ClaimErrorCode> | RateLimited>;
   /** Paketi USD bakiyeden alır. */
   purchase: (packageId: string) => Promise<Outcome<{ order: Order }, ActionErrorCode>>;
   /** Bakiye yükleme talebi; demo yöntemi hemen tamamlanır. */
@@ -150,6 +164,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       topUp: (method, amountCents) => call(() => api.topUp({ data: { method, amountCents } })),
       claimUsdt: (txHash) => call(() => api.claimUsdt({ data: { txHash } })),
       claimBinance: () => call(() => api.claimBinance()),
+      startPaypal: (intentId) => call(() => api.startPaypal({ data: { intentId } })),
+      capturePaypal: (orderId) => call(() => api.capturePaypal({ data: { orderId } })),
       generate: (input) => call(() => api.generate({ data: input })),
       deleteGeneration: async (id) => {
         await call(() => api.deleteGeneration({ data: { id } }));
