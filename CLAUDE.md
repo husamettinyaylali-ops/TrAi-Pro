@@ -14,6 +14,7 @@ Kredi tabanlı yapay zeka ses, video ve görsel platformu. Yapı ve kapsam için
 - **Gizli veriler düz metin saklanmaz:** şifre scrypt özeti, oturum token'ının SHA-256 özeti saklanır. Oturum çerezi `httpOnly` + `sameSite=lax`, üretimde `secure`.
 - **Şema değişikliği** → `npm run db:generate`, üretilen `drizzle/` migration'ı commit edilir. Elle migration düzenlenmez. Tabloyu yeniden kuran migration'ları (ör. sütunu boş bırakılabilir yapmak) commit'ten önce dolu bir veritabanı kopyasında satır sayısını karşılaştırarak dene.
 - **Deneme sınırı:** şifreyle giriş ve kayıt `signInLimited` / `registerLimited` üzerinden geçer; sınırlar `src/lib/rate-limit.ts`'te. Yeni bir kimlik doğrulama yolu (ör. şifre sıfırlama) eklenirse aynı sınır mekanizması kullanılır. İstemci IP'si X-Forwarded-For'dan yalnız `TRUST_PROXY=on` iken okunur.
+- **Hesap silme** (`deleteAccount`) kullanıcıya bağlı tabloları açıkça siler. Kullanıcıya bağlı **yeni bir tablo** eklenirse o listeye de eklenir ve "hesap silme" testi güncellenir. Gerçek ödeme bağlanınca siparişler silinmez, yasal saklama süresince anonimleştirilir.
 - **Ortam değişkenleri** yalnız `env()` (`src/server/env.server.ts`) ile okunur; geliştirmede `.env` oradan yüklenir.
 - **Dış kimlik (Google):** hesaplar `oauth_accounts` ile bağlanır. Aynı e-postalı şifreli hesap otomatik bağlanmaz (önceden ele geçirme riski). Sunucu rotaları (`src/routes/auth/…`) yalnız `server.handlers` içerir ve tam sayfa bağlantıyla (`<a href>`) açılır.
 - **Paket ve fiyatlar** yalnız `src/lib/packages.ts` içinde değişir.
