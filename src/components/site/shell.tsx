@@ -9,6 +9,7 @@ import {
   MessageCircle,
   Moon,
   Receipt,
+  Shield,
   Send,
   Sun,
   User,
@@ -109,7 +110,7 @@ function CreditBadge() {
 }
 
 function UserMenu() {
-  const { user, signOut } = useApp();
+  const { user, admin, signOut } = useApp();
   const { t } = useI18n();
   const navigate = useNavigate();
   if (!user) return null;
@@ -141,6 +142,11 @@ function UserMenu() {
         <DropdownMenuItem onSelect={() => navigate({ to: "/payment-history" })}>
           <Receipt /> {t.footer.paymentHistory}
         </DropdownMenuItem>
+        {admin && (
+          <DropdownMenuItem onSelect={() => navigate({ to: "/admin" })}>
+            <Shield /> {t.admin.nav}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
@@ -159,7 +165,7 @@ const navCls = "transition hover:text-foreground [&.active]:text-foreground";
 
 function Header() {
   const { t } = useI18n();
-  const { user, hydrated, signOut } = useApp();
+  const { user, admin, hydrated, signOut } = useApp();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -258,6 +264,11 @@ function Header() {
                 <Link to="/payment-history" onClick={close}>
                   {t.footer.paymentHistory}
                 </Link>
+                {admin && (
+                  <Link to="/admin" onClick={close}>
+                    {t.admin.nav}
+                  </Link>
+                )}
               </>
             )}
           </nav>

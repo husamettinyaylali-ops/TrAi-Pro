@@ -13,6 +13,15 @@ import { clock } from "@/lib/clock";
 import type { Lang } from "@/lib/i18n";
 import type { Account, PaymentConfig, SessionPayload, StudioConfig } from "@/lib/types";
 
+import {
+  adjustBalance,
+  adminEmails,
+  adminOverview,
+  isAdmin,
+  recentActions,
+  searchUsers,
+  userDetail,
+} from "@/server/admin.server";
 import { audioStorage } from "@/server/audio-storage.server";
 import { binanceConfig, sharedIncoming } from "@/server/binance.server";
 import { checkUsdtTransfer, rpcClient, usdtConfig } from "@/server/bsc.server";
@@ -80,7 +89,22 @@ async function currentUser(): Promise<Account | null> {
 }
 
 async function payloadFor(user: Account): Promise<SessionPayload> {
-  return { user, data: await svc.loadUserData(await getDb(), user.id, clock()) };
+  const db = await getDb();
+  const [data, admin] = await Promise.all([
+    svc.loadUserData(db, user.id, clock()),
+    isAdmin(db, user.id, adminEmails(env("ADMIN_EMAILS"))),
+  ]);
+  return { user, data, admin };
+}
+
+/** Yönetici oturumu; değilse hata kodu. Her yönetim fonksiyonu önce bunu çağırır. */
+async function requireAdmin(): Promise<
+  { ok: true; user: Account } | { ok: false; error: "unauthorized" | "forbidden" }
+> {
+  const user = await currentUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+  const allowed = await isAdmin(await getDb(), user.id, adminEmails(env("ADMIN_EMAILS")));
+  return allowed ? { ok: true, user } : { ok: false, error: "forbidden" };
 }
 
 async function startSession(userId: string): Promise<SessionPayload> {
@@ -508,4 +532,52 @@ export const resetPassword = createServerFn({ method: "POST" })
     const ctx = mailContext(data.lang ?? "tr");
     if (ctx) await svc.sendPasswordChangedNotice(db, ctx, res.userId, clock());
     return { ok: true as const };
+  });
+
+// ---------------------------------------------------------------- yönetim paneli
+
+/** Özet ve son yönetici işlemleri. */
+export const adminDashboard = createServerFn({ method: "GET" }).handler(async () => {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+  const db = await getDb();
+  const [overview, actions] = await Promise.all([
+    adminOverview(db, clock()),
+    recentActions(db, { limit: 30 }),
+  ]);
+  return { ok: true as const, overview, actions };
+});
+
+export const adminSearchUsers = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ query: z.string().max(200) })))
+  .handler(async ({ data }) => {
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth;
+    return { ok: true as const, users: await searchUsers(await getDb(), data.query) };
+  });
+
+export const adminUserDetail = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ userId: z.string().max(64) })))
+  .handler(async ({ data }) => {
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth;
+    const detail = await userDetail(await getDb(), data.userId);
+    if (!detail) return { ok: false as const, error: "notFound" as const };
+    return { ok: true as const, detail };
+  });
+
+export const adminAdjustBalance = createServerFn({ method: "POST" })
+  .validator(
+    parse(
+      z.object({
+        userId: z.string().max(64),
+        amountCents: z.number().int(),
+        reason: z.string().max(1000),
+      }),
+    ),
+  )
+  .handler(async ({ data }) => {
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth;
+    return adjustBalance(await getDb(), auth.user.id, data, clock());
   });

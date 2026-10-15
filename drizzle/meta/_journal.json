@@ -50,6 +50,13 @@
       "when": 1792099443279,
       "tag": "0006_hesap_silme_saklama",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1792100198332,
+      "tag": "0007_yonetim_kaydi",
+      "breakpoints": true
     }
   ]
 }

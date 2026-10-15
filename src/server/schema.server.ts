@@ -212,3 +212,28 @@ export const paymentIntents = sqliteTable(
     uniqueIndex("payment_intents_ref_idx").on(t.method, t.providerRef),
   ],
 );
+
+/**
+ * Yönetici işlemleri kaydı (denetim). Kayıtlar değiştirilmez ve hesap
+ * silinince de kalır; her bakiye düzeltmesi ve elle tamamlanan ödeme buraya
+ * gerekçesiyle yazılır.
+ */
+export const adminActions = sqliteTable(
+  "admin_actions",
+  {
+    id: text("id").primaryKey(),
+    adminId: text("admin_id")
+      .notNull()
+      .references(() => users.id),
+    action: text("action", { enum: ["adjustBalance", "completeIntent"] }).notNull(),
+    targetUserId: text("target_user_id").references(() => users.id),
+    reason: text("reason").notNull(),
+    /** İşleme özgü ayrıntılar (JSON): tutar, talep kimliği, sağlayıcı referansı. */
+    details: text("details").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    index("admin_actions_target_idx").on(t.targetUserId),
+    index("admin_actions_created_idx").on(t.createdAt),
+  ],
+);

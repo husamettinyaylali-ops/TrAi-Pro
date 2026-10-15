@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AcceptableUsePolicyRouteImport } from './routes/acceptable-use-policy'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LabsRouteImport } from './routes/labs'
 import { Route as PaymentRouteImport } from './routes/payment'
@@ -42,6 +43,11 @@ const AcceptableUsePolicyRoute = AcceptableUsePolicyRouteImport.update({
 const AccountRoute = AccountRouteImport.update({
   id: '/account',
   path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
@@ -129,6 +135,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/acceptable-use-policy': typeof AcceptableUsePolicyRoute
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
@@ -150,6 +157,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/acceptable-use-policy': typeof AcceptableUsePolicyRoute
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
@@ -172,6 +180,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/acceptable-use-policy': typeof AcceptableUsePolicyRoute
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
     | '/'
     | '/acceptable-use-policy'
     | '/account'
+    | '/admin'
     | '/forgot-password'
     | '/labs'
     | '/payment'
@@ -216,6 +226,7 @@ export interface FileRouteTypes {
     | '/'
     | '/acceptable-use-policy'
     | '/account'
+    | '/admin'
     | '/forgot-password'
     | '/labs'
     | '/payment'
@@ -237,6 +248,7 @@ export interface FileRouteTypes {
     | '/'
     | '/acceptable-use-policy'
     | '/account'
+    | '/admin'
     | '/forgot-password'
     | '/labs'
     | '/payment'
@@ -259,6 +271,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcceptableUsePolicyRoute: typeof AcceptableUsePolicyRoute
   AccountRoute: typeof AccountRoute
+  AdminRoute: typeof AdminRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LabsRoute: typeof LabsRoute
   PaymentRoute: typeof PaymentRoute
@@ -297,6 +310,13 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forgot-password': {
@@ -430,6 +450,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcceptableUsePolicyRoute: AcceptableUsePolicyRoute,
   AccountRoute: AccountRoute,
+  AdminRoute: AdminRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LabsRoute: LabsRoute,
   PaymentRoute: PaymentRoute,

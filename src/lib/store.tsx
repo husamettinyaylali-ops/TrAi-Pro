@@ -34,6 +34,8 @@ interface Store {
   hydrated: boolean;
   user: Account | null;
   data: UserData;
+  /** Yönetim menüsünü göstermek için; yetki sunucuda denetlenir. */
+  admin: boolean;
   signUp: (input: {
     name: string;
     email: string;
@@ -154,6 +156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       hydrated: !session.isPending,
       user: session.data?.user ?? null,
       data: session.data?.data ?? emptyData,
+      admin: session.data?.admin ?? false,
       signUp: (input) => call(() => api.signUp({ data: input })),
       signIn: (input) => call(() => api.signIn({ data: input })),
       signOut: async () => {

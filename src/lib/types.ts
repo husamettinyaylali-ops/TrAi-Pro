@@ -100,6 +100,8 @@ export interface UserData {
 export interface SessionPayload {
   user: Account;
   data: UserData;
+  /** Yönetim paneline erişim (yalnız menüyü göstermek için; yetki sunucuda denetlenir). */
+  admin: boolean;
 }
 
 /** Üretim isteği; maliyet istemciden alınmaz, sunucuda hesaplanır. */
@@ -173,3 +175,56 @@ export type ClaimErrorCode =
   | "providerFailed"
   /** Kart ya da PayPal hesabı ödemeyi reddetti; başka bir kaynakla denenir. */
   | "declined";
+
+// ---------------------------------------------------------------- yönetim paneli
+
+export type AdminErrorCode =
+  | "unauthorized"
+  /** Oturum var ama yönetici değil. */
+  | "forbidden"
+  | "notFound"
+  | "invalidInput"
+  /** Düzeltme sonrası bakiye eksiye düşerdi. */
+  | "negativeBalance"
+  /** Yönetici kendi hesabında işlem yapamaz. */
+  | "selfAction";
+
+export interface AdminOverview {
+  users: number;
+  deletedUsers: number;
+  /** Tüm kullanıcıların bakiyeleri toplamı (sent): kullanıcılara borç. */
+  liabilityCents: number;
+  /** Son 24 saatte tamamlanan gerçek bakiye yüklemeleri (demo hariç, sent). */
+  topUps24hCents: number;
+  pendingIntents: number;
+}
+
+export interface AdminUserRow {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  verified: boolean;
+  deletedAt: string | null;
+  balanceCents: number;
+}
+
+export interface AdminAction {
+  id: string;
+  adminEmail: string;
+  action: "adjustBalance" | "completeIntent";
+  targetUserId: string | null;
+  targetEmail: string | null;
+  reason: string;
+  /** Bakiyeye etkisi (sent). */
+  amountCents: number | null;
+  createdAt: string;
+}
+
+export interface AdminUserDetail {
+  user: AdminUserRow;
+  entries: WalletEntry[];
+  intents: (TopUpIntent & { providerRef: string | null })[];
+  orders: Order[];
+  actions: AdminAction[];
+}

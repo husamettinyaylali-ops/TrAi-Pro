@@ -116,7 +116,7 @@ export async function registerUser(
   return { ok: true, userId };
 }
 
-type Conn = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type Conn = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * E-posta sahipliği kanıtlandı: doğrulama tarihini yazar ve deneme kredisini
@@ -345,7 +345,7 @@ type GenerationRow = typeof generations.$inferSelect;
 
 const toGrant = ({ userId: _u, ...g }: GrantRow): Grant => g;
 
-const toOrder = ({ userId: _u, amountCents, ...o }: OrderRow): Order => ({
+export const toOrder = ({ userId: _u, amountCents, ...o }: OrderRow): Order => ({
   ...o,
   amountUsd: amountCents / 100,
 });
@@ -422,7 +422,7 @@ type IntentRow = typeof paymentIntents.$inferSelect;
 const creditCentsFor = (r: Pick<IntentRow, "payCurrency" | "payAmount" | "amountCents">) =>
   r.payCurrency === "USDT" ? centsFromAmount(r.payAmount) : r.amountCents;
 
-const toIntent = (r: IntentRow): TopUpIntent => ({
+export const toIntent = (r: IntentRow): TopUpIntent => ({
   id: r.id,
   method: r.method,
   amountCents: r.amountCents,
