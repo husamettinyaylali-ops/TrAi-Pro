@@ -20,6 +20,7 @@ Kredi tabanlı yapay zeka ses, video ve görsel platformu. Yapı ve kapsam için
 - **Ses klonu** kullanıcının izin onayı olmadan açılmaz; onay zamanı `consent_at`'e yazılır. Hazır ses listesinden kullanıcı klonları ayıklanır (`publicVoices`). Klon ya da hesap silinince sağlayıcıdaki ses ve depodaki dosyalar da silinir.
 - **Kullanıcı dosyaları** (`/media/...`) yalnız sahibine sunulur; başkasının kaydı için 404 döner.
 - **Bakiye** yalnız defter kayıtlarıyla değişir (`wallet_entries`, değiştirilmez). Bakiyeye yükleme yalnız `completeTopUp()` ile yazılır (idempotent; işlem kimliği yöntem başına benzersiz); paket alımı `purchasePackage()` ile bakiyeden, tek transaction'da.
+- **Kripto ödemeler** zincirden doğrulanır; işlem kimliği herkese açık olduğundan eşleşme benzersiz tutar ve talep zamanıyla yapılır (`claimUsdtTopUp`). Yalnız işlem kimliğine güvenen bir doğrulama yazılmaz.
 - **Ödeme alıcı bilgileri** (cüzdan adresi, Binance kimliği, PayPal hesabı) yalnız `.env`'den gelir; koda yazılmaz. Başka bir sitenin ekran görüntüsündeki alıcı bilgileri asla kullanılmaz.
 - **Deneme kredisi** yalnız `markEmailVerified()` ile tanımlanır (doğrulama, şifre sıfırlama ya da Google); tekrar çağrılması zararsızdır.
 - **Ortam değişkenleri** yalnız `env()` (`src/server/env.server.ts`) ile okunur; geliştirmede `.env` oradan yüklenir.

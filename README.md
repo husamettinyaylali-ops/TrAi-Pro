@@ -46,6 +46,14 @@ npm run db:studio    # veritabanını tarayıcıda incele
 
 Ortam değişkenleri için `.env.example` dosyasına bakın. Hiçbiri zorunlu değildir; varsayılan veritabanı `data/trai-pro.db`'dir. Geliştirmede `.env`'ye yeni eklenen değerler sunucu yeniden başlatılmadan okunur; var olan bir değeri değiştirdiyseniz sunucuyu yeniden başlatın.
 
+## USDT (BEP20) ile bakiye yükleme
+
+1. `.env`'e kendi BSC cüzdan adresinizi `USDT_BEP20_ADDRESS` olarak yazın (borsa yatırma adresi değil, kontrolünüzdeki bir cüzdan önerilir).
+2. Kullanıcı tutar seçer; ona 1 saat geçerli, kuruşuna kadar benzersiz bir tutar (ör. 10,0347 USDT), adres ve QR gösterilir.
+3. Kullanıcı gönderdikten sonra işlem kimliğini (tx hash) yapıştırır. Sunucu BSC düğümünden işlemi doğrular: başarılı mı, USDT sözleşmesi mi (`0x55d3…7955`), alıcı sizin adresiniz mi, tutar o kullanıcının bekleyen benzersiz tutarıyla aynı mı, yeterli onay (varsayılan 12 blok) var mı ve talepten sonra mı yapılmış. Hepsi tutarsa bakiye yüklenir; aynı işlem ikinci kez kullanılamaz.
+
+Zincir herkese açık olduğu için eşleşme yalnız işlem kimliğine değil benzersiz tutara dayanır: adresinizi izleyen biri başkasının işlemini kendi hesabına yazdıramaz. Farklı tutar gönderen ya da süresi dolduktan sonra ödeyen kullanıcı otomatik eşleşmez; destekle işlem kimliği üzerinden elle çözülür.
+
 ## Ses üretimi (ElevenLabs) kurulumu
 
 1. [elevenlabs.io](https://elevenlabs.io)'da hesap açın; ses klonlama için en az Starter planı gerekir.
