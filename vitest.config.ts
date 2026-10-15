@@ -9,6 +9,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // Şifre özetleme (scrypt) kasıtlı olarak yavaştır; dosyalar paralel koşarken
+    // az çekirdekli makinelerde 5 sn'lik varsayılan sınır aşılabiliyor.
+    testTimeout: 30_000,
   },
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
