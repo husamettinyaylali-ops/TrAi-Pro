@@ -1,26 +1,50 @@
-# Visual Synthwave
+# TrAi Pro
 
-Implement exactly the screenshot and nothing else
+Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı web sitesi. Synthwave temalı arayüz; Türkçe (varsayılan) ve İngilizce, açık ve koyu tema.
 
-This project was built with [Lovable](https://lovable.dev).
+## Sayfalar
 
-**Live app**: https://visual-synthwave.lovable.app
+| Yol | İçerik |
+| --- | --- |
+| `/` | Hero, Ses AI kredi paketleri, Video & Görsel paketleri |
+| `/pricing` | Paketler, kredi harcama tablosu, SSS |
+| `/sign-in`, `/sign-up` | Giriş ve kayıt (`?redirect=` ile dönüş) |
+| `/labs` | Stüdyo: Metinden Ses, Ses Klonlama, Görsel, Video (`?tab=`) |
+| `/payment` | Paket ve ödeme yöntemi seçimi (`?package=`) |
+| `/payment-history` | Siparişler ve kalan krediler |
+| `/terms-of-service`, `/privacy-policy`, `/refund-policy`, `/acceptable-use-policy` | Yasal şablon metinler |
 
-## Build with Lovable
+## Durum: demo modu
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/df07b35f-2733-4628-b028-5edf75b5b628).
+Arka uç henüz yok. Hesap, kredi, sipariş ve üretim geçmişi tarayıcının `localStorage` alanında tutulur; gerçek ödeme alınmaz, şifre saklanmaz. Seslendirme önizlemesi tarayıcının konuşma sentezini, görsel/video sonuçları örnek görselleri kullanır. Yayına almak için gereken bağlantılar:
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+- Kimlik doğrulama (sunucu tarafı oturum)
+- Ödeme sağlayıcısı (ör. iyzico, Stripe)
+- Ses, görsel ve video üretimi için yapay zeka API'leri
+- Kredi ve siparişlerin sunucuda tutulması
 
-## Development
+## Geliştirme
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+Node.js 22+ gerekir.
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
 npm i
-npm run dev
+npm run dev        # http://localhost:8080
+npm test           # vitest
+npm run lint
+npx tsc --noEmit
+npm run build
 ```
+
+## Yapı
+
+- `src/routes/` — dosya tabanlı rotalar (TanStack Start). `routeTree.gen.ts` otomatik üretilir.
+- `src/lib/credits.ts` — kredi hesapları (saf fonksiyonlar, `src/test/credits.test.ts` ile korunur)
+- `src/lib/packages.ts` — paket fiyatları, kayıt bonusu, iletişim bilgileri
+- `src/lib/i18n.tsx` — tüm arayüz metinleri (TR/EN)
+- `src/lib/store.tsx` — demo hesap ve kredi durumu
+- `src/components/site/` — site iskeleti, paket kartları, giriş formu, yasal sayfa
+- `src/components/labs/` — stüdyo araçları
+- `src/styles.css` — renk token'ları (koyu varsayılan, `html.light` açık tema)
+
+Proje [Lovable](https://lovable.dev) ile başlatıldı; özgün Lovable deposu `lovable` uzak adıyla duruyor.
