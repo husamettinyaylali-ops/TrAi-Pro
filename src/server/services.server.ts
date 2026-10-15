@@ -18,6 +18,7 @@ import type {
   ActionErrorCode,
   AuthErrorCode,
   GenerateInput,
+  GoogleErrorCode,
   Generation,
   Order,
   PaymentMethod,
@@ -26,8 +27,17 @@ import type {
 import { stockVoices } from "@/lib/voices";
 
 import type { Db } from "./db.server";
+import type { GoogleProfile } from "./google.server";
 import { DUMMY_HASH, hashPassword, verifyPassword } from "./password.server";
-import { creditGrants, generations, orders, sessions, users, voiceClones } from "./schema.server";
+import {
+  creditGrants,
+  generations,
+  oauthAccounts,
+  orders,
+  sessions,
+  users,
+  voiceClones,
+} from "./schema.server";
 import { SESSION_DAYS, hashToken, newSessionToken } from "./session.server";
 
 const DAY = 86_400_000;
@@ -82,6 +92,54 @@ export async function authenticate(
   const valid = await verifyPassword(input.password, row?.passwordHash ?? DUMMY_HASH);
   if (!row || !valid) return { ok: false, error: "invalidCredentials" };
   return { ok: true, userId: row.id };
+}
+
+/**
+ * Google profiliyle giriş ya da kayıt. Daha önce bağlanmış hesap varsa ona girilir.
+ * Aynı e-postayla şifreli hesap varsa otomatik bağlanmaz: o hesabı e-postayı
+ * doğrulamadan başkası açmış olabilir ve bağlama ona da erişim bırakır.
+ */
+export async function signInWithGoogle(
+  db: Db,
+  profile: GoogleProfile,
+  now: Date,
+): Promise<Result<{ userId: string; created: boolean }, GoogleErrorCode>> {
+  if (!profile.emailVerified) return { ok: false, error: "googleUnverified" };
+
+  const linked = await db
+    .select({ userId: oauthAccounts.userId })
+    .from(oauthAccounts)
+    .where(and(eq(oauthAccounts.provider, "google"), eq(oauthAccounts.providerUserId, profile.sub)))
+    .get();
+  if (linked) return { ok: true, userId: linked.userId, created: false };
+
+  const email = normEmail(profile.email);
+  const existing = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+    .get();
+  if (existing) return { ok: false, error: "googleEmailInUse" };
+
+  const userId = randomUUID();
+  const bonus = createGrant({ id: randomUUID(), packageId: "signup-bonus", ...signupBonus }, now);
+  await db.transaction(async (tx) => {
+    await tx.insert(users).values({
+      id: userId,
+      name: profile.name.slice(0, 80),
+      email,
+      passwordHash: null,
+      createdAt: now.toISOString(),
+    });
+    await tx.insert(oauthAccounts).values({
+      provider: "google",
+      providerUserId: profile.sub,
+      userId,
+      createdAt: now.toISOString(),
+    });
+    await tx.insert(creditGrants).values({ ...bonus, userId });
+  });
+  return { ok: true, userId, created: true };
 }
 
 export async function createSession(db: Db, userId: string, now: Date) {

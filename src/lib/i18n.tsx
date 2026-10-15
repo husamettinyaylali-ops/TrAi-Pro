@@ -95,6 +95,10 @@ const tr = {
     noAccount: "Hesabın yok mu?",
     haveAccount: "Zaten hesabın var mı?",
     submitting: "Lütfen bekle…",
+    google: "Google ile devam et",
+    or: "veya",
+    googleTermsBefore: "Google ile devam ederek ",
+    googleTermsAfter: "'nı kabul etmiş olursun.",
     errors: {
       required: "Bu alan zorunlu.",
       email: "Geçerli bir e-posta adresi gir.",
@@ -102,6 +106,13 @@ const tr = {
       terms: "Devam etmek için şartları kabul et.",
       invalidCredentials: "E-posta veya şifre hatalı.",
       network: "Sunucuya ulaşılamadı. Bağlantını kontrol edip tekrar dene.",
+      googleUnavailable:
+        "Google ile giriş şu an kullanılamıyor. E-posta ve şifreyle devam edebilirsin.",
+      googleCancelled: "Google ile giriş iptal edildi.",
+      googleFailed: "Google ile giriş tamamlanamadı. Tekrar dene.",
+      googleUnverified: "Google hesabının e-posta adresi doğrulanmamış.",
+      googleEmailInUse:
+        "Bu e-posta adresiyle şifreli bir hesap var. E-posta ve şifrenle giriş yap.",
       emailTaken: "Bu e-posta zaten kayıtlı. Giriş yapmayı dene.",
     },
   },
@@ -328,6 +339,10 @@ const en: Dict = {
     noAccount: "Don't have an account?",
     haveAccount: "Already have an account?",
     submitting: "Please wait…",
+    google: "Continue with Google",
+    or: "or",
+    googleTermsBefore: "By continuing with Google you accept the ",
+    googleTermsAfter: ".",
     errors: {
       required: "This field is required.",
       email: "Enter a valid email address.",
@@ -335,6 +350,13 @@ const en: Dict = {
       terms: "Accept the terms to continue.",
       invalidCredentials: "Incorrect email or password.",
       network: "Couldn't reach the server. Check your connection and try again.",
+      googleUnavailable:
+        "Google sign-in isn't available right now. You can continue with email and password.",
+      googleCancelled: "Google sign-in was cancelled.",
+      googleFailed: "Google sign-in couldn't be completed. Try again.",
+      googleUnverified: "Your Google account's email address isn't verified.",
+      googleEmailInUse:
+        "An account with a password already uses this email. Sign in with your email and password.",
       emailTaken: "This email is already registered. Try signing in.",
     },
   },

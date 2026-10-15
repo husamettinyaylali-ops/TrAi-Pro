@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 // Tarihler ISO-8601 UTC metni olarak saklanır; para birimi kuruş/sent tamsayısıdır.
 
@@ -6,9 +6,27 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  /** Yalnız Google ile açılan hesaplarda boştur; bu hesaplar şifreyle giriş yapamaz. */
+  passwordHash: text("password_hash"),
   createdAt: text("created_at").notNull(),
 });
+
+/** Dış kimlik sağlayıcı bağlantısı (şimdilik yalnız Google). */
+export const oauthAccounts = sqliteTable(
+  "oauth_accounts",
+  {
+    provider: text("provider", { enum: ["google"] }).notNull(),
+    providerUserId: text("provider_user_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.provider, t.providerUserId] }),
+    index("oauth_accounts_user_idx").on(t.userId),
+  ],
+);
 
 /** Oturum kimliği, çerezdeki token'ın SHA-256 özetidir; token düz metin saklanmaz. */
 export const sessions = sqliteTable(

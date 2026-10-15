@@ -6,6 +6,7 @@ import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 
+import { env } from "./env.server";
 import * as schema from "./schema.server";
 
 export const DEFAULT_DATABASE_URL = "file:data/trai-pro.db";
@@ -33,12 +34,11 @@ let shared: Promise<Db> | null = null;
 
 /** Süreç boyunca tek bağlantı. DATABASE_URL yoksa yerel SQLite dosyası kullanılır. */
 export function getDb(): Promise<Db> {
-  shared ??= openDb(
-    process.env["DATABASE_URL"] || DEFAULT_DATABASE_URL,
-    process.env["DATABASE_AUTH_TOKEN"] || undefined,
-  ).catch((err: unknown) => {
-    shared = null;
-    throw err;
-  });
+  shared ??= openDb(env("DATABASE_URL") ?? DEFAULT_DATABASE_URL, env("DATABASE_AUTH_TOKEN")).catch(
+    (err: unknown) => {
+      shared = null;
+      throw err;
+    },
+  );
   return shared;
 }

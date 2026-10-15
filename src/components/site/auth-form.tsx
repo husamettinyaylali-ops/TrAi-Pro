@@ -6,6 +6,7 @@ import { useFormat, useI18n } from "@/lib/i18n";
 import { signupBonus } from "@/lib/packages";
 import { safeRedirect } from "@/lib/redirect";
 import { useApp } from "@/lib/store";
+import type { GoogleErrorCode } from "@/lib/types";
 
 import { DemoNote, SiteShell, btnPrimary, field } from "./shell";
 
@@ -23,7 +24,7 @@ function Field({
   id: string;
   label: string;
   error?: string | undefined;
-  hint?: string;
+  hint?: string | undefined;
   children: ReactNode;
 }) {
   return (
@@ -43,12 +44,49 @@ function Field({
   );
 }
 
+const GOOGLE_ERRORS = [
+  "googleUnavailable",
+  "googleCancelled",
+  "googleFailed",
+  "googleUnverified",
+  "googleEmailInUse",
+] as const satisfies readonly GoogleErrorCode[];
+
+const isGoogleError = (v: unknown): v is GoogleErrorCode =>
+  GOOGLE_ERRORS.includes(v as (typeof GOOGLE_ERRORS)[number]);
+
+/** Google'ın giriş düğmesi yönergesindeki çok renkli "G" işareti. */
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 48 48" className="h-5 w-5 shrink-0" aria-hidden>
+      <path
+        fill="var(--brand-google-red)"
+        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+      />
+      <path
+        fill="var(--brand-google-blue)"
+        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+      />
+      <path
+        fill="var(--brand-google-yellow)"
+        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+      />
+      <path
+        fill="var(--brand-google-green)"
+        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+      />
+    </svg>
+  );
+}
+
 export function AuthForm({
   mode,
   redirect,
+  error,
 }: {
   mode: "sign-in" | "sign-up";
   redirect?: string | undefined;
+  error?: string | undefined;
 }) {
   const { t } = useI18n();
   const f = useFormat();
@@ -95,7 +133,41 @@ export function AuthForm({
           <p className="mt-2 text-sm text-muted-foreground">
             {up ? t.auth.signUpSub(f.num(signupBonus.credits)) : t.auth.signInSub}
           </p>
-          <form onSubmit={submit} noValidate className="mt-8 space-y-5">
+          {isGoogleError(error) && (
+            <p
+              role="alert"
+              className="mt-6 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
+              {e[error]}
+            </p>
+          )}
+          {/* Sunucu rotasına tam sayfa istek gider; istemci yönlendiricisi kullanılmaz. */}
+          <a
+            href={`/auth/google?${new URLSearchParams({ redirect: safeRedirect(redirect) })}`}
+            className="mt-8 inline-flex min-h-11 w-full items-center justify-center gap-3 rounded-full border border-border bg-background px-6 py-3 font-semibold transition hover:border-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <GoogleMark />
+            {t.auth.google}
+          </a>
+          {up && (
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              {t.auth.googleTermsBefore}
+              <Link to="/terms-of-service" className="underline underline-offset-2 hover:text-cyan">
+                {t.auth.terms}
+              </Link>
+              {t.auth.and}
+              <Link to="/privacy-policy" className="underline underline-offset-2 hover:text-cyan">
+                {t.auth.privacy}
+              </Link>
+              {t.auth.googleTermsAfter}
+            </p>
+          )}
+          <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-wider text-muted-foreground">
+            <span className="h-px flex-1 bg-border" aria-hidden />
+            {t.auth.or}
+            <span className="h-px flex-1 bg-border" aria-hidden />
+          </div>
+          <form onSubmit={submit} noValidate className="space-y-5">
             {up && (
               <Field id="name" label={t.auth.name} error={errors.name}>
                 <input
@@ -123,7 +195,7 @@ export function AuthForm({
               id="password"
               label={t.auth.password}
               error={errors.password}
-              hint={t.auth.passwordHint}
+              hint={up ? t.auth.passwordHint : undefined}
             >
               <input
                 id="password"

@@ -6,6 +6,7 @@ import { clock } from "@/lib/clock";
 import type { Account, SessionPayload } from "@/lib/types";
 
 import { getDb } from "@/server/db.server";
+import { env, isProduction } from "@/server/env.server";
 import * as svc from "@/server/services.server";
 import { SESSION_COOKIE } from "@/server/session.server";
 
@@ -23,7 +24,7 @@ function setSessionCookie(token: string, expires: Date) {
   setCookie(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env["NODE_ENV"] === "production",
+    secure: isProduction(),
     path: "/",
     expires,
   });
@@ -77,8 +78,7 @@ export const signOut = createServerFn({ method: "POST" }).handler(async () => {
 });
 
 /** Demo ödemeler üretimde yalnız DEMO_PAYMENTS=on ise açıktır. */
-const demoPaymentsEnabled = () =>
-  process.env["NODE_ENV"] !== "production" || process.env["DEMO_PAYMENTS"] === "on";
+const demoPaymentsEnabled = () => !isProduction() || env("DEMO_PAYMENTS") === "on";
 
 export const purchase = createServerFn({ method: "POST" })
   .validator(

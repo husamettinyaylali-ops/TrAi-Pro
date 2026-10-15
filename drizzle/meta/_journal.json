@@ -8,6 +8,13 @@
       "when": 1792071383491,
       "tag": "0000_ilk_sema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792073714942,
+      "tag": "0001_google_giris",
+      "breakpoints": true
     }
   ]
 }

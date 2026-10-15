@@ -59,5 +59,11 @@ export type GenerateInput =
   | { type: "video"; text: string; styleIndex: number };
 
 export type AuthErrorCode = "emailTaken" | "invalidCredentials";
+export type GoogleErrorCode =
+  | "googleUnavailable"
+  | "googleCancelled"
+  | "googleFailed"
+  | "googleUnverified"
+  | "googleEmailInUse";
 export type ActionErrorCode =
   "unauthorized" | "insufficient" | "invalidInput" | "limit" | "paymentsDisabled";

@@ -3,13 +3,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AuthForm } from "@/components/site/auth-form";
 
 export const Route = createFileRoute("/sign-in")({
-  validateSearch: (s: Record<string, unknown>): { redirect?: string } =>
-    typeof s["redirect"] === "string" ? { redirect: s["redirect"] } : {},
+  validateSearch: (s: Record<string, unknown>): { redirect?: string; error?: string } => ({
+    ...(typeof s["redirect"] === "string" ? { redirect: s["redirect"] } : {}),
+    ...(typeof s["error"] === "string" ? { error: s["error"] } : {}),
+  }),
   head: () => ({ meta: [{ title: "Giriş Yap — TrAi Pro" }] }),
   component: SignIn,
 });
 
 function SignIn() {
-  const { redirect } = Route.useSearch();
-  return <AuthForm mode="sign-in" redirect={redirect} />;
+  const { redirect, error } = Route.useSearch();
+  return <AuthForm mode="sign-in" redirect={redirect} error={error} />;
 }

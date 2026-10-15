@@ -74,6 +74,12 @@
   --shadow-glow:
     0 0 40px -8px color-mix(in oklab, var(--violet) 70%, transparent),
     0 0 80px -20px color-mix(in oklab, var(--cyan) 50%, transparent);
+
+  /* Üçüncü taraf marka renkleri: yalnız ilgili logoda, her iki temada aynı. */
+  --brand-google-blue: #4285f4;
+  --brand-google-green: #34a853;
+  --brand-google-yellow: #fbbc05;
+  --brand-google-red: #ea4335;
 }
 
 html.light {
