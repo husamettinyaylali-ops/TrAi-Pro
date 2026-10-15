@@ -4,24 +4,24 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 
 ## Sayfalar
 
-| Yol | İçerik |
-| --- | --- |
-| `/` | Hero, Ses AI kredi paketleri, Video & Görsel paketleri |
-| `/pricing` | Paketler, kredi harcama tablosu, SSS |
-| `/sign-in`, `/sign-up` | Giriş ve kayıt (`?redirect=` ile dönüş) |
-| `/labs` | Stüdyo: Metinden Ses, Ses Klonlama, Görsel, Video (`?tab=`) |
-| `/payment` | Paket ve ödeme yöntemi seçimi (`?package=`) |
-| `/payment-history` | Siparişler ve kalan krediler |
-| `/account` | Hesabım: ad, şifre, Google bağlantısı, diğer oturumları kapatma, hesabı silme |
-| `/forgot-password`, `/reset-password` | Şifremi unuttum: e-postayla sıfırlama bağlantısı ve yeni şifre |
-| `/verify-email` | E-posta doğrulama bağlantısının açıldığı sayfa |
-| `/terms-of-service`, `/privacy-policy`, `/refund-policy`, `/acceptable-use-policy` | Yasal şablon metinler |
+| Yol                                                                                | İçerik                                                                        |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `/`                                                                                | Hero, Ses AI kredi paketleri, Video & Görsel paketleri                        |
+| `/pricing`                                                                         | Paketler, kredi harcama tablosu, SSS                                          |
+| `/sign-in`, `/sign-up`                                                             | Giriş ve kayıt (`?redirect=` ile dönüş)                                       |
+| `/labs`                                                                            | Stüdyo: Metinden Ses, Ses Klonlama, Görsel, Video (`?tab=`)                   |
+| `/payment`                                                                         | Paket ve ödeme yöntemi seçimi (`?package=`)                                   |
+| `/payment-history`                                                                 | Siparişler ve kalan krediler                                                  |
+| `/account`                                                                         | Hesabım: ad, şifre, Google bağlantısı, diğer oturumları kapatma, hesabı silme |
+| `/forgot-password`, `/reset-password`                                              | Şifremi unuttum: e-postayla sıfırlama bağlantısı ve yeni şifre                |
+| `/verify-email`                                                                    | E-posta doğrulama bağlantısının açıldığı sayfa                                |
+| `/terms-of-service`, `/privacy-policy`, `/refund-policy`, `/acceptable-use-policy` | Yasal şablon metinler                                                         |
 
 ## Durum
 
 **Hazır:** Hesaplar, oturumlar, krediler, siparişler ve üretim geçmişi sunucuda, SQLite veritabanında tutulur (Drizzle ORM + libSQL). Şifreler scrypt ile özetlenir; oturum `httpOnly` çerezle taşınır, veritabanında yalnız token özeti durur. Kredi maliyeti sunucuda hesaplanır ve tek transaction içinde düşülür. E-posta/şifreye ek olarak Google ile giriş ve kayıt vardır (aşağıdaki kuruluma bakın). Kaba kuvvete karşı deneme sınırı uygulanır: aynı e-postaya 15 dakikada 5, aynı IP'den 15 dakikada 20 başarısız şifre denemesi; aynı IP'den saatte 5 kayıt (`src/lib/rate-limit.ts`). Proxy arkasında `TRUST_PROXY=on` ayarlanmalıdır. Hesap sayfasında şifre değişince diğer cihazlardaki oturumlar kapanır; şifreyle açılmış hesaba Google kullanıcının kendi isteğiyle bağlanabilir; hesap silme e-posta onayı (şifreli hesapta şifre de) ister ve kullanıcının tüm verisini siler. Kayıtta doğrulama e-postası gider; **5.000 deneme kredisi e-posta doğrulanınca** tanımlanır (Google ile açılan hesaplar doğrulanmış sayılır). Şifremi unuttum bağlantısı 1 saat, doğrulama bağlantısı 24 saat geçerlidir; ikisi de tek kullanımlıktır ve veritabanında yalnız özetleri durur. Şifre değişince "şifren değiştirildi" bildirimi gider.
 
-**Ödeme modeli (genaipro.io ile aynı):** Kullanıcı önce USD bakiye yükler (en az $5), paketleri bakiyeden alır. Bakiye, değiştirilemez bir defterde tutulur (`wallet_entries`): yükleme artı, alım eksi kayıt; düzeltme yeni kayıtla yapılır. Bakiye yükleme talepleri (`payment_intents`) 1 saat geçerlidir; kripto yöntemlerinde ödemeyi kullanıcıya bağlamak için kuruşuna kadar benzersiz tutar atanır (ör. 10,0347 USDT). Sağlayıcı işlem kimliği benzersizdir, aynı ödeme iki kez bakiyeye yazılamaz. Yöntemler: USDT (BEP20), Binance Pay, PayPal/kart; her biri kendi aşamasında bağlanır. Geliştirmede (üretimde yalnız `DEMO_PAYMENTS=on` ile) "Demo bakiye" yöntemi gerçek ödeme almadan bakiye yükler.
+**Ödeme modeli (genaipro.io ile aynı):** Kullanıcı önce USD bakiye yükler (en az $5), paketleri bakiyeden alır. Bakiye, değiştirilemez bir defterde tutulur (`wallet_entries`): yükleme artı, alım eksi kayıt; düzeltme yeni kayıtla yapılır. Bakiye yükleme talepleri (`payment_intents`) 1 saat geçerlidir; kripto yöntemlerinde ödemeyi kullanıcıya bağlamak için kuruşuna kadar benzersiz tutar atanır (ör. 10,0347 USDT). Sağlayıcı işlem kimliği benzersizdir, aynı ödeme iki kez bakiyeye yazılamaz. Yöntemler: USDT (BEP20), Binance Pay, PayPal/kart (PayPal kendi aşamasında bağlanır). Geliştirmede (üretimde yalnız `DEMO_PAYMENTS=on` ile) "Demo bakiye" yöntemi gerçek ödeme almadan bakiye yükler.
 
 **Demo olan kısımlar:**
 
@@ -53,6 +53,19 @@ Ortam değişkenleri için `.env.example` dosyasına bakın. Hiçbiri zorunlu de
 3. Kullanıcı gönderdikten sonra işlem kimliğini (tx hash) yapıştırır. Sunucu BSC düğümünden işlemi doğrular: başarılı mı, USDT sözleşmesi mi (`0x55d3…7955`), alıcı sizin adresiniz mi, tutar o kullanıcının bekleyen benzersiz tutarıyla aynı mı, yeterli onay (varsayılan 12 blok) var mı ve talepten sonra mı yapılmış. Hepsi tutarsa bakiye yüklenir; aynı işlem ikinci kez kullanılamaz.
 
 Zincir herkese açık olduğu için eşleşme yalnız işlem kimliğine değil benzersiz tutara dayanır: adresinizi izleyen biri başkasının işlemini kendi hesabına yazdıramaz. Farklı tutar gönderen ya da süresi dolduktan sonra ödeyen kullanıcı otomatik eşleşmez; destekle işlem kimliği üzerinden elle çözülür.
+
+## Binance Pay ile bakiye yükleme
+
+1. Binance'te **API Management**'tan bir API anahtarı oluşturun. Yalnız **Enable Reading** izni verin (çekim ve işlem izinleri gerekmez), mümkünse sunucunuzun IP adresiyle kısıtlayın.
+2. `.env`'e kendi Binance kimliğinizi (Pay ID) `BINANCE_PAY_ID`, anahtarı `BINANCE_API_KEY` ve `BINANCE_API_SECRET` olarak yazın. Üçü de dolu olduğunda yöntem ödeme sayfasında görünür.
+3. Kullanıcı tutar seçer; ona 1 saat geçerli, 2 ondalıklı benzersiz bir tutar (ör. 10,37 USDT) ve Binance kimliğiniz gösterilir. Binance uygulamasında Pay > Gönder ile bu tutarı gönderir ve "Ödemeyi yaptım" düğmesine basar; sayfa açık kaldıkça 30 saniyede bir kendiliğinden kontrol edilir.
+4. Sunucu Binance Pay geçmişini (`GET /sapi/v1/pay/transactions`, imzalı) okur ve hesabınıza gelen C2C USDT ödemeleri arasında kullanıcının bekleyen tutarını, talepten sonra yapılmış ve daha önce kullanılmamış işlemi arar. Bulursa bakiye yüklenir.
+
+Binance geçmişi ödeme notunu döndürmediği için eşleşme yalnız benzersiz tutar ve zamanla yapılır; Binance uygulamasında güvenle girilebilen 2 ondalık kullanılır. Geçmiş sorgusu ağır olduğundan liste 20 saniye önbellekte tutulur ve kullanıcılar arasında paylaşılır. USDT dışında bir para birimiyle ya da farklı tutarla yapılan ödeme otomatik eşleşmez; destekle elle çözülür.
+
+## Bakiyeye yazılan tutar
+
+Kripto yöntemlerde benzersizlik için eklenen kuruşlar kullanıcıda kalır: bakiyeye, ödenen tutar sente aşağı yuvarlanarak yazılır (10,37 USDT → $10,37; 10,0347 USDT → $10,03). Bir talebin tutarı, o talebe ödeme gelebileceği sürece (talep beklerken, kullanıcı yeni tutar istediğinde ve süresi dolduktan sonraki 5 dakika) başka bir kullanıcıya verilmez.
 
 ## Ses üretimi (ElevenLabs) kurulumu
 
