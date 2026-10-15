@@ -44,6 +44,20 @@ npm run db:studio    # veritabanını tarayıcıda incele
 
 Ortam değişkenleri için `.env.example` dosyasına bakın. Hiçbiri zorunlu değildir; varsayılan veritabanı `data/trai-pro.db`'dir. Geliştirmede `.env`'ye yeni eklenen değerler sunucu yeniden başlatılmadan okunur; var olan bir değeri değiştirdiyseniz sunucuyu yeniden başlatın.
 
+## Ses üretimi (ElevenLabs) kurulumu
+
+1. [elevenlabs.io](https://elevenlabs.io)'da hesap açın; ses klonlama için en az Starter planı gerekir.
+2. **Settings → API Keys**'ten bir anahtar oluşturup `.env`'e `ELEVENLABS_API_KEY` olarak yazın.
+3. İsteğe bağlı: **Voices** bölümünden Türkçe için beğendiğiniz hazır sesleri hesabınıza ekleyin ve kimliklerini `ELEVENLABS_VOICE_IDS`'e virgülle yazın; boşsa hesaptaki tüm hazır sesler listelenir.
+
+Anahtar yokken Stüdyo demo kipinde çalışır: seslendirme tarayıcının konuşma sentezini kullanır. Anahtar varken:
+
+- Ses `eleven_multilingual_v2` ile üretilir, MP3 olarak `data/audio/<kullanıcı>/` altında saklanır ve `/media/audio/:id` adresinden yalnız sahibine sunulur (dinleme ve indirme).
+- Kredi yalnız başarıda düşer; servis hata verirse kredi düşülmez. Bir kullanıcı dakikada en fazla 20 seslendirme yapabilir.
+- Ses klonu, kullanıcının yüklediği kayıtla (en fazla 10 MB) ElevenLabs'te açılır; izin onayı zamanıyla kaydedilir. Klon ya da hesap silinince ElevenLabs'teki ses ve kullanıcının ses dosyaları da silinir.
+- **Maliyet:** ElevenLabs karakter başına ücretlendirir; sitedeki kredi fiyatlarınız (`src/lib/packages.ts`) bu maliyeti karşılayacak şekilde ayarlanmalı.
+- Cloudflare gibi dosya sistemi olmayan bir ortamda `AudioStorage` arayüzü bir nesne deposuyla (ör. R2/S3) değiştirilmelidir (`src/server/audio-storage.server.ts`).
+
 ## E-posta (SMTP) kurulumu
 
 1. Bir SMTP sağlayıcısı seçin: kurumsal e-posta sunucunuz, Google Workspace/Gmail, Yandex, Resend, SendGrid, Brevo vb. Toplu gönderim için işlemsel e-posta servisleri (Resend, SendGrid, Brevo) daha iyi teslim edilir.
