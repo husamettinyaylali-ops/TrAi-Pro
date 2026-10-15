@@ -43,3 +43,26 @@ export function useAdjustBalance() {
     }
   };
 }
+
+export function useAdminIntentSearch(query: string) {
+  return useQuery({
+    queryKey: [...ADMIN_KEY, "intents", query],
+    queryFn: () => api.adminSearchIntents({ data: { query } }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+}
+
+/** Ödeme talebini elle tamamlar; başarıda yönetim verileri yenilenir. */
+export function useCompleteIntent() {
+  const qc = useQueryClient();
+  return async (input: { intentId: string; providerRef: string; reason: string }) => {
+    try {
+      const res = await api.adminCompleteIntent({ data: input });
+      if (res.ok) await qc.invalidateQueries({ queryKey: ADMIN_KEY });
+      return res;
+    } catch {
+      return { ok: false as const, error: "network" as const };
+    }
+  };
+}

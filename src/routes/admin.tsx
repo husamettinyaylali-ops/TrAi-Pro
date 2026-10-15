@@ -3,11 +3,18 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { AlertCircle, CheckCircle2, Loader2, Search, ShieldAlert } from "lucide-react";
 
 import { RequireAuth } from "@/components/site/require-auth";
-import { PageHead, SiteShell, btnPrimary, field } from "@/components/site/shell";
-import { useAdjustBalance, useAdminDashboard, useAdminSearch, useAdminUser } from "@/lib/admin";
+import { PageHead, SiteShell, btnOutline, btnPrimary, field } from "@/components/site/shell";
+import {
+  useAdjustBalance,
+  useAdminDashboard,
+  useAdminIntentSearch,
+  useAdminSearch,
+  useAdminUser,
+  useCompleteIntent,
+} from "@/lib/admin";
 import { useFormat, useI18n } from "@/lib/i18n";
 import { useApp } from "@/lib/store";
-import type { AdminAction, AdminUserRow } from "@/lib/types";
+import type { AdminAction, AdminIntentRow, AdminUserRow, TopUpIntent } from "@/lib/types";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Yönetim — TrAi Pro" }] }),
@@ -44,7 +51,34 @@ function Table({ heads, children }: { heads: string[]; children: ReactNode }) {
   );
 }
 
-const td = "px-3 py-2 align-top";
+const td = "px-3 py-2 align-middle";
+
+/** Yazarken her tuşta sorgu atılmasın diye 300 ms gecikmeli değer. */
+function useDebounced(value: string) {
+  const [debounced, setDebounced] = useState(value.trim());
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebounced(value.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [value]);
+  return debounced;
+}
+
+function Note({ note }: { note: { ok: boolean; text: string } | null }) {
+  if (!note) return null;
+  return (
+    <p
+      role={note.ok ? "status" : "alert"}
+      className={`flex items-start gap-2 text-sm ${note.ok ? "text-cyan" : "text-destructive"}`}
+    >
+      {note.ok ? (
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      ) : (
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      )}
+      {note.text}
+    </p>
+  );
+}
 
 function Section({
   title,
@@ -124,11 +158,7 @@ function UserSearch({
   const { t } = useI18n();
   const { usd } = useMoney();
   const [input, setInput] = useState("");
-  const [query, setQuery] = useState("");
-  useEffect(() => {
-    const id = window.setTimeout(() => setQuery(input.trim()), 300);
-    return () => window.clearTimeout(id);
-  }, [input]);
+  const query = useDebounced(input);
   const q = useAdminSearch(query);
   const users: AdminUserRow[] = q.data?.ok ? q.data.users : [];
 
@@ -257,19 +287,7 @@ function AdjustForm({ userId }: { userId: string }) {
           {a.reasonHint}
         </p>
       </div>
-      {note && (
-        <p
-          role={note.ok ? "status" : "alert"}
-          className={`flex items-start gap-2 text-sm ${note.ok ? "text-cyan" : "text-destructive"}`}
-        >
-          {note.ok ? (
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          ) : (
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          )}
-          {note.text}
-        </p>
-      )}
+      <Note note={note} />
       <button
         type="submit"
         disabled={busy || !valid || reason.trim().length < 5}
@@ -311,12 +329,167 @@ function ActionRows({ actions, showTarget }: { actions: AdminAction[]; showTarge
   );
 }
 
+/** Sağlayıcıda doğrulanmış ödemeyi işlem kimliği ve gerekçeyle elle tamamlar. */
+function CompleteForm({ intent, onClose }: { intent: TopUpIntent; onClose: () => void }) {
+  const { t } = useI18n();
+  const { usd } = useMoney();
+  const complete = useCompleteIntent();
+  const k = t.admin.complete;
+  const [ref, setRef] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const refId = `complete-ref-${intent.id}`;
+  const reasonId = `complete-reason-${intent.id}`;
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    const res = await complete({ intentId: intent.id, providerRef: ref, reason });
+    setBusy(false);
+    if (res.ok) return setNote({ ok: true, text: k.done(usd(res.intent.creditCents)) });
+    setNote({ ok: false, text: k.errors[res.error] });
+  };
+
+  return (
+    <form onSubmit={submit} noValidate className="space-y-3 rounded-2xl border border-border p-4">
+      <h4 className="text-sm font-semibold">
+        {k.title} · <span className="font-mono">{`${intent.payAmount} ${intent.payCurrency}`}</span>
+      </h4>
+      <div>
+        <label htmlFor={refId} className="mb-1.5 block text-sm font-medium">
+          {k.ref[intent.method]}
+        </label>
+        <input
+          id={refId}
+          className={`${field} font-mono`}
+          spellCheck={false}
+          autoComplete="off"
+          value={ref}
+          onChange={(e) => setRef(e.target.value)}
+          aria-describedby={`${refId}-hint`}
+        />
+        <p id={`${refId}-hint`} className="mt-1 text-xs text-muted-foreground">
+          {k.refHint}
+        </p>
+      </div>
+      <div>
+        <label htmlFor={reasonId} className="mb-1.5 block text-sm font-medium">
+          {t.admin.adjust.reason}
+        </label>
+        <textarea
+          id={reasonId}
+          rows={2}
+          maxLength={500}
+          className={field}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+      </div>
+      <Note note={note} />
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="submit"
+          disabled={busy || !ref.trim() || reason.trim().length < 5 || note?.ok === true}
+          className={btnPrimary}
+        >
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          {k.submit(usd(intent.creditCents))}
+        </button>
+        <button type="button" onClick={onClose} className={btnOutline}>
+          {k.cancel}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function IntentRows({
+  intents,
+  onSelectUser,
+}: {
+  intents: AdminIntentRow[];
+  onSelectUser: (id: string) => void;
+}) {
+  const { t } = useI18n();
+  const f = useFormat();
+  const c = t.admin.cols;
+  return (
+    <Table heads={[c.date, c.target, c.method, c.payAmount, c.status, c.providerRef]}>
+      {intents.map((i) => (
+        <tr key={i.id}>
+          <td className={`${td} whitespace-nowrap`}>{f.dateTime(i.createdAt)}</td>
+          <td className={td}>
+            <button
+              type="button"
+              onClick={() => onSelectUser(i.userId)}
+              aria-label={t.admin.openUser(i.userEmail)}
+              className="min-h-11 text-left font-medium underline-offset-4 hover:text-cyan hover:underline"
+            >
+              {i.userEmail}
+            </button>
+          </td>
+          <td className={td}>{t.payment.methods[i.method]}</td>
+          <td className={`${td} whitespace-nowrap font-mono`}>
+            {i.payAmount} {i.payCurrency}
+          </td>
+          <td className={td}>{t.admin.intentStatus[i.status]}</td>
+          <td className={`${td} break-all font-mono text-xs`}>{i.providerRef ?? "—"}</td>
+        </tr>
+      ))}
+    </Table>
+  );
+}
+
+function IntentSearch({ onSelectUser }: { onSelectUser: (id: string) => void }) {
+  const { t } = useI18n();
+  const [input, setInput] = useState("");
+  const query = useDebounced(input);
+  const q = useAdminIntentSearch(query);
+  const intents = q.data?.ok ? q.data.intents : [];
+  return (
+    <section aria-labelledby="admin-intents" className={card}>
+      <h2 id="admin-intents" className="mb-3 text-lg font-semibold">
+        {t.admin.intentSearch}
+      </h2>
+      <div className="relative max-w-xl">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <input
+          type="search"
+          aria-label={t.admin.intentSearch}
+          placeholder={t.admin.intentSearchPlaceholder}
+          className={`${field} pl-9`}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+        />
+      </div>
+      <div className="mt-3" aria-busy={q.isFetching}>
+        {q.isPending ? (
+          <div className="shimmer h-32 rounded-2xl" />
+        ) : q.isError ? (
+          <p role="alert" className="text-sm text-destructive">
+            {t.admin.loadFailed}
+          </p>
+        ) : intents.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t.admin.empty}</p>
+        ) : (
+          <IntentRows intents={intents} onSelectUser={onSelectUser} />
+        )}
+      </div>
+    </section>
+  );
+}
+
 function UserPanel({ userId }: { userId: string | null }) {
   const { t } = useI18n();
   const f = useFormat();
   const { usd, signed } = useMoney();
   const q = useAdminUser(userId);
   const c = t.admin.cols;
+  const [completing, setCompleting] = useState<string | null>(null);
 
   if (!userId) {
     return (
@@ -346,6 +519,7 @@ function UserPanel({ userId }: { userId: string | null }) {
     );
   }
   const { user, entries, intents, orders, actions } = q.data.detail;
+  const completingIntent = intents.find((i) => i.id === completing) ?? null;
 
   return (
     <section aria-labelledby="admin-user" className={`${card} space-y-5`}>
@@ -390,7 +564,7 @@ function UserPanel({ userId }: { userId: string | null }) {
       </Section>
 
       <Section title={t.admin.intents} empty={intents.length === 0}>
-        <Table heads={[c.date, c.method, c.payAmount, c.status, c.providerRef]}>
+        <Table heads={[c.date, c.method, c.payAmount, c.status, c.providerRef, c.action]}>
           {intents.map((i) => (
             <tr key={i.id}>
               <td className={`${td} whitespace-nowrap`}>{f.dateTime(i.createdAt)}</td>
@@ -400,9 +574,26 @@ function UserPanel({ userId }: { userId: string | null }) {
               </td>
               <td className={td}>{t.admin.intentStatus[i.status]}</td>
               <td className={`${td} break-all font-mono text-xs`}>{i.providerRef ?? "—"}</td>
+              <td className={td}>
+                {i.status !== "completed" && i.method !== "demo" && completing !== i.id && (
+                  <button
+                    type="button"
+                    onClick={() => setCompleting(i.id)}
+                    className="min-h-11 whitespace-nowrap text-sm font-semibold text-cyan hover:underline"
+                  >
+                    {t.admin.complete.open}
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
         </Table>
+        {/* Tablonun dışında: mobilde yatay kaydırma alanında kesilmesin. */}
+        {completingIntent && (
+          <div className="mt-3">
+            <CompleteForm intent={completingIntent} onClose={() => setCompleting(null)} />
+          </div>
+        )}
       </Section>
 
       <Section title={t.admin.orders} empty={orders.length === 0}>
@@ -461,10 +652,11 @@ export function AdminPanel() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 pb-24 sm:px-6">
       <Stats />
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <UserSearch selected={selected} onSelect={setSelected} />
-        <UserPanel userId={selected} />
+        <UserPanel key={selected ?? "none"} userId={selected} />
       </div>
+      <IntentSearch onSelectUser={setSelected} />
       <RecentActions />
     </div>
   );

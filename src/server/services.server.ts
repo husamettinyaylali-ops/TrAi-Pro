@@ -558,49 +558,60 @@ export async function completeTopUp(
 ): Promise<
   Result<{ intent: TopUpIntent; userId: string }, "notFound" | "notPending" | "duplicateRef">
 > {
-  return db.transaction(async (tx) => {
-    const intent = await tx
-      .select()
-      .from(paymentIntents)
-      .where(eq(paymentIntents.id, intentId))
-      .get();
-    if (!intent) return { ok: false, error: "notFound" } as const;
-    if (intent.status === "completed") {
-      return intent.providerRef === providerRef
-        ? ({ ok: true, intent: toIntent(intent), userId: intent.userId } as const)
-        : ({ ok: false, error: "notPending" } as const);
-    }
-    const open = intent.status === "pending" || (opts.allowExpired && intent.status === "expired");
-    if (!open) return { ok: false, error: "notPending" } as const;
-    const used = await tx
-      .select({ id: paymentIntents.id })
-      .from(paymentIntents)
-      .where(
-        and(eq(paymentIntents.method, intent.method), eq(paymentIntents.providerRef, providerRef)),
-      )
-      .get();
-    if (used) return { ok: false, error: "duplicateRef" } as const;
+  return db.transaction((tx) => completeTopUpIn(tx, intentId, providerRef, now, opts));
+}
 
-    const done: IntentRow = {
-      ...intent,
-      status: "completed",
-      providerRef,
-      completedAt: now.toISOString(),
-    };
-    await tx
-      .update(paymentIntents)
-      .set({ status: "completed", providerRef, completedAt: done.completedAt })
-      .where(and(eq(paymentIntents.id, intentId), ne(paymentIntents.status, "completed")));
-    await tx.insert(walletEntries).values({
-      id: randomUUID(),
-      userId: intent.userId,
-      kind: "topup",
-      amountCents: creditCentsFor(intent),
-      reference: intent.id,
-      createdAt: now.toISOString(),
-    });
-    return { ok: true, intent: toIntent(done), userId: intent.userId } as const;
+/** completeTopUp'ın gövdesi; başka bir kaydı aynı transaction'da yazmak için (yönetici işlemi). */
+export async function completeTopUpIn(
+  tx: Conn,
+  intentId: string,
+  providerRef: string,
+  now: Date,
+  opts: { allowExpired?: boolean } = {},
+): Promise<
+  Result<{ intent: TopUpIntent; userId: string }, "notFound" | "notPending" | "duplicateRef">
+> {
+  const intent = await tx
+    .select()
+    .from(paymentIntents)
+    .where(eq(paymentIntents.id, intentId))
+    .get();
+  if (!intent) return { ok: false, error: "notFound" } as const;
+  if (intent.status === "completed") {
+    return intent.providerRef === providerRef
+      ? ({ ok: true, intent: toIntent(intent), userId: intent.userId } as const)
+      : ({ ok: false, error: "notPending" } as const);
+  }
+  const open = intent.status === "pending" || (opts.allowExpired && intent.status === "expired");
+  if (!open) return { ok: false, error: "notPending" } as const;
+  const used = await tx
+    .select({ id: paymentIntents.id })
+    .from(paymentIntents)
+    .where(
+      and(eq(paymentIntents.method, intent.method), eq(paymentIntents.providerRef, providerRef)),
+    )
+    .get();
+  if (used) return { ok: false, error: "duplicateRef" } as const;
+
+  const done: IntentRow = {
+    ...intent,
+    status: "completed",
+    providerRef,
+    completedAt: now.toISOString(),
+  };
+  await tx
+    .update(paymentIntents)
+    .set({ status: "completed", providerRef, completedAt: done.completedAt })
+    .where(and(eq(paymentIntents.id, intentId), ne(paymentIntents.status, "completed")));
+  await tx.insert(walletEntries).values({
+    id: randomUUID(),
+    userId: intent.userId,
+    kind: "topup",
+    amountCents: creditCentsFor(intent),
+    reference: intent.id,
+    createdAt: now.toISOString(),
   });
+  return { ok: true, intent: toIntent(done), userId: intent.userId } as const;
 }
 
 /** Geliştirme/demo: talep açılır ve hemen tamamlanır. Üretimde API katmanı kapatır. */

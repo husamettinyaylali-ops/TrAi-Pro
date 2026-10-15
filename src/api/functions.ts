@@ -17,8 +17,10 @@ import {
   adjustBalance,
   adminEmails,
   adminOverview,
+  completeIntentManually,
   isAdmin,
   recentActions,
+  searchIntents,
   searchUsers,
   userDetail,
 } from "@/server/admin.server";
@@ -580,4 +582,29 @@ export const adminAdjustBalance = createServerFn({ method: "POST" })
     const auth = await requireAdmin();
     if (!auth.ok) return auth;
     return adjustBalance(await getDb(), auth.user.id, data, clock());
+  });
+
+export const adminSearchIntents = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ query: z.string().max(200) })))
+  .handler(async ({ data }) => {
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth;
+    return { ok: true as const, intents: await searchIntents(await getDb(), data.query) };
+  });
+
+/** Sağlayıcıda doğrulanmış ama eşleşmemiş ödemeyi elle tamamlar. */
+export const adminCompleteIntent = createServerFn({ method: "POST" })
+  .validator(
+    parse(
+      z.object({
+        intentId: z.string().max(64),
+        providerRef: z.string().max(200),
+        reason: z.string().max(1000),
+      }),
+    ),
+  )
+  .handler(async ({ data }) => {
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth;
+    return completeIntentManually(await getDb(), auth.user.id, data, clock());
   });

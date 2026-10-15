@@ -187,7 +187,11 @@ export type AdminErrorCode =
   /** Düzeltme sonrası bakiye eksiye düşerdi. */
   | "negativeBalance"
   /** Yönetici kendi hesabında işlem yapamaz. */
-  | "selfAction";
+  | "selfAction"
+  /** Talep zaten tamamlanmış. */
+  | "alreadyCompleted"
+  /** Bu sağlayıcı işlem kimliği başka bir talepte kullanılmış. */
+  | "duplicateRef";
 
 export interface AdminOverview {
   users: number;
@@ -227,4 +231,10 @@ export interface AdminUserDetail {
   intents: (TopUpIntent & { providerRef: string | null })[];
   orders: Order[];
   actions: AdminAction[];
+}
+
+export interface AdminIntentRow extends TopUpIntent {
+  providerRef: string | null;
+  userId: string;
+  userEmail: string;
 }

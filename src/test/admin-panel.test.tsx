@@ -9,6 +9,7 @@ let admin = true;
 vi.mock("@/lib/store", () => ({ useApp: () => ({ admin }) }));
 
 const adjust = vi.fn();
+const complete = vi.fn();
 const dashboard = {
   ok: true as const,
   overview: {
@@ -32,7 +33,20 @@ const detail: AdminUserDetail = {
     balanceCents: 500,
   },
   entries: [],
-  intents: [],
+  intents: [
+    {
+      id: "i1",
+      method: "usdt_bep20",
+      amountCents: 1_000,
+      payAmount: "10.0347",
+      creditCents: 1_003,
+      payCurrency: "USDT",
+      status: "expired",
+      createdAt: "2026-10-15T09:00:00Z",
+      expiresAt: "2026-10-15T10:00:00Z",
+      providerRef: null,
+    },
+  ],
   orders: [],
   actions: [],
 };
@@ -47,6 +61,13 @@ vi.mock("@/lib/admin", () => ({
   useAdminUser: (id: string | null) =>
     id ? { isPending: false, isError: false, data: { ok: true, detail } } : { isPending: false },
   useAdjustBalance: () => adjust,
+  useAdminIntentSearch: () => ({
+    isPending: false,
+    isError: false,
+    isFetching: false,
+    data: { ok: true, intents: [] },
+  }),
+  useCompleteIntent: () => complete,
 }));
 
 function renderPanel() {
@@ -62,6 +83,7 @@ describe("yönetim paneli", () => {
     admin = true;
     dashboardData = dashboard;
     adjust.mockReset();
+    complete.mockReset();
   });
 
   it("yönetici değilse ya da sunucu reddederse yalnız erişim uyarısı gösterilir", () => {
@@ -108,5 +130,27 @@ describe("yönetim paneli", () => {
     fireEvent.change(screen.getByLabelText("Gerekçe"), { target: { value: "Destek #4" } });
     fireEvent.click(screen.getByRole("button", { name: "Bakiyeden $10,00 düş" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("eksiye düşer");
+  });
+
+  it("süresi dolan talep işlem kimliği ve gerekçeyle elle tamamlanır", async () => {
+    complete.mockResolvedValue({ ok: true, intent: { ...detail.intents[0], status: "completed" } });
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Ayşe/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Elle tamamla" }));
+    fireEvent.change(screen.getByLabelText("İşlem kimliği (Txn Hash)"), {
+      target: { value: "0xabc" },
+    });
+    fireEvent.change(screen.getAllByLabelText("Gerekçe")[1]!, {
+      target: { value: "BscScan'de doğrulandı" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Tamamla ve bakiyeye $10,03 yaz" }));
+    await waitFor(() =>
+      expect(complete).toHaveBeenCalledWith({
+        intentId: "i1",
+        providerRef: "0xabc",
+        reason: "BscScan'de doğrulandı",
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("bakiyeye $10,03 yazıldı");
   });
 });

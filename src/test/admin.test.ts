@@ -9,6 +9,9 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   adjustBalance,
   adminEmails,
+  completeIntentManually,
+  normalizeProviderRef,
+  searchIntents,
   adminOverview,
   isAdmin,
   recentActions,
@@ -17,6 +20,7 @@ import {
 } from "@/server/admin.server";
 import { openDb, type Db } from "@/server/db.server";
 import {
+  claimUsdtTopUp,
   completeTopUp,
   createTopUp,
   deleteAccount,
@@ -176,5 +180,120 @@ describe("özet", () => {
       pendingIntents: 1,
     });
     expect((await adminOverview(db, later(25 * 60))).topUps24hCents).toBe(0);
+  });
+});
+
+describe("ödeme talepleri", () => {
+  const HASH = `0x${"ab".repeat(32)}`;
+
+  it("tutar başı, işlem kimliği, e-posta ve talep kimliğiyle bulunur", async () => {
+    const a = await newUser("ayse@example.com");
+    const b = await newUser("mehmet@example.com");
+    const ta = await createTopUp(
+      db,
+      a,
+      { method: "binance_pay", amountCents: 1_000 },
+      now,
+      () => 0.36,
+    );
+    const tb = await createTopUp(db, b, { method: "usdt_bep20", amountCents: 2_000 }, now, () => 0);
+    if (!ta.ok || !tb.ok) throw new Error("talep");
+    expect(ta.intent.payAmount).toBe("10.36");
+    await completeTopUp(db, tb.intent.id, HASH, now);
+
+    expect((await searchIntents(db, "10,36")).map((i) => i.id)).toEqual([ta.intent.id]);
+    expect(await searchIntents(db, HASH.toUpperCase().replace("0X", "0x"))).toMatchObject([
+      { id: tb.intent.id, userEmail: "mehmet@example.com", providerRef: HASH },
+    ]);
+    expect((await searchIntents(db, "ayse@")).map((i) => i.id)).toEqual([ta.intent.id]);
+    expect((await searchIntents(db, tb.intent.id)).map((i) => i.userId)).toEqual([b]);
+    expect(await searchIntents(db, "")).toHaveLength(2);
+  });
+
+  it("işlem kimliği otomatik akışın biçimine getirilir", () => {
+    expect(normalizeProviderRef("usdt_bep20", ` ${HASH.toUpperCase().replace("0X", "0x")} `)).toBe(
+      HASH,
+    );
+    expect(normalizeProviderRef("usdt_bep20", "0x12")).toBeNull();
+    expect(normalizeProviderRef("binance_pay", "M_P_71505104267788288")).toBe(
+      "binance:M_P_71505104267788288",
+    );
+    expect(normalizeProviderRef("binance_pay", "binance:M_P_1234")).toBe("binance:M_P_1234");
+    expect(normalizeProviderRef("paypal", "paypal:3c679366hh908993f")).toBe(
+      "paypal:3C679366HH908993F",
+    );
+    expect(normalizeProviderRef("paypal", "x y")).toBeNull();
+    expect(normalizeProviderRef("demo", "anything")).toBeNull();
+  });
+
+  it("süresi dolan talep elle tamamlanır, kayda geçer; aynı işlem otomatik akışta tekrar kullanılamaz", async () => {
+    const admin = await newUser("admin@example.com");
+    const id = await newUser("ayse@example.com");
+    const t = await createTopUp(db, id, { method: "usdt_bep20", amountCents: 1_000 }, now, () => 0);
+    if (!t.ok) throw new Error(t.error);
+
+    const res = await completeIntentManually(
+      db,
+      admin,
+      {
+        intentId: t.intent.id,
+        providerRef: HASH.toUpperCase().replace("0X", "0x"),
+        reason: "Süre dolduktan sonra ödenmiş, BscScan'de doğrulandı",
+      },
+      later(90),
+    );
+    expect(res.ok && res.intent).toMatchObject({ status: "completed", creditCents: 1_000 });
+    expect(await walletBalance(db, id)).toBe(1_000);
+    expect(await recentActions(db)).toMatchObject([
+      { action: "completeIntent", targetEmail: "ayse@example.com", amountCents: 1_000 },
+    ]);
+
+    // Kullanıcı aynı işlemi kendisi doğrulamaya çalışırsa ikinci kez yazılmaz.
+    await createTopUp(db, id, { method: "usdt_bep20", amountCents: 1_000 }, later(91), () => 0);
+    const check = async () => ({
+      ok: true as const,
+      amount: "10.0001",
+      blockTime: later(91).getTime() / 1000,
+    });
+    expect(await claimUsdtTopUp(db, id, HASH, check, later(92))).toEqual({
+      ok: false,
+      error: "duplicateRef",
+    });
+    expect(
+      await completeIntentManually(
+        db,
+        admin,
+        { intentId: t.intent.id, providerRef: HASH, reason: "tekrar deneme" },
+        later(93),
+      ),
+    ).toEqual({
+      ok: false,
+      error: "alreadyCompleted",
+    });
+    expect(await walletBalance(db, id)).toBe(1_000);
+  });
+
+  it("geçersiz kimlik, kısa gerekçe, kendi talebi ve kullanılmış kimlik reddedilir", async () => {
+    const admin = await newUser("admin@example.com");
+    const id = await newUser("ayse@example.com");
+    const other = await newUser("mehmet@example.com");
+    const t = await createTopUp(db, id, { method: "binance_pay", amountCents: 500 }, now);
+    const own = await createTopUp(db, admin, { method: "binance_pay", amountCents: 500 }, now);
+    const used = await createTopUp(db, other, { method: "binance_pay", amountCents: 500 }, now);
+    if (!t.ok || !own.ok || !used.ok) throw new Error("talep");
+    await completeTopUp(db, used.intent.id, "binance:M_P_1", now);
+    const complete = (intentId: string, providerRef: string, reason = "Destek talebi #7") =>
+      completeIntentManually(db, admin, { intentId, providerRef, reason }, later(1));
+
+    expect(await complete(t.intent.id, "x y")).toEqual({ ok: false, error: "invalidInput" });
+    expect(await complete(t.intent.id, "M_2", "kısa")).toEqual({
+      ok: false,
+      error: "invalidInput",
+    });
+    expect(await complete(own.intent.id, "M_3")).toEqual({ ok: false, error: "selfAction" });
+    expect(await complete(t.intent.id, "M_P_1")).toEqual({ ok: false, error: "duplicateRef" });
+    expect(await complete("yok", "M_4")).toEqual({ ok: false, error: "notFound" });
+    expect(await walletBalance(db, id)).toBe(0);
+    expect(await recentActions(db)).toHaveLength(0);
   });
 });
