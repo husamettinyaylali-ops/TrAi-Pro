@@ -13,11 +13,13 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 | `/payment` | Paket ve ödeme yöntemi seçimi (`?package=`) |
 | `/payment-history` | Siparişler ve kalan krediler |
 | `/account` | Hesabım: ad, şifre, Google bağlantısı, diğer oturumları kapatma, hesabı silme |
+| `/forgot-password`, `/reset-password` | Şifremi unuttum: e-postayla sıfırlama bağlantısı ve yeni şifre |
+| `/verify-email` | E-posta doğrulama bağlantısının açıldığı sayfa |
 | `/terms-of-service`, `/privacy-policy`, `/refund-policy`, `/acceptable-use-policy` | Yasal şablon metinler |
 
 ## Durum
 
-**Hazır:** Hesaplar, oturumlar, krediler, siparişler ve üretim geçmişi sunucuda, SQLite veritabanında tutulur (Drizzle ORM + libSQL). Şifreler scrypt ile özetlenir; oturum `httpOnly` çerezle taşınır, veritabanında yalnız token özeti durur. Kredi maliyeti sunucuda hesaplanır ve tek transaction içinde düşülür. E-posta/şifreye ek olarak Google ile giriş ve kayıt vardır (aşağıdaki kuruluma bakın). Kaba kuvvete karşı deneme sınırı uygulanır: aynı e-postaya 15 dakikada 5, aynı IP'den 15 dakikada 20 başarısız şifre denemesi; aynı IP'den saatte 5 kayıt (`src/lib/rate-limit.ts`). Proxy arkasında `TRUST_PROXY=on` ayarlanmalıdır. Hesap sayfasında şifre değişince diğer cihazlardaki oturumlar kapanır; şifreyle açılmış hesaba Google kullanıcının kendi isteğiyle bağlanabilir; hesap silme e-posta onayı (şifreli hesapta şifre de) ister ve kullanıcının tüm verisini siler.
+**Hazır:** Hesaplar, oturumlar, krediler, siparişler ve üretim geçmişi sunucuda, SQLite veritabanında tutulur (Drizzle ORM + libSQL). Şifreler scrypt ile özetlenir; oturum `httpOnly` çerezle taşınır, veritabanında yalnız token özeti durur. Kredi maliyeti sunucuda hesaplanır ve tek transaction içinde düşülür. E-posta/şifreye ek olarak Google ile giriş ve kayıt vardır (aşağıdaki kuruluma bakın). Kaba kuvvete karşı deneme sınırı uygulanır: aynı e-postaya 15 dakikada 5, aynı IP'den 15 dakikada 20 başarısız şifre denemesi; aynı IP'den saatte 5 kayıt (`src/lib/rate-limit.ts`). Proxy arkasında `TRUST_PROXY=on` ayarlanmalıdır. Hesap sayfasında şifre değişince diğer cihazlardaki oturumlar kapanır; şifreyle açılmış hesaba Google kullanıcının kendi isteğiyle bağlanabilir; hesap silme e-posta onayı (şifreli hesapta şifre de) ister ve kullanıcının tüm verisini siler. Kayıtta doğrulama e-postası gider; **5.000 deneme kredisi e-posta doğrulanınca** tanımlanır (Google ile açılan hesaplar doğrulanmış sayılır). Şifremi unuttum bağlantısı 1 saat, doğrulama bağlantısı 24 saat geçerlidir; ikisi de tek kullanımlıktır ve veritabanında yalnız özetleri durur. Şifre değişince "şifren değiştirildi" bildirimi gider.
 
 **Demo olan kısımlar:**
 
@@ -41,6 +43,15 @@ npm run db:studio    # veritabanını tarayıcıda incele
 ```
 
 Ortam değişkenleri için `.env.example` dosyasına bakın. Hiçbiri zorunlu değildir; varsayılan veritabanı `data/trai-pro.db`'dir. Geliştirmede `.env`'ye yeni eklenen değerler sunucu yeniden başlatılmadan okunur; var olan bir değeri değiştirdiyseniz sunucuyu yeniden başlatın.
+
+## E-posta (SMTP) kurulumu
+
+1. Bir SMTP sağlayıcısı seçin: kurumsal e-posta sunucunuz, Google Workspace/Gmail, Yandex, Resend, SendGrid, Brevo vb. Toplu gönderim için işlemsel e-posta servisleri (Resend, SendGrid, Brevo) daha iyi teslim edilir.
+2. `.env` dosyasına `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` ve `EMAIL_FROM` yazın (açıklamalar `.env.example`'da).
+3. Gönderen alan adınızda sağlayıcının istediği SPF ve DKIM kayıtlarını ekleyin; yoksa e-postalar gereksiz klasörüne düşebilir.
+4. Yayında `PUBLIC_URL` zorunludur: bağlantılar yalnız bu adresten kurulur, istekteki `Host` başlığına güvenilmez.
+
+SMTP ayarlı değilken geliştirmede e-postalar gönderilmez, `data/outbox/` klasörüne `.html` ve `.txt` olarak yazılır (klasör git'e girmez); bağlantılar oradan açılıp denenebilir.
 
 ## Google ile giriş kurulumu
 
