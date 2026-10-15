@@ -4,6 +4,7 @@ import { Film, ImageIcon, Mic, Upload } from "lucide-react";
 import { Balances, MediaStudio, TextToSpeech, VoiceClone } from "@/components/labs/tools";
 import { RequireAuth } from "@/components/site/require-auth";
 import { DemoNote, SiteShell } from "@/components/site/shell";
+import { VerifyBanner } from "@/components/site/verify-banner";
 import { useI18n } from "@/lib/i18n";
 
 const tabs = ["tts", "clone", "image", "video"] as const;
@@ -29,6 +30,7 @@ function Labs() {
         <h1 className="text-4xl font-bold">{t.labs.title}</h1>
         <p className="mt-2 text-muted-foreground">{t.labs.sub}</p>
       </div>
+      <VerifyBanner />
       <Balances />
       <div
         role="tablist"

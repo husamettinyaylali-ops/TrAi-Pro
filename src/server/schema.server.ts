@@ -8,6 +8,8 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   /** Yalnız Google ile açılan hesaplarda boştur; bu hesaplar şifreyle giriş yapamaz. */
   passwordHash: text("password_hash"),
+  /** E-posta sahipliği kanıtlandığında (doğrulama bağlantısı, şifre sıfırlama ya da Google). */
+  emailVerifiedAt: text("email_verified_at"),
   createdAt: text("created_at").notNull(),
 });
 
@@ -119,4 +121,25 @@ export const authAttempts = sqliteTable(
     createdAt: text("created_at").notNull(),
   },
   (t) => [index("auth_attempts_key_idx").on(t.key, t.createdAt)],
+);
+
+/**
+ * E-posta doğrulama ve şifre sıfırlama token'ları. Kimlik, e-postadaki token'ın
+ * SHA-256 özetidir; token düz metin saklanmaz. Tek kullanımlıktır.
+ */
+export const emailTokens = sqliteTable(
+  "email_tokens",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose", { enum: ["verify", "reset"] }).notNull(),
+    /** Token verildiğindeki e-posta; adres sonradan değişirse doğrulama geçersiz olur. */
+    email: text("email").notNull(),
+    createdAt: text("created_at").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+  },
+  (t) => [index("email_tokens_user_idx").on(t.userId)],
 );

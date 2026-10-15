@@ -49,12 +49,15 @@ export function AuthForm({
   mode,
   redirect,
   error,
+  resetDone = false,
 }: {
   mode: "sign-in" | "sign-up";
   redirect?: string | undefined;
   error?: string | undefined;
+  /** Şifre sıfırlandıktan sonra giriş sayfasına gelindi. */
+  resetDone?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const f = useFormat();
   const { signIn, signUp } = useApp();
   const router = useRouter();
@@ -81,7 +84,7 @@ export function AuthForm({
     setBusy(true);
     const email = values.email.trim();
     const res = up
-      ? await signUp({ name: values.name, email, password: values.password })
+      ? await signUp({ name: values.name, email, password: values.password, lang })
       : await signIn({ email, password: values.password });
     setBusy(false);
     if (!res.ok) {
@@ -104,6 +107,14 @@ export function AuthForm({
           <p className="mt-2 text-sm text-muted-foreground">
             {up ? t.auth.signUpSub(f.num(signupBonus.credits)) : t.auth.signInSub}
           </p>
+          {resetDone && !up && (
+            <p
+              role="status"
+              className="mt-6 rounded-xl border border-cyan/40 bg-cyan/10 px-4 py-3 text-sm text-cyan"
+            >
+              {t.auth.resetDone}
+            </p>
+          )}
           {isGoogleError(error) && (
             <p
               role="alert"
@@ -178,6 +189,16 @@ export function AuthForm({
                 {...err("password")}
               />
             </Field>
+            {!up && (
+              <p className="-mt-2 text-right text-sm">
+                <Link
+                  to="/forgot-password"
+                  className="inline-flex min-h-11 items-center text-muted-foreground underline-offset-2 hover:text-cyan hover:underline"
+                >
+                  {t.auth.forgot}
+                </Link>
+              </p>
+            )}
             {up && (
               <div>
                 <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm">

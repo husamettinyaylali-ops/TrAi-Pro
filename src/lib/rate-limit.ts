@@ -13,6 +13,12 @@ export const LIMITS = {
   signInPerIp: { max: 20, windowMs: 15 * MINUTE },
   /** Aynı IP'den saatte en fazla 5 kayıt denemesi. */
   signUpPerIp: { max: 5, windowMs: 60 * MINUTE },
+  /** Aynı e-postaya saatte en fazla 3 şifre sıfırlama e-postası. */
+  resetPerEmail: { max: 3, windowMs: 60 * MINUTE },
+  /** Aynı IP'den saatte en fazla 10 şifre sıfırlama isteği. */
+  resetPerIp: { max: 10, windowMs: 60 * MINUTE },
+  /** Aynı kullanıcıya saatte en fazla 3 doğrulama e-postası. */
+  verifyResendPerUser: { max: 3, windowMs: 60 * MINUTE },
 } as const satisfies Record<string, Limit>;
 
 export type LimitCheck = { allowed: true } | { allowed: false; retryAfterMs: number };

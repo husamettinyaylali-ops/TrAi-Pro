@@ -1,11 +1,20 @@
 import { createServerFn } from "@tanstack/react-start";
-import { deleteCookie, getCookie, getRequestIP, setCookie } from "@tanstack/react-start/server";
+import {
+  deleteCookie,
+  getCookie,
+  getRequest,
+  getRequestIP,
+  setCookie,
+} from "@tanstack/react-start/server";
 import { z } from "zod";
 
+import { resolveAppUrl } from "@/lib/app-url";
 import { clock } from "@/lib/clock";
+import type { Lang } from "@/lib/i18n";
 import type { Account, SessionPayload } from "@/lib/types";
 
 import { getDb } from "@/server/db.server";
+import { getMailer } from "@/server/email.server";
 import { env, isProduction } from "@/server/env.server";
 import * as svc from "@/server/services.server";
 import { SESSION_COOKIE } from "@/server/session.server";
@@ -19,6 +28,8 @@ const parse =
 
 const email = z.string().trim().email().max(254);
 const password = z.string().min(8).max(200);
+const langSchema = z.enum(["tr", "en"]).optional();
+const tokenSchema = z.string().min(20).max(200);
 
 function setSessionCookie(token: string, expires: Date) {
   setCookie(SESSION_COOKIE, token, {
@@ -40,6 +51,16 @@ function clientIp(): string | null {
   } catch {
     return null;
   }
+}
+
+/** E-posta bağlamı; yayında PUBLIC_URL yoksa bağlantı kurulamaz ve null döner. */
+function mailContext(lang: Lang): svc.MailContext | null {
+  const appUrl = resolveAppUrl(env("PUBLIC_URL"), getRequest().url, isProduction());
+  if (!appUrl) {
+    console.error("[e-posta] PUBLIC_URL tanımlı değil; e-posta bağlantısı kurulamıyor.");
+    return null;
+  }
+  return { mailer: getMailer(), appUrl, lang };
 }
 
 async function currentSession(): Promise<{ user: Account; token: string } | null> {
@@ -72,10 +93,16 @@ export const getSession = createServerFn({ method: "GET" }).handler(async () => 
 });
 
 export const signUp = createServerFn({ method: "POST" })
-  .validator(parse(z.object({ name: z.string().trim().min(1).max(80), email, password })))
+  .validator(
+    parse(z.object({ name: z.string().trim().min(1).max(80), email, password, lang: langSchema })),
+  )
   .handler(async ({ data }) => {
-    const res = await svc.registerLimited(await getDb(), data, clientIp(), clock());
+    const db = await getDb();
+    const res = await svc.registerLimited(db, data, clientIp(), clock());
     if (!res.ok) return res;
+    // Doğrulama e-postası gönderilemese de kayıt geçerlidir; kullanıcı yeniden isteyebilir.
+    const ctx = mailContext(data.lang ?? "tr");
+    if (ctx) await svc.sendVerificationEmail(db, ctx, res.userId, clock());
     return { ok: true as const, session: await startSession(res.userId) };
   });
 
@@ -162,20 +189,22 @@ export const updateProfile = createServerFn({ method: "POST" })
 
 export const changePassword = createServerFn({ method: "POST" })
   .validator(
-    parse(z.object({ current: z.string().max(200).optional(), next: z.string().max(200) })),
+    parse(
+      z.object({
+        current: z.string().max(200).optional(),
+        next: z.string().max(200),
+        lang: langSchema,
+      }),
+    ),
   )
   .handler(async ({ data }) => {
     const s = await currentSession();
     if (!s) return unauthorized;
-    const res = await svc.changePassword(
-      await getDb(),
-      s.user.id,
-      data,
-      s.token,
-      clientIp(),
-      clock(),
-    );
+    const db = await getDb();
+    const res = await svc.changePassword(db, s.user.id, data, s.token, clientIp(), clock());
     if (!res.ok) return res;
+    const ctx = mailContext(data.lang ?? "tr");
+    if (ctx) await svc.sendPasswordChangedNotice(db, ctx, s.user.id, clock());
     return { ok: true as const, session: await payloadFor(s.user) };
   });
 
@@ -206,5 +235,53 @@ export const deleteAccount = createServerFn({ method: "POST" })
     const res = await svc.deleteAccount(await getDb(), user.id, data, clientIp(), clock());
     if (!res.ok) return res;
     deleteCookie(SESSION_COOKIE, { path: "/" });
+    return { ok: true as const };
+  });
+
+// ---------------------------------------------------------------- e-posta doğrulama ve şifre sıfırlama
+
+export const resendVerification = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ lang: langSchema })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return unauthorized;
+    const ctx = mailContext(data.lang ?? "tr");
+    if (!ctx) return { ok: false as const, error: "sendFailed" as const };
+    return svc.resendVerification(await getDb(), ctx, user.id, clock());
+  });
+
+/** Doğrulama bağlantısı. Oturum aynı kullanıcıya aitse güncel veri de döner. */
+export const verifyEmail = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ token: tokenSchema })))
+  .handler(async ({ data }) => {
+    const res = await svc.verifyEmailWithToken(await getDb(), data.token, clock());
+    if (!res.ok) return res;
+    const user = await currentUser();
+    return user?.id === res.userId
+      ? { ok: true as const, session: await payloadFor(user) }
+      : { ok: true as const };
+  });
+
+/** Yanıt her durumda aynıdır; e-postanın kayıtlı olup olmadığı anlaşılmaz. */
+export const requestPasswordReset = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ email, lang: langSchema })))
+  .handler(async ({ data }) => {
+    const ctx = mailContext(data.lang ?? "tr");
+    if (!ctx) return { ok: true as const };
+    return svc.requestPasswordReset(await getDb(), ctx, data.email, clientIp(), clock());
+  });
+
+/** Yeni şifre; tüm oturumlar kapanır, kullanıcı yeni şifresiyle giriş yapar. */
+export const resetPassword = createServerFn({ method: "POST" })
+  .validator(
+    parse(z.object({ token: tokenSchema, password: z.string().max(200), lang: langSchema })),
+  )
+  .handler(async ({ data }) => {
+    const db = await getDb();
+    const res = await svc.resetPasswordWithToken(db, data.token, data.password, clock());
+    if (!res.ok) return res;
+    deleteCookie(SESSION_COOKIE, { path: "/" });
+    const ctx = mailContext(data.lang ?? "tr");
+    if (ctx) await svc.sendPasswordChangedNotice(db, ctx, res.userId, clock());
     return { ok: true as const };
   });

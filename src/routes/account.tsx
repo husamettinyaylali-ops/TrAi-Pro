@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, KeyRound, Loader2, LogOut, Trash2 } from "lu
 
 import { GoogleMark } from "@/components/site/google-mark";
 import { RequireAuth } from "@/components/site/require-auth";
+import { VerifyBanner } from "@/components/site/verify-banner";
 import { PageHead, SiteShell, btnOutline, btnPrimary, field } from "@/components/site/shell";
 import { isGoogleError } from "@/lib/google-errors";
 import { useFormat, useI18n } from "@/lib/i18n";
@@ -75,7 +76,7 @@ const label = "mb-1.5 block text-sm font-medium";
 function ProfileSection() {
   const { t } = useI18n();
   const f = useFormat();
-  const { user, updateName } = useApp();
+  const { user, data, updateName } = useApp();
   const errorText = useErrorText();
   const [name, setName] = useState(user?.name ?? "");
   const [note, setNote] = useState<Note>(null);
@@ -114,8 +115,13 @@ function ProfileSection() {
         </div>
         <div>
           <span className={label}>{t.auth.email}</span>
-          <p className="rounded-xl border border-input bg-muted/30 px-4 py-2.5 text-sm text-muted-foreground">
-            {user.email}
+          <p className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-input bg-muted/30 px-4 py-2.5 text-sm text-muted-foreground">
+            <span className="break-all">{user.email}</span>
+            <span
+              className={`text-xs font-semibold ${data.security.emailVerified ? "text-cyan" : "text-muted-foreground"}`}
+            >
+              {data.security.emailVerified ? `✓ ${t.email.verified}` : t.email.notVerified}
+            </span>
           </p>
         </div>
         <Message note={note} />
@@ -203,7 +209,7 @@ function MethodsSection({ initial }: { initial: Note }) {
 }
 
 function PasswordSection() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { data, changePassword } = useApp();
   const errorText = useErrorText();
   const has = data.security.hasPassword;
@@ -216,7 +222,7 @@ function PasswordSection() {
     e.preventDefault();
     if (next.length < 8) return setNote({ kind: "error", text: t.auth.errors.password });
     setBusy(true);
-    const res = await changePassword(has ? { current, next } : { next });
+    const res = await changePassword(has ? { current, next, lang } : { next, lang });
     setBusy(false);
     if (!res.ok) return setNote({ kind: "error", text: errorText(res) });
     setCurrent("");
@@ -392,6 +398,7 @@ function Account() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 pb-24 sm:px-6">
+      <VerifyBanner />
       <ProfileSection />
       <MethodsSection initial={initial} />
       <PasswordSection />

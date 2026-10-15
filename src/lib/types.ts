@@ -45,7 +45,7 @@ export interface UserData {
   orders: Order[];
   generations: Generation[];
   clones: ClonedVoice[];
-  security: { hasPassword: boolean; googleLinked: boolean };
+  security: { hasPassword: boolean; googleLinked: boolean; emailVerified: boolean };
 }
 
 export interface SessionPayload {
@@ -74,6 +74,9 @@ export type GoogleErrorCode =
   | "googleUnverified"
   | "googleEmailInUse"
   | "googleAlreadyLinked";
+
+export type TokenErrorCode = "invalidToken" | "expiredToken";
+export type EmailErrorCode = "alreadyVerified" | "sendFailed";
 
 export type AccountErrorCode =
   "unauthorized" | "invalidInput" | "invalidCredentials" | "confirmMismatch" | "noPassword";

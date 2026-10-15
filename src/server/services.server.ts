@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 
-import { and, asc, count, desc, eq, gt, lt, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNull, lt, ne } from "drizzle-orm";
 
 import {
   MAX_CLONES,
@@ -18,22 +18,33 @@ import type {
   Account,
   ActionErrorCode,
   AuthErrorCode,
+  EmailErrorCode,
   GenerateInput,
   GoogleErrorCode,
   Generation,
   Order,
   PaymentMethod,
   RateLimited,
+  TokenErrorCode,
   UserData,
 } from "@/lib/types";
 import { stockVoices } from "@/lib/voices";
 
+import type { Lang } from "@/lib/i18n";
+
 import type { Db } from "./db.server";
+import type { EmailMessage, Mailer } from "./email.server";
+import {
+  passwordChangedTemplate,
+  resetPasswordTemplate,
+  verifyEmailTemplate,
+} from "./email-templates.server";
 import type { GoogleProfile } from "./google.server";
 import { DUMMY_HASH, hashPassword, verifyPassword } from "./password.server";
 import {
   authAttempts,
   creditGrants,
+  emailTokens,
   generations,
   oauthAccounts,
   orders,
@@ -68,18 +79,37 @@ export async function registerUser(
 
   const userId = randomUUID();
   const passwordHash = await hashPassword(input.password);
-  const bonus = createGrant({ id: randomUUID(), packageId: "signup-bonus", ...signupBonus }, now);
-  await db.transaction(async (tx) => {
-    await tx.insert(users).values({
-      id: userId,
-      name: input.name.trim(),
-      email,
-      passwordHash,
-      createdAt: now.toISOString(),
-    });
-    await tx.insert(creditGrants).values({ ...bonus, userId });
+  // Deneme kredisi e-posta doğrulanınca tanımlanır (markEmailVerified).
+  await db.insert(users).values({
+    id: userId,
+    name: input.name.trim(),
+    email,
+    passwordHash,
+    createdAt: now.toISOString(),
   });
   return { ok: true, userId };
+}
+
+type Conn = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/**
+ * E-posta sahipliği kanıtlandı: doğrulama tarihini yazar ve deneme kredisini
+ * (daha önce verilmediyse) tanımlar. Tekrar çağrılması zararsızdır.
+ */
+export async function markEmailVerified(conn: Conn, userId: string, now: Date): Promise<void> {
+  await conn
+    .update(users)
+    .set({ emailVerifiedAt: now.toISOString() })
+    .where(and(eq(users.id, userId), isNull(users.emailVerifiedAt)));
+  const bonus = await conn
+    .select({ id: creditGrants.id })
+    .from(creditGrants)
+    .where(and(eq(creditGrants.userId, userId), eq(creditGrants.packageId, "signup-bonus")))
+    .get();
+  if (!bonus) {
+    const grant = createGrant({ id: randomUUID(), packageId: "signup-bonus", ...signupBonus }, now);
+    await conn.insert(creditGrants).values({ ...grant, userId });
+  }
 }
 
 export async function authenticate(
@@ -99,8 +129,9 @@ export async function authenticate(
 
 /**
  * Google profiliyle giriş ya da kayıt. Daha önce bağlanmış hesap varsa ona girilir.
- * Aynı e-postayla şifreli hesap varsa otomatik bağlanmaz: o hesabı e-postayı
- * doğrulamadan başkası açmış olabilir ve bağlama ona da erişim bırakır.
+ * Aynı e-postayla hesap varsa yalnız o hesabın e-postası doğrulanmışsa otomatik
+ * bağlanır. Doğrulanmamış hesabı e-postanın sahibi değil başkası açmış olabilir;
+ * bağlama o kişiye de erişim bırakırdı.
  */
 export async function signInWithGoogle(
   db: Db,
@@ -118,14 +149,28 @@ export async function signInWithGoogle(
 
   const email = normEmail(profile.email);
   const existing = await db
-    .select({ id: users.id })
+    .select({ id: users.id, emailVerifiedAt: users.emailVerifiedAt })
     .from(users)
     .where(eq(users.email, email))
     .get();
-  if (existing) return { ok: false, error: "googleEmailInUse" };
+  if (existing) {
+    if (!existing.emailVerifiedAt) return { ok: false, error: "googleEmailInUse" };
+    const mine = await db
+      .select({ sub: oauthAccounts.providerUserId })
+      .from(oauthAccounts)
+      .where(and(eq(oauthAccounts.provider, "google"), eq(oauthAccounts.userId, existing.id)))
+      .get();
+    if (mine) return { ok: false, error: "googleAlreadyLinked" };
+    await db.insert(oauthAccounts).values({
+      provider: "google",
+      providerUserId: profile.sub,
+      userId: existing.id,
+      createdAt: now.toISOString(),
+    });
+    return { ok: true, userId: existing.id, created: false };
+  }
 
   const userId = randomUUID();
-  const bonus = createGrant({ id: randomUUID(), packageId: "signup-bonus", ...signupBonus }, now);
   await db.transaction(async (tx) => {
     await tx.insert(users).values({
       id: userId,
@@ -140,7 +185,8 @@ export async function signInWithGoogle(
       userId,
       createdAt: now.toISOString(),
     });
-    await tx.insert(creditGrants).values({ ...bonus, userId });
+    // Google e-postayı doğrulamıştır.
+    await markEmailVerified(tx, userId, now);
   });
   return { ok: true, userId, created: true };
 }
@@ -307,7 +353,11 @@ export async function loadUserData(db: Db, userId: string): Promise<UserData> {
       .from(voiceClones)
       .where(eq(voiceClones.userId, userId))
       .orderBy(asc(voiceClones.createdAt)),
-    db.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, userId)).get(),
+    db
+      .select({ passwordHash: users.passwordHash, verifiedAt: users.emailVerifiedAt })
+      .from(users)
+      .where(eq(users.id, userId))
+      .get(),
     db
       .select({ sub: oauthAccounts.providerUserId })
       .from(oauthAccounts)
@@ -319,7 +369,11 @@ export async function loadUserData(db: Db, userId: string): Promise<UserData> {
     orders: orderRows.map(toOrder),
     generations: genRows.map(toGeneration),
     clones: cloneRows,
-    security: { hasPassword: Boolean(auth?.passwordHash), googleLinked: Boolean(google) },
+    security: {
+      hasPassword: Boolean(auth?.passwordHash),
+      googleLinked: Boolean(google),
+      emailVerified: Boolean(auth?.verifiedAt),
+    },
   };
 }
 
@@ -643,10 +697,234 @@ export async function deleteAccount(
     if (!check.ok) return check;
   }
   await db.transaction(async (tx) => {
-    for (const table of [sessions, creditGrants, orders, generations, voiceClones, oauthAccounts]) {
+    for (const table of [
+      sessions,
+      creditGrants,
+      orders,
+      generations,
+      voiceClones,
+      oauthAccounts,
+      emailTokens,
+    ]) {
       await tx.delete(table).where(eq(table.userId, userId));
     }
     await tx.delete(users).where(eq(users.id, userId));
   });
   return { ok: true };
+}
+
+// ---------------------------------------------------------------- e-posta: doğrulama ve şifre sıfırlama
+
+const TOKEN_TTL = { verify: DAY, reset: 60 * 60_000 } as const;
+export type TokenPurpose = keyof typeof TOKEN_TTL;
+
+/** E-posta gönderimi için bağlam; bağlantılar appUrl köküne göre kurulur. */
+export interface MailContext {
+  mailer: Mailer;
+  appUrl: string;
+  lang: Lang;
+}
+
+/** Yeni token üretir; aynı amaçlı kullanılmamış eski token'lar geçersiz olur. */
+export async function issueEmailToken(
+  db: Db,
+  userId: string,
+  purpose: TokenPurpose,
+  email: string,
+  now: Date,
+): Promise<string> {
+  const token = newSessionToken();
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(emailTokens)
+      .where(
+        and(
+          eq(emailTokens.userId, userId),
+          eq(emailTokens.purpose, purpose),
+          isNull(emailTokens.usedAt),
+        ),
+      );
+    await tx.insert(emailTokens).values({
+      id: hashToken(token),
+      userId,
+      purpose,
+      email,
+      createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + TOKEN_TTL[purpose]).toISOString(),
+      usedAt: null,
+    });
+  });
+  return token;
+}
+
+/** Token'ı tek seferlik kullanır; eşzamanlı iki kullanımdan yalnız biri geçer. */
+async function consumeEmailToken(
+  conn: Conn,
+  token: string,
+  purpose: TokenPurpose,
+  now: Date,
+): Promise<Result<{ userId: string; email: string }, TokenErrorCode>> {
+  const row = await conn
+    .select()
+    .from(emailTokens)
+    .where(and(eq(emailTokens.id, hashToken(token)), eq(emailTokens.purpose, purpose)))
+    .get();
+  if (!row || row.usedAt) return { ok: false, error: "invalidToken" };
+  if (Date.parse(row.expiresAt) <= now.getTime()) return { ok: false, error: "expiredToken" };
+  const res = await conn
+    .update(emailTokens)
+    .set({ usedAt: now.toISOString() })
+    .where(and(eq(emailTokens.id, row.id), isNull(emailTokens.usedAt)));
+  if (res.rowsAffected === 0) return { ok: false, error: "invalidToken" };
+  return { ok: true, userId: row.userId, email: row.email };
+}
+
+async function deliver(ctx: MailContext, msg: EmailMessage): Promise<boolean> {
+  try {
+    await ctx.mailer.send(msg);
+    return true;
+  } catch (err) {
+    console.error(
+      `[e-posta] "${msg.subject}" gönderilemedi:`,
+      err instanceof Error ? err.message : err,
+    );
+    return false;
+  }
+}
+
+export async function sendVerificationEmail(
+  db: Db,
+  ctx: MailContext,
+  userId: string,
+  now: Date,
+): Promise<Result<object, EmailErrorCode>> {
+  const user = await db
+    .select({ name: users.name, email: users.email, verifiedAt: users.emailVerifiedAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+  if (!user) return { ok: false, error: "sendFailed" };
+  if (user.verifiedAt) return { ok: false, error: "alreadyVerified" };
+  const token = await issueEmailToken(db, userId, "verify", user.email, now);
+  const url = `${ctx.appUrl}/verify-email?token=${token}`;
+  const sent = await deliver(ctx, {
+    to: user.email,
+    ...verifyEmailTemplate(ctx.lang, user.name, url),
+  });
+  return sent ? { ok: true } : { ok: false, error: "sendFailed" };
+}
+
+/** Doğrulama e-postasını yeniden gönderir; kullanıcı başına saatte 3. */
+export async function resendVerification(
+  db: Db,
+  ctx: MailContext,
+  userId: string,
+  now: Date,
+): Promise<Result<object, EmailErrorCode> | RateLimited> {
+  const key = `verify:user:${userId}`;
+  const stop = await blocked(db, [[key, LIMITS.verifyResendPerUser]], now);
+  if (stop) return stop;
+  await recordAttempt(db, key, now);
+  return sendVerificationEmail(db, ctx, userId, now);
+}
+
+/** Doğrulama bağlantısı: e-postayı doğrulanmış işaretler ve deneme kredisini tanımlar. */
+export async function verifyEmailWithToken(
+  db: Db,
+  token: string,
+  now: Date,
+): Promise<Result<{ userId: string }, TokenErrorCode>> {
+  return db.transaction(async (tx) => {
+    const used = await consumeEmailToken(tx, token, "verify", now);
+    if (!used.ok) return used;
+    const user = await tx
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, used.userId))
+      .get();
+    // Adres token verildikten sonra değiştiyse eski adresin doğrulaması geçmez.
+    if (!user || user.email !== used.email) return { ok: false, error: "invalidToken" } as const;
+    await markEmailVerified(tx, used.userId, now);
+    return { ok: true, userId: used.userId } as const;
+  });
+}
+
+/**
+ * Şifre sıfırlama isteği. Yanıt her durumda aynıdır; e-postanın kayıtlı olup
+ * olmadığı anlaşılmaz. Sınır, var olmayan adresler için de sayılır.
+ */
+export async function requestPasswordReset(
+  db: Db,
+  ctx: MailContext,
+  email: string,
+  ip: string | null,
+  now: Date,
+): Promise<{ ok: true } | RateLimited> {
+  const norm = normEmail(email);
+  const checks: [string, Limit][] = [[`reset:email:${norm}`, LIMITS.resetPerEmail]];
+  if (ip) checks.push([`reset:ip:${ip}`, LIMITS.resetPerIp]);
+  const stop = await blocked(db, checks, now);
+  if (stop) return stop;
+  for (const [key] of checks) await recordAttempt(db, key, now);
+
+  const user = await db
+    .select({ id: users.id, name: users.name, email: users.email })
+    .from(users)
+    .where(eq(users.email, norm))
+    .get();
+  if (user) {
+    const token = await issueEmailToken(db, user.id, "reset", user.email, now);
+    const url = `${ctx.appUrl}/reset-password?token=${token}`;
+    await deliver(ctx, { to: user.email, ...resetPasswordTemplate(ctx.lang, user.name, url) });
+  }
+  return { ok: true };
+}
+
+/**
+ * Sıfırlama bağlantısıyla yeni şifre. Tüm oturumlar kapanır, o e-postanın giriş
+ * deneme sayacı sıfırlanır; e-posta sahipliği kanıtlandığı için doğrulanmış sayılır.
+ */
+export async function resetPasswordWithToken(
+  db: Db,
+  token: string,
+  next: string,
+  now: Date,
+): Promise<Result<{ userId: string }, TokenErrorCode | "invalidInput">> {
+  if (next.length < 8 || next.length > 200) return { ok: false, error: "invalidInput" };
+  const passwordHash = await hashPassword(next);
+  return db.transaction(async (tx) => {
+    const used = await consumeEmailToken(tx, token, "reset", now);
+    if (!used.ok) return used;
+    const user = await tx
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, used.userId))
+      .get();
+    if (!user || user.email !== used.email) return { ok: false, error: "invalidToken" } as const;
+    await tx.update(users).set({ passwordHash }).where(eq(users.id, used.userId));
+    await tx.delete(sessions).where(eq(sessions.userId, used.userId));
+    await tx.delete(authAttempts).where(eq(authAttempts.key, `signin:email:${user.email}`));
+    await markEmailVerified(tx, used.userId, now);
+    return { ok: true, userId: used.userId } as const;
+  });
+}
+
+/** "Şifren değiştirildi" güvenlik bildirimi; gönderilemezse işlem yine geçerlidir. */
+export async function sendPasswordChangedNotice(
+  db: Db,
+  ctx: MailContext,
+  userId: string,
+  now: Date,
+): Promise<void> {
+  const user = await db
+    .select({ name: users.name, email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+  if (!user) return;
+  const resetUrl = `${ctx.appUrl}/forgot-password`;
+  await deliver(ctx, {
+    to: user.email,
+    ...passwordChangedTemplate(ctx.lang, user.name, now, resetUrl),
+  });
 }

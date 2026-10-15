@@ -3,17 +3,20 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 import * as api from "@/api/functions";
 
+import type { Lang } from "./i18n";
 import type {
   Account,
   AccountErrorCode,
   ActionErrorCode,
   AuthErrorCode,
+  EmailErrorCode,
   GenerateInput,
   Generation,
   Order,
   PaymentMethod,
   RateLimited,
   SessionPayload,
+  TokenErrorCode,
   UserData,
 } from "./types";
 
@@ -32,6 +35,7 @@ interface Store {
     name: string;
     email: string;
     password: string;
+    lang?: Lang | undefined;
   }) => Promise<Outcome<object, AuthErrorCode> | RateLimited>;
   signIn: (input: {
     email: string;
@@ -49,6 +53,7 @@ interface Store {
   changePassword: (input: {
     current?: string | undefined;
     next: string;
+    lang?: Lang | undefined;
   }) => Promise<Outcome<object, AccountErrorCode> | RateLimited>;
   signOutOthers: () => Promise<Outcome<object, AccountErrorCode>>;
   unlinkGoogle: () => Promise<Outcome<object, AccountErrorCode>>;
@@ -59,6 +64,20 @@ interface Store {
   }) => Promise<Outcome<object, AccountErrorCode> | RateLimited>;
   /** Yerel oturum bilgisini siler (sunucu çağrısı yapmaz). */
   forget: () => void;
+  resendVerification: (
+    lang: Lang,
+  ) => Promise<Outcome<object, EmailErrorCode | AccountErrorCode> | RateLimited>;
+  verifyEmail: (token: string) => Promise<Outcome<object, TokenErrorCode>>;
+  requestPasswordReset: (
+    email: string,
+    lang: Lang,
+  ) => Promise<Outcome<object, never> | RateLimited>;
+  /** Başarıda tüm oturumlar kapanır; yerel oturum da silinir. */
+  resetPassword: (
+    token: string,
+    password: string,
+    lang: Lang,
+  ) => Promise<Outcome<object, TokenErrorCode | "invalidInput">>;
 }
 
 const SESSION_KEY = ["session"] as const;
@@ -67,7 +86,7 @@ const emptyData: UserData = {
   orders: [],
   generations: [],
   clones: [],
-  security: { hasPassword: false, googleLinked: false },
+  security: { hasPassword: false, googleLinked: false, emailVerified: false },
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -120,6 +139,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unlinkGoogle: () => call(() => api.unlinkGoogle()),
       deleteAccount: (input) => call(() => api.deleteAccount({ data: input })),
       forget: () => put(null),
+      resendVerification: (lang) => call(() => api.resendVerification({ data: { lang } })),
+      verifyEmail: (token) => call(() => api.verifyEmail({ data: { token } })),
+      requestPasswordReset: (email, lang) =>
+        call(() => api.requestPasswordReset({ data: { email, lang } })),
+      resetPassword: async (token, password, lang) => {
+        const res = await call(() => api.resetPassword({ data: { token, password, lang } }));
+        if (res.ok) put(null);
+        return res;
+      },
     };
   }, [qc, session.isPending, session.data]);
 

@@ -20,6 +20,7 @@ import {
   generateContent,
   getSessionUser,
   loadUserData,
+  markEmailVerified,
   purchasePackage,
   registerLimited,
   registerUser,
@@ -52,9 +53,11 @@ afterAll(() => {
   }
 });
 
-async function newUser(email = "ayse@example.com") {
+/** Kayıt + e-posta doğrulama (deneme kredisi doğrulamada tanımlanır). */
+async function newUser(email = "ayse@example.com", { verified = true } = {}) {
   const res = await registerUser(db, { name: "Ayşe", email, password: "gizli-sifre-1" }, now);
   if (!res.ok) throw new Error(res.error);
+  if (verified) await markEmailVerified(db, res.userId, now);
   return res.userId;
 }
 
@@ -69,10 +72,18 @@ describe("şifre", () => {
 });
 
 describe("kayıt ve giriş", () => {
-  it("kayıtta 5.000 deneme kredisi tanımlanır", async () => {
-    const id = await newUser();
+  it("kayıtta kredi yok; e-posta doğrulanınca 5.000 deneme kredisi bir kez tanımlanır", async () => {
+    const id = await newUser("ayse@example.com", { verified: false });
+    const before = await loadUserData(db, id);
+    expect(before.grants).toHaveLength(0);
+    expect(before.security.emailVerified).toBe(false);
+
+    await markEmailVerified(db, id, now);
+    await markEmailVerified(db, id, now);
     const data = await loadUserData(db, id);
+    expect(data.security.emailVerified).toBe(true);
     expect(balance(data.grants, "voice", now)).toBe(5_000);
+    expect(data.grants).toHaveLength(1);
     expect(data.grants[0]!.expiresAt).toBe("2026-10-22T09:00:00.000Z");
   });
 
@@ -379,6 +390,7 @@ describe("hesap yönetimi", () => {
     expect((await loadUserData(db, res.userId)).security).toEqual({
       hasPassword: false,
       googleLinked: true,
+      emailVerified: true,
     });
     expect(await changePassword(db, res.userId, { next: "ilk-sifre-1" }, token, ip, now)).toEqual({
       ok: true,
@@ -399,7 +411,11 @@ describe("hesap yönetimi", () => {
     const a = await newUser("a@example.com");
     const b = await newUser("b@example.com");
     expect(await linkGoogle(db, a, google, now)).toEqual({ ok: true });
-    expect((await loadUserData(db, a)).security).toEqual({ hasPassword: true, googleLinked: true });
+    expect((await loadUserData(db, a)).security).toEqual({
+      hasPassword: true,
+      googleLinked: true,
+      emailVerified: true,
+    });
     expect(await linkGoogle(db, b, google, now)).toEqual({
       ok: false,
       error: "googleAlreadyLinked",

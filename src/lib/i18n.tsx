@@ -82,7 +82,8 @@ const tr = {
     signInTitle: "Tekrar hoş geldin",
     signInSub: "Hesabına giriş yap ve üretmeye devam et.",
     signUpTitle: "Hesap oluştur",
-    signUpSub: (n: string) => `Kayıt ol, ${n} deneme kredisi hesabına tanımlansın.`,
+    signUpSub: (n: string) =>
+      `Kayıt ol ve e-postanı doğrula; ${n} deneme kredisi hesabına tanımlansın.`,
     name: "Ad Soyad",
     email: "E-posta",
     password: "Şifre",
@@ -95,6 +96,8 @@ const tr = {
     noAccount: "Hesabın yok mu?",
     haveAccount: "Zaten hesabın var mı?",
     submitting: "Lütfen bekle…",
+    forgot: "Şifremi unuttum",
+    resetDone: "Şifren güncellendi. Yeni şifrenle giriş yap.",
     google: "Google ile devam et",
     or: "veya",
     googleTermsBefore: "Google ile devam ederek ",
@@ -222,6 +225,37 @@ const tr = {
     paid: "Ödendi",
     empty: "Henüz ödeme yok.",
     emptyCta: "Paketlere göz at",
+  },
+
+  email: {
+    banner: (n: string) => `E-posta adresini doğrula; ${n} deneme kredisi hesabına tanımlansın.`,
+    bannerSub:
+      "Doğrulama bağlantısını e-postana gönderdik. Gelmediyse gereksiz klasörünü kontrol et.",
+    resend: "Bağlantıyı tekrar gönder",
+    resent: "Doğrulama e-postası gönderildi.",
+    verified: "Doğrulandı",
+    notVerified: "Doğrulanmadı",
+    forgotTitle: "Şifreni sıfırla",
+    forgotSub: "Hesabının e-posta adresini yaz; şifre sıfırlama bağlantısını gönderelim.",
+    forgotSubmit: "Sıfırlama bağlantısı gönder",
+    forgotSent:
+      "Bu adresle kayıtlı bir hesap varsa sıfırlama bağlantısını gönderdik. Gelen kutunu ve gereksiz klasörünü kontrol et; bağlantı 1 saat geçerli.",
+    resetTitle: "Yeni şifre belirle",
+    resetSub: "Yeni şifreni yaz. Değişiklikten sonra tüm cihazlardaki oturumlar kapanır.",
+    resetSubmit: "Şifreyi güncelle",
+    requestNew: "Yeni bağlantı iste",
+    verifyTitle: "E-posta doğrulama",
+    verifying: "E-posta adresin doğrulanıyor…",
+    verifyDone: (n: string) =>
+      `E-posta adresin doğrulandı. ${n} deneme kredisi hesabına tanımlandı.`,
+    backToSignIn: "Giriş sayfasına dön",
+    errors: {
+      invalidToken: "Bu bağlantı geçersiz ya da daha önce kullanılmış.",
+      expiredToken: "Bu bağlantının süresi dolmuş.",
+      invalidInput: "Şifre en az 8 karakter olmalı.",
+      sendFailed: "E-posta gönderilemedi. Biraz sonra tekrar dene.",
+      alreadyVerified: "E-posta adresin zaten doğrulanmış.",
+    },
   },
 
   accountPage: {
@@ -374,7 +408,7 @@ const en: Dict = {
     signInTitle: "Welcome back",
     signInSub: "Sign in to your account and keep creating.",
     signUpTitle: "Create an account",
-    signUpSub: (n) => `Sign up and get ${n} trial credits.`,
+    signUpSub: (n) => `Sign up and verify your email to get ${n} trial credits.`,
     name: "Full name",
     email: "Email",
     password: "Password",
@@ -387,6 +421,8 @@ const en: Dict = {
     noAccount: "Don't have an account?",
     haveAccount: "Already have an account?",
     submitting: "Please wait…",
+    forgot: "Forgot password?",
+    resetDone: "Your password was updated. Sign in with your new password.",
     google: "Continue with Google",
     or: "or",
     googleTermsBefore: "By continuing with Google you accept the ",
@@ -516,6 +552,37 @@ const en: Dict = {
     paid: "Paid",
     empty: "No payments yet.",
     emptyCta: "Browse packs",
+  },
+
+  email: {
+    banner: (n) => `Verify your email address to get ${n} trial credits.`,
+    bannerSub:
+      "We sent a verification link to your email. If it's not there, check your spam folder.",
+    resend: "Resend link",
+    resent: "Verification email sent.",
+    verified: "Verified",
+    notVerified: "Not verified",
+    forgotTitle: "Reset your password",
+    forgotSub: "Enter your account's email address and we'll send you a reset link.",
+    forgotSubmit: "Send reset link",
+    forgotSent:
+      "If an account exists for this address, we've sent a reset link. Check your inbox and spam folder; the link is valid for 1 hour.",
+    resetTitle: "Set a new password",
+    resetSub: "Enter your new password. You'll be signed out on every device afterwards.",
+    resetSubmit: "Update password",
+    requestNew: "Request a new link",
+    verifyTitle: "Email verification",
+    verifying: "Verifying your email address…",
+    verifyDone: (n) =>
+      `Your email address is verified. ${n} trial credits were added to your account.`,
+    backToSignIn: "Back to sign in",
+    errors: {
+      invalidToken: "This link is invalid or has already been used.",
+      expiredToken: "This link has expired.",
+      invalidInput: "Passwords need at least 8 characters.",
+      sendFailed: "The email couldn't be sent. Try again in a moment.",
+      alreadyVerified: "Your email address is already verified.",
+    },
   },
 
   accountPage: {

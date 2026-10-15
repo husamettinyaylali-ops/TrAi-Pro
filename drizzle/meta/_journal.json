@@ -22,6 +22,13 @@
       "when": 1792074980387,
       "tag": "0002_giris_denemeleri",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792081965854,
+      "tag": "0003_eposta",
+      "breakpoints": true
     }
   ]
 }

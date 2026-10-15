@@ -12,15 +12,18 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AcceptableUsePolicyRouteImport } from './routes/acceptable-use-policy'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LabsRouteImport } from './routes/labs'
 import { Route as PaymentRouteImport } from './routes/payment'
 import { Route as PaymentHistoryRouteImport } from './routes/payment-history'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as RefundPolicyRouteImport } from './routes/refund-policy'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AuthGoogleRouteImport } from './routes/auth/google'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 
@@ -37,6 +40,11 @@ const AcceptableUsePolicyRoute = AcceptableUsePolicyRouteImport.update({
 const AccountRoute = AccountRouteImport.update({
   id: '/account',
   path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LabsRoute = LabsRouteImport.update({
@@ -69,6 +77,11 @@ const RefundPolicyRoute = RefundPolicyRouteImport.update({
   path: '/refund-policy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
@@ -82,6 +95,11 @@ const SignUpRoute = SignUpRouteImport.update({
 const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
   id: '/terms-of-service',
   path: '/terms-of-service',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthGoogleRoute = AuthGoogleRouteImport.update({
@@ -99,15 +117,18 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/acceptable-use-policy': typeof AcceptableUsePolicyRoute
   '/account': typeof AccountRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
   '/payment-history': typeof PaymentHistoryRoute
   '/pricing': typeof PricingRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/refund-policy': typeof RefundPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
 }
@@ -115,15 +136,18 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/acceptable-use-policy': typeof AcceptableUsePolicyRoute
   '/account': typeof AccountRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
   '/payment-history': typeof PaymentHistoryRoute
   '/pricing': typeof PricingRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/refund-policy': typeof RefundPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
 }
@@ -132,15 +156,18 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/acceptable-use-policy': typeof AcceptableUsePolicyRoute
   '/account': typeof AccountRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
   '/payment-history': typeof PaymentHistoryRoute
   '/pricing': typeof PricingRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/refund-policy': typeof RefundPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
 }
@@ -150,15 +177,18 @@ export interface FileRouteTypes {
     | '/'
     | '/acceptable-use-policy'
     | '/account'
+    | '/forgot-password'
     | '/labs'
     | '/payment'
     | '/payment-history'
     | '/pricing'
     | '/privacy-policy'
     | '/refund-policy'
+    | '/reset-password'
     | '/sign-in'
     | '/sign-up'
     | '/terms-of-service'
+    | '/verify-email'
     | '/auth/google'
     | '/auth/google/callback'
   fileRoutesByTo: FileRoutesByTo
@@ -166,15 +196,18 @@ export interface FileRouteTypes {
     | '/'
     | '/acceptable-use-policy'
     | '/account'
+    | '/forgot-password'
     | '/labs'
     | '/payment'
     | '/payment-history'
     | '/pricing'
     | '/privacy-policy'
     | '/refund-policy'
+    | '/reset-password'
     | '/sign-in'
     | '/sign-up'
     | '/terms-of-service'
+    | '/verify-email'
     | '/auth/google'
     | '/auth/google/callback'
   id:
@@ -182,15 +215,18 @@ export interface FileRouteTypes {
     | '/'
     | '/acceptable-use-policy'
     | '/account'
+    | '/forgot-password'
     | '/labs'
     | '/payment'
     | '/payment-history'
     | '/pricing'
     | '/privacy-policy'
     | '/refund-policy'
+    | '/reset-password'
     | '/sign-in'
     | '/sign-up'
     | '/terms-of-service'
+    | '/verify-email'
     | '/auth/google'
     | '/auth/google/callback'
   fileRoutesById: FileRoutesById
@@ -199,15 +235,18 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcceptableUsePolicyRoute: typeof AcceptableUsePolicyRoute
   AccountRoute: typeof AccountRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   LabsRoute: typeof LabsRoute
   PaymentRoute: typeof PaymentRoute
   PaymentHistoryRoute: typeof PaymentHistoryRoute
   PricingRoute: typeof PricingRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   RefundPolicyRoute: typeof RefundPolicyRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
   TermsOfServiceRoute: typeof TermsOfServiceRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
   AuthGoogleRoute: typeof AuthGoogleRouteWithChildren
 }
 
@@ -232,6 +271,13 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/labs': {
@@ -276,6 +322,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RefundPolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sign-in': {
       id: '/sign-in'
       path: '/sign-in'
@@ -295,6 +348,13 @@ declare module '@tanstack/react-router' {
       path: '/terms-of-service'
       fullPath: '/terms-of-service'
       preLoaderRoute: typeof TermsOfServiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/google': {
@@ -330,15 +390,18 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcceptableUsePolicyRoute: AcceptableUsePolicyRoute,
   AccountRoute: AccountRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LabsRoute: LabsRoute,
   PaymentRoute: PaymentRoute,
   PaymentHistoryRoute: PaymentHistoryRoute,
   PricingRoute: PricingRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   RefundPolicyRoute: RefundPolicyRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
   TermsOfServiceRoute: TermsOfServiceRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
   AuthGoogleRoute: AuthGoogleRouteWithChildren,
 }
 export const routeTree = rootRouteImport

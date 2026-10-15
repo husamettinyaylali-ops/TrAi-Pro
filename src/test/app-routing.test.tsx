@@ -19,6 +19,10 @@ describe("App routing", () => {
     "/privacy-policy",
     "/refund-policy",
     "/acceptable-use-policy",
+    "/account",
+    "/forgot-password",
+    "/reset-password",
+    "/verify-email",
   ];
 
   it.each(paths)("matches a page for %s instead of falling back to not found", (path) => {
