@@ -42,10 +42,15 @@ function clientIp(): string | null {
   }
 }
 
-async function currentUser(): Promise<Account | null> {
+async function currentSession(): Promise<{ user: Account; token: string } | null> {
   const token = getCookie(SESSION_COOKIE);
   if (!token) return null;
-  return svc.getSessionUser(await getDb(), token, clock());
+  const user = await svc.getSessionUser(await getDb(), token, clock());
+  return user ? { user, token } : null;
+}
+
+async function currentUser(): Promise<Account | null> {
+  return (await currentSession())?.user ?? null;
 }
 
 async function payloadFor(user: Account): Promise<SessionPayload> {
@@ -138,4 +143,68 @@ export const addClone = createServerFn({ method: "POST" })
     const res = await svc.addVoiceClone(await getDb(), user.id, data.name, clock());
     if (!res.ok) return res;
     return { ok: true as const, session: await payloadFor(user) };
+  });
+
+// ---------------------------------------------------------------- hesap yönetimi
+
+const unauthorized = { ok: false as const, error: "unauthorized" as const };
+
+export const updateProfile = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ name: z.string().max(200) })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return unauthorized;
+    const res = await svc.updateName(await getDb(), user.id, data.name);
+    if (!res.ok) return res;
+    const fresh = await currentUser();
+    return { ok: true as const, session: await payloadFor(fresh ?? user) };
+  });
+
+export const changePassword = createServerFn({ method: "POST" })
+  .validator(
+    parse(z.object({ current: z.string().max(200).optional(), next: z.string().max(200) })),
+  )
+  .handler(async ({ data }) => {
+    const s = await currentSession();
+    if (!s) return unauthorized;
+    const res = await svc.changePassword(
+      await getDb(),
+      s.user.id,
+      data,
+      s.token,
+      clientIp(),
+      clock(),
+    );
+    if (!res.ok) return res;
+    return { ok: true as const, session: await payloadFor(s.user) };
+  });
+
+export const signOutOthers = createServerFn({ method: "POST" }).handler(async () => {
+  const s = await currentSession();
+  if (!s) return unauthorized;
+  await svc.revokeOtherSessions(await getDb(), s.user.id, s.token);
+  return { ok: true as const };
+});
+
+export const unlinkGoogle = createServerFn({ method: "POST" }).handler(async () => {
+  const user = await currentUser();
+  if (!user) return unauthorized;
+  const res = await svc.unlinkGoogle(await getDb(), user.id);
+  if (!res.ok) return res;
+  return { ok: true as const, session: await payloadFor(user) };
+});
+
+export const deleteAccount = createServerFn({ method: "POST" })
+  .validator(
+    parse(
+      z.object({ confirmEmail: z.string().max(254), password: z.string().max(200).optional() }),
+    ),
+  )
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return unauthorized;
+    const res = await svc.deleteAccount(await getDb(), user.id, data, clientIp(), clock());
+    if (!res.ok) return res;
+    deleteCookie(SESSION_COOKIE, { path: "/" });
+    return { ok: true as const };
   });

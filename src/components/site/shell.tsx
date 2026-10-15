@@ -129,6 +129,9 @@ function UserMenu() {
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => navigate({ to: "/account" })}>
+          <User /> {t.accountPage.title}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => navigate({ to: "/labs" })}>
           <Wand2 /> {t.labs.title}
         </DropdownMenuItem>
@@ -246,6 +249,9 @@ function Header() {
             </Link>
             {user && (
               <>
+                <Link to="/account" onClick={close}>
+                  {t.accountPage.title}
+                </Link>
                 <Link to="/payment" onClick={close}>
                   {t.footer.payment}
                 </Link>

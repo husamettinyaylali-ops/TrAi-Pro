@@ -45,6 +45,7 @@ export interface UserData {
   orders: Order[];
   generations: Generation[];
   clones: ClonedVoice[];
+  security: { hasPassword: boolean; googleLinked: boolean };
 }
 
 export interface SessionPayload {
@@ -71,6 +72,10 @@ export type GoogleErrorCode =
   | "googleCancelled"
   | "googleFailed"
   | "googleUnverified"
-  | "googleEmailInUse";
+  | "googleEmailInUse"
+  | "googleAlreadyLinked";
+
+export type AccountErrorCode =
+  "unauthorized" | "invalidInput" | "invalidCredentials" | "confirmMismatch" | "noPassword";
 export type ActionErrorCode =
   "unauthorized" | "insufficient" | "invalidInput" | "limit" | "paymentsDisabled";

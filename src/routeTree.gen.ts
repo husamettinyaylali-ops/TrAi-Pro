@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AcceptableUsePolicyRouteImport } from './routes/acceptable-use-policy'
+import { Route as AccountRouteImport } from './routes/account'
 import { Route as LabsRouteImport } from './routes/labs'
 import { Route as PaymentRouteImport } from './routes/payment'
 import { Route as PaymentHistoryRouteImport } from './routes/payment-history'
@@ -31,6 +32,11 @@ const IndexRoute = IndexRouteImport.update({
 const AcceptableUsePolicyRoute = AcceptableUsePolicyRouteImport.update({
   id: '/acceptable-use-policy',
   path: '/acceptable-use-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LabsRoute = LabsRouteImport.update({
@@ -92,6 +98,7 @@ const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/acceptable-use-policy': typeof AcceptableUsePolicyRoute
+  '/account': typeof AccountRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
   '/payment-history': typeof PaymentHistoryRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/acceptable-use-policy': typeof AcceptableUsePolicyRoute
+  '/account': typeof AccountRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
   '/payment-history': typeof PaymentHistoryRoute
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/acceptable-use-policy': typeof AcceptableUsePolicyRoute
+  '/account': typeof AccountRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
   '/payment-history': typeof PaymentHistoryRoute
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/acceptable-use-policy'
+    | '/account'
     | '/labs'
     | '/payment'
     | '/payment-history'
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/acceptable-use-policy'
+    | '/account'
     | '/labs'
     | '/payment'
     | '/payment-history'
@@ -170,6 +181,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/acceptable-use-policy'
+    | '/account'
     | '/labs'
     | '/payment'
     | '/payment-history'
@@ -186,6 +198,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcceptableUsePolicyRoute: typeof AcceptableUsePolicyRoute
+  AccountRoute: typeof AccountRoute
   LabsRoute: typeof LabsRoute
   PaymentRoute: typeof PaymentRoute
   PaymentHistoryRoute: typeof PaymentHistoryRoute
@@ -212,6 +225,13 @@ declare module '@tanstack/react-router' {
       path: '/acceptable-use-policy'
       fullPath: '/acceptable-use-policy'
       preLoaderRoute: typeof AcceptableUsePolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/labs': {
@@ -309,6 +329,7 @@ const AuthGoogleRouteWithChildren = AuthGoogleRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcceptableUsePolicyRoute: AcceptableUsePolicyRoute,
+  AccountRoute: AccountRoute,
   LabsRoute: LabsRoute,
   PaymentRoute: PaymentRoute,
   PaymentHistoryRoute: PaymentHistoryRoute,

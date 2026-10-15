@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 
-import { and, asc, count, desc, eq, gt, lt } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, lt, ne } from "drizzle-orm";
 
 import {
   MAX_CLONES,
@@ -290,7 +290,7 @@ const toGeneration = (g: GenerationRow): Generation => ({
 });
 
 export async function loadUserData(db: Db, userId: string): Promise<UserData> {
-  const [grantRows, orderRows, genRows, cloneRows] = await Promise.all([
+  const [grantRows, orderRows, genRows, cloneRows, auth, google] = await Promise.all([
     db
       .select()
       .from(creditGrants)
@@ -307,12 +307,19 @@ export async function loadUserData(db: Db, userId: string): Promise<UserData> {
       .from(voiceClones)
       .where(eq(voiceClones.userId, userId))
       .orderBy(asc(voiceClones.createdAt)),
+    db.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, userId)).get(),
+    db
+      .select({ sub: oauthAccounts.providerUserId })
+      .from(oauthAccounts)
+      .where(and(eq(oauthAccounts.userId, userId), eq(oauthAccounts.provider, "google")))
+      .get(),
   ]);
   return {
     grants: grantRows.map(toGrant),
     orders: orderRows.map(toOrder),
     generations: genRows.map(toGeneration),
     clones: cloneRows,
+    security: { hasPassword: Boolean(auth?.passwordHash), googleLinked: Boolean(google) },
   };
 }
 
@@ -483,4 +490,163 @@ export async function addVoiceClone(
     await tx.insert(voiceClones).values({ id, userId, name: clean, createdAt: now.toISOString() });
     return { ok: true, id } as const;
   });
+}
+
+// ---------------------------------------------------------------- hesap yönetimi
+
+async function authRow(db: Db, userId: string) {
+  return db
+    .select({ email: users.email, passwordHash: users.passwordHash })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+}
+
+/**
+ * Şifre gerektiren hesap işlemlerinde mevcut şifreyi doğrular. Yanlış denemeler
+ * giriş sınırına sayılır; çalınmış bir oturumla şifre tahmini de yavaşlar.
+ */
+async function confirmPassword(
+  db: Db,
+  row: { email: string; passwordHash: string },
+  password: string | undefined,
+  ip: string | null,
+  now: Date,
+): Promise<Result<object, "invalidCredentials"> | RateLimited> {
+  const keys = signInKeys(row.email, ip);
+  const checks: [string, Limit][] = [[keys.email, LIMITS.signInPerEmail]];
+  if (keys.ip) checks.push([keys.ip, LIMITS.signInPerIp]);
+  const stop = await blocked(db, checks, now);
+  if (stop) return stop;
+  if (password && (await verifyPassword(password, row.passwordHash))) return { ok: true };
+  for (const [key] of checks) await recordAttempt(db, key, now);
+  return { ok: false, error: "invalidCredentials" };
+}
+
+export async function updateName(
+  db: Db,
+  userId: string,
+  name: string,
+): Promise<Result<object, "invalidInput">> {
+  const clean = name.trim();
+  if (!clean || clean.length > 80) return { ok: false, error: "invalidInput" };
+  await db.update(users).set({ name: clean }).where(eq(users.id, userId));
+  return { ok: true };
+}
+
+/** Bu oturum dışındaki tüm oturumları kapatır. */
+export async function revokeOtherSessions(db: Db, userId: string, keepToken: string) {
+  await db
+    .delete(sessions)
+    .where(and(eq(sessions.userId, userId), ne(sessions.id, hashToken(keepToken))));
+}
+
+/**
+ * Şifreyi değiştirir. Google ile açılmış (şifresiz) hesapta mevcut şifre istenmez,
+ * ilk şifre belirlenir. Başarıda bu oturum dışındaki oturumlar kapanır.
+ */
+export async function changePassword(
+  db: Db,
+  userId: string,
+  input: { current?: string | undefined; next: string },
+  keepToken: string,
+  ip: string | null,
+  now: Date,
+): Promise<Result<object, "invalidCredentials" | "invalidInput"> | RateLimited> {
+  if (input.next.length < 8 || input.next.length > 200) return { ok: false, error: "invalidInput" };
+  const row = await authRow(db, userId);
+  if (!row) return { ok: false, error: "invalidCredentials" };
+  if (row.passwordHash) {
+    const check = await confirmPassword(
+      db,
+      { email: row.email, passwordHash: row.passwordHash },
+      input.current,
+      ip,
+      now,
+    );
+    if (!check.ok) return check;
+  }
+  const passwordHash = await hashPassword(input.next);
+  await db.transaction(async (tx) => {
+    await tx.update(users).set({ passwordHash }).where(eq(users.id, userId));
+    await tx
+      .delete(sessions)
+      .where(and(eq(sessions.userId, userId), ne(sessions.id, hashToken(keepToken))));
+  });
+  return { ok: true };
+}
+
+/** Oturumu açık kullanıcının isteğiyle Google hesabını bağlar; e-postaların aynı olması gerekmez. */
+export async function linkGoogle(
+  db: Db,
+  userId: string,
+  profile: GoogleProfile,
+  now: Date,
+): Promise<Result<object, "googleAlreadyLinked">> {
+  const bySub = await db
+    .select({ userId: oauthAccounts.userId })
+    .from(oauthAccounts)
+    .where(and(eq(oauthAccounts.provider, "google"), eq(oauthAccounts.providerUserId, profile.sub)))
+    .get();
+  if (bySub)
+    return bySub.userId === userId ? { ok: true } : { ok: false, error: "googleAlreadyLinked" };
+
+  const mine = await db
+    .select({ sub: oauthAccounts.providerUserId })
+    .from(oauthAccounts)
+    .where(and(eq(oauthAccounts.provider, "google"), eq(oauthAccounts.userId, userId)))
+    .get();
+  if (mine) return { ok: false, error: "googleAlreadyLinked" };
+
+  await db.insert(oauthAccounts).values({
+    provider: "google",
+    providerUserId: profile.sub,
+    userId,
+    createdAt: now.toISOString(),
+  });
+  return { ok: true };
+}
+
+/** Google bağlantısını kaldırır; şifresi olmayan hesap girişsiz kalacağı için izin verilmez. */
+export async function unlinkGoogle(db: Db, userId: string): Promise<Result<object, "noPassword">> {
+  const row = await authRow(db, userId);
+  if (!row?.passwordHash) return { ok: false, error: "noPassword" };
+  await db
+    .delete(oauthAccounts)
+    .where(and(eq(oauthAccounts.userId, userId), eq(oauthAccounts.provider, "google")));
+  return { ok: true };
+}
+
+/**
+ * Hesabı ve tüm verisini siler. Onay için e-posta yazılır; şifreli hesapta şifre de istenir.
+ * Bağlı tablolar açıkça silinir (yabancı anahtar zincirine güvenilmez).
+ * Not: gerçek ödeme bağlandığında siparişler yasal saklama süresince anonimleştirilerek tutulmalı.
+ */
+export async function deleteAccount(
+  db: Db,
+  userId: string,
+  input: { confirmEmail: string; password?: string | undefined },
+  ip: string | null,
+  now: Date,
+): Promise<Result<object, "confirmMismatch" | "invalidCredentials"> | RateLimited> {
+  const row = await authRow(db, userId);
+  if (!row) return { ok: false, error: "invalidCredentials" };
+  if (normEmail(input.confirmEmail) !== row.email) return { ok: false, error: "confirmMismatch" };
+  if (row.passwordHash) {
+    const check = await confirmPassword(
+      db,
+      { email: row.email, passwordHash: row.passwordHash },
+      input.password,
+      ip,
+      now,
+    );
+    if (!check.ok) return check;
+  }
+  await db.transaction(async (tx) => {
+    for (const table of [sessions, creditGrants, orders, generations, voiceClones, oauthAccounts]) {
+      await tx.delete(table).where(eq(table.userId, userId));
+    }
+    await tx.delete(users).where(eq(users.id, userId));
+  });
+  return { ok: true };
 }

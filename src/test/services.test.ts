@@ -12,6 +12,9 @@ import { hashPassword, verifyPassword } from "@/server/password.server";
 import {
   addVoiceClone,
   authenticate,
+  changePassword,
+  deleteAccount,
+  linkGoogle,
   createSession,
   deleteSession,
   generateContent,
@@ -21,7 +24,11 @@ import {
   registerLimited,
   registerUser,
   removeGeneration,
+  revokeOtherSessions,
   signInLimited,
+  signInWithGoogle,
+  unlinkGoogle,
+  updateName,
 } from "@/server/services.server";
 
 const now = new Date("2026-10-15T09:00:00Z");
@@ -306,5 +313,176 @@ describe("deneme sınırı", () => {
         )
       ).ok,
     ).toBe(true);
+  });
+});
+
+describe("hesap yönetimi", () => {
+  const ip = "203.0.113.9";
+  const google = { sub: "g-1", email: "ayse.g@example.com", emailVerified: true, name: "Ayşe G" };
+
+  it("ad değiştirilir; boş ad reddedilir", async () => {
+    const id = await newUser();
+    expect(await updateName(db, id, "  Ayşe Kaya ")).toEqual({ ok: true });
+    expect((await db.query.users.findFirst())?.name).toBe("Ayşe Kaya");
+    expect(await updateName(db, id, "   ")).toEqual({ ok: false, error: "invalidInput" });
+  });
+
+  it("şifre değişimi mevcut şifreyi ister, diğer oturumları kapatır", async () => {
+    const id = await newUser();
+    const keep = await createSession(db, id, now);
+    const other = await createSession(db, id, now);
+
+    expect(
+      await changePassword(
+        db,
+        id,
+        { current: "yanlis", next: "yeni-sifre-1" },
+        keep.token,
+        ip,
+        now,
+      ),
+    ).toEqual({
+      ok: false,
+      error: "invalidCredentials",
+    });
+    expect(
+      await changePassword(db, id, { current: "gizli-sifre-1", next: "kisa" }, keep.token, ip, now),
+    ).toEqual({
+      ok: false,
+      error: "invalidInput",
+    });
+    expect(
+      await changePassword(
+        db,
+        id,
+        { current: "gizli-sifre-1", next: "yeni-sifre-1" },
+        keep.token,
+        ip,
+        now,
+      ),
+    ).toEqual({ ok: true });
+
+    expect(await getSessionUser(db, keep.token, now)).not.toBeNull();
+    expect(await getSessionUser(db, other.token, now)).toBeNull();
+    expect(
+      (await authenticate(db, { email: "ayse@example.com", password: "yeni-sifre-1" })).ok,
+    ).toBe(true);
+    expect(
+      (await authenticate(db, { email: "ayse@example.com", password: "gizli-sifre-1" })).ok,
+    ).toBe(false);
+  });
+
+  it("Google ile açılan hesap mevcut şifre olmadan ilk şifresini belirler", async () => {
+    const res = await signInWithGoogle(db, google, now);
+    if (!res.ok) throw new Error(res.error);
+    const { token } = await createSession(db, res.userId, now);
+    expect((await loadUserData(db, res.userId)).security).toEqual({
+      hasPassword: false,
+      googleLinked: true,
+    });
+    expect(await changePassword(db, res.userId, { next: "ilk-sifre-1" }, token, ip, now)).toEqual({
+      ok: true,
+    });
+    expect((await loadUserData(db, res.userId)).security.hasPassword).toBe(true);
+  });
+
+  it("diğer oturumları kapat", async () => {
+    const id = await newUser();
+    const keep = await createSession(db, id, now);
+    const other = await createSession(db, id, now);
+    await revokeOtherSessions(db, id, keep.token);
+    expect(await getSessionUser(db, keep.token, now)).not.toBeNull();
+    expect(await getSessionUser(db, other.token, now)).toBeNull();
+  });
+
+  it("şifreli hesaba Google bağlanır; aynı Google başka hesaba bağlanamaz", async () => {
+    const a = await newUser("a@example.com");
+    const b = await newUser("b@example.com");
+    expect(await linkGoogle(db, a, google, now)).toEqual({ ok: true });
+    expect((await loadUserData(db, a)).security).toEqual({ hasPassword: true, googleLinked: true });
+    expect(await linkGoogle(db, b, google, now)).toEqual({
+      ok: false,
+      error: "googleAlreadyLinked",
+    });
+    expect(await linkGoogle(db, a, { ...google, sub: "g-2" }, now)).toEqual({
+      ok: false,
+      error: "googleAlreadyLinked",
+    });
+    // Bağlandıktan sonra Google ile giriş aynı hesaba gider.
+    expect(await signInWithGoogle(db, google, now)).toEqual({
+      ok: true,
+      userId: a,
+      created: false,
+    });
+  });
+
+  it("şifresiz hesapta Google bağlantısı kaldırılamaz", async () => {
+    const res = await signInWithGoogle(db, google, now);
+    if (!res.ok) throw new Error(res.error);
+    expect(await unlinkGoogle(db, res.userId)).toEqual({ ok: false, error: "noPassword" });
+    const a = await newUser("a@example.com");
+    await linkGoogle(db, a, { ...google, sub: "g-2" }, now);
+    expect(await unlinkGoogle(db, a)).toEqual({ ok: true });
+    expect((await loadUserData(db, a)).security.googleLinked).toBe(false);
+  });
+
+  it("hesap silme e-posta onayı ve şifre ister; tüm veriyi siler", async () => {
+    const id = await newUser();
+    const other = await newUser("b@example.com");
+    await createSession(db, id, now);
+    await purchasePackage(db, id, { packageId: "media-2d", method: "card" }, now);
+    await generateContent(db, id, { type: "image", text: "kedi", count: 1 }, now);
+    await addVoiceClone(db, id, "Sesim", now);
+
+    expect(
+      await deleteAccount(
+        db,
+        id,
+        { confirmEmail: "baska@example.com", password: "gizli-sifre-1" },
+        ip,
+        now,
+      ),
+    ).toEqual({
+      ok: false,
+      error: "confirmMismatch",
+    });
+    expect(
+      await deleteAccount(
+        db,
+        id,
+        { confirmEmail: "AYSE@example.com", password: "yanlis" },
+        ip,
+        now,
+      ),
+    ).toEqual({
+      ok: false,
+      error: "invalidCredentials",
+    });
+    expect(
+      await deleteAccount(
+        db,
+        id,
+        { confirmEmail: "AYSE@example.com", password: "gizli-sifre-1" },
+        ip,
+        now,
+      ),
+    ).toEqual({ ok: true });
+
+    for (const table of [
+      "users",
+      "sessions",
+      "credit_grants",
+      "orders",
+      "generations",
+      "voice_clones",
+    ]) {
+      const rows = await db.$client.execute({
+        sql: `select count(*) n from ${table} where ${table === "users" ? "id" : "user_id"} = ?`,
+        args: [id],
+      });
+      expect(Number(rows.rows[0]!["n"]), table).toBe(0);
+    }
+    // Diğer kullanıcıya dokunulmaz.
+    expect((await loadUserData(db, other)).grants).toHaveLength(1);
   });
 });

@@ -18,6 +18,7 @@ import {
 } from "@/server/google.server";
 import {
   authenticate,
+  createSession,
   getSessionUser,
   loadUserData,
   registerUser,
@@ -190,7 +191,7 @@ describe("akış", () => {
     expect(location.hostname).toBe("accounts.google.com");
     expect(location.searchParams.get("redirect_uri")).toBe(`${base}/auth/google/callback`);
     const cookies = res.headers.getSetCookie();
-    expect(cookies).toHaveLength(3);
+    expect(cookies).toHaveLength(4);
     expect(cookies.every((c) => c.includes("HttpOnly") && c.includes("SameSite=Lax"))).toBe(true);
     // Dış adrese dönüş kabul edilmez.
     expect(cookies.find((c) => c.startsWith("trai_oauth_return="))).toContain("%2Flabs");
@@ -243,5 +244,56 @@ describe("akış", () => {
     expect(session).toContain("HttpOnly");
     const token = decodeURIComponent(session.split(";")[0]!.slice("trai_session=".length));
     expect((await getSessionUser(db, token, now))?.email).toBe("deniz@example.com");
+  });
+});
+
+describe("hesaba Google bağlama akışı", () => {
+  const base = "http://localhost:8080";
+
+  it("bağlama kipinde dönüş hesap sayfasıdır ve kip çerezi yazılır", () => {
+    const res = startGoogleSignIn(new Request(`${base}/auth/google?mode=link`));
+    const cookies = res.headers.getSetCookie();
+    expect(cookies.find((c) => c.startsWith("trai_oauth_mode="))).toContain("link");
+    expect(cookies.find((c) => c.startsWith("trai_oauth_return="))).toContain("%2Faccount");
+  });
+
+  function linkCallback(sessionToken?: string) {
+    const session = sessionToken ? `; trai_session=${encodeURIComponent(sessionToken)}` : "";
+    return new Request(`${base}/auth/google/callback?code=kod&state=s`, {
+      headers: {
+        cookie: `trai_oauth_state=s; trai_oauth_verifier=v; trai_oauth_mode=link${session}`,
+      },
+    });
+  }
+
+  it("açık oturumda Google hesaba bağlanır, yeni oturum açılmaz", async () => {
+    const reg = await registerUser(
+      db,
+      { name: "Ali", email: "ali@example.com", password: "gizli-sifre-1" },
+      now,
+    );
+    if (!reg.ok) throw new Error(reg.error);
+    const { token } = await createSession(db, reg.userId, now);
+    const res = await finishGoogleSignIn(linkCallback(token), {
+      db,
+      now,
+      fetchImpl: fakeGoogle({ sub: "g-link", email: "baska@gmail.com", email_verified: true }),
+    });
+    expect(res.headers.get("location")).toBe("/account?linked=google");
+    expect(
+      res.headers
+        .getSetCookie()
+        .some((c) => c.startsWith("trai_session=") && !c.includes("Max-Age=0")),
+    ).toBe(false);
+    expect((await loadUserData(db, reg.userId)).security.googleLinked).toBe(true);
+  });
+
+  it("oturum yoksa bağlama yapılmaz", async () => {
+    const res = await finishGoogleSignIn(linkCallback(), {
+      db,
+      now,
+      fetchImpl: fakeGoogle({ sub: "g-link", email: "baska@gmail.com", email_verified: true }),
+    });
+    expect(res.headers.get("location")).toBe("/account?error=googleFailed");
   });
 });

@@ -5,6 +5,7 @@ import * as api from "@/api/functions";
 
 import type {
   Account,
+  AccountErrorCode,
   ActionErrorCode,
   AuthErrorCode,
   GenerateInput,
@@ -44,10 +45,30 @@ interface Store {
   generate: (input: GenerateInput) => Promise<Outcome<{ generation: Generation }, ActionErrorCode>>;
   deleteGeneration: (id: string) => Promise<void>;
   addClone: (name: string) => Promise<Outcome<object, ActionErrorCode>>;
+  updateName: (name: string) => Promise<Outcome<object, AccountErrorCode>>;
+  changePassword: (input: {
+    current?: string | undefined;
+    next: string;
+  }) => Promise<Outcome<object, AccountErrorCode> | RateLimited>;
+  signOutOthers: () => Promise<Outcome<object, AccountErrorCode>>;
+  unlinkGoogle: () => Promise<Outcome<object, AccountErrorCode>>;
+  /** Başarıda oturum önbelleği temizlenmez; çağıran önce sayfadan çıkıp `forget()` çağırır. */
+  deleteAccount: (input: {
+    confirmEmail: string;
+    password?: string | undefined;
+  }) => Promise<Outcome<object, AccountErrorCode> | RateLimited>;
+  /** Yerel oturum bilgisini siler (sunucu çağrısı yapmaz). */
+  forget: () => void;
 }
 
 const SESSION_KEY = ["session"] as const;
-const emptyData: UserData = { grants: [], orders: [], generations: [], clones: [] };
+const emptyData: UserData = {
+  grants: [],
+  orders: [],
+  generations: [],
+  clones: [],
+  security: { hasPassword: false, googleLinked: false },
+};
 
 const Ctx = createContext<Store | null>(null);
 
@@ -93,6 +114,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await call(() => api.deleteGeneration({ data: { id } }));
       },
       addClone: (name) => call(() => api.addClone({ data: { name } })),
+      updateName: (name) => call(() => api.updateProfile({ data: { name } })),
+      changePassword: (input) => call(() => api.changePassword({ data: input })),
+      signOutOthers: () => call(() => api.signOutOthers()),
+      unlinkGoogle: () => call(() => api.unlinkGoogle()),
+      deleteAccount: (input) => call(() => api.deleteAccount({ data: input })),
+      forget: () => put(null),
     };
   }, [qc, session.isPending, session.data]);
 
