@@ -36,15 +36,17 @@ function Payment() {
   const [method, setMethod] = useState<PaymentMethod>("card");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<Order | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const pkg = findPackage(selected);
 
-  const pay = () => {
+  const pay = async () => {
     if (!pkg) return;
     setBusy(true);
-    setTimeout(() => {
-      setDone(purchase(pkg.id, method));
-      setBusy(false);
-    }, 1200);
+    setError(null);
+    const res = await purchase(pkg.id, method);
+    setBusy(false);
+    if (res.ok) return setDone(res.order);
+    setError(res.error === "paymentsDisabled" ? t.payment.disabled : t.payment.failed);
   };
 
   if (done) {
@@ -168,6 +170,14 @@ function Payment() {
           </dl>
         ) : (
           <p className="text-sm text-muted-foreground">{t.payment.pickFirst}</p>
+        )}
+        {error && (
+          <p
+            role="alert"
+            className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
+            {error}
+          </p>
         )}
         <button onClick={pay} disabled={!pkg || busy} className={`${btnPrimary} mt-6 w-full`}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" />}

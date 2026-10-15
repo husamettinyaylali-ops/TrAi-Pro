@@ -15,7 +15,7 @@ const tr = {
   soon: "Yakında",
   theme: { toLight: "Açık temaya geç", toDark: "Koyu temaya geç" },
   demoNote:
-    "Demo modu: hesap, kredi ve ödemeler yalnız bu tarayıcıda saklanır; gerçek ödeme alınmaz.",
+    "Demo modu: ödemeler gerçek değildir; ses, görsel ve video sonuçları önizleme amaçlıdır.",
   loading: "Yükleniyor…",
 
   hero: {
@@ -100,7 +100,8 @@ const tr = {
       email: "Geçerli bir e-posta adresi gir.",
       password: "Şifre en az 8 karakter olmalı.",
       terms: "Devam etmek için şartları kabul et.",
-      accountMissing: "Bu e-postayla kayıtlı bir hesap bulunamadı.",
+      invalidCredentials: "E-posta veya şifre hatalı.",
+      network: "Sunucuya ulaşılamadı. Bağlantını kontrol edip tekrar dene.",
       emailTaken: "Bu e-posta zaten kayıtlı. Giriş yapmayı dene.",
     },
   },
@@ -115,6 +116,7 @@ const tr = {
     noPackage: "Aktif paket yok",
     buy: "Kredi Al",
     insufficient: "Bu işlem için yeterli kredin yok.",
+    failed: "İşlem tamamlanamadı. Tekrar dene.",
     seePackages: "Paketleri gör",
     cost: (n: string) => `${n} kredi harcanır`,
     creditsShort: "kr",
@@ -188,6 +190,8 @@ const tr = {
     goLabs: "Stüdyoya Git",
     goHistory: "Ödeme Geçmişi",
     pickFirst: "Devam etmek için bir paket seç.",
+    failed: "Ödeme tamamlanamadı. Tekrar dene.",
+    disabled: "Ödemeler şu an kapalı.",
   },
 
   history: {
@@ -244,8 +248,7 @@ const en: Dict = {
   account: "My account",
   soon: "Soon",
   theme: { toLight: "Switch to light theme", toDark: "Switch to dark theme" },
-  demoNote:
-    "Demo mode: accounts, credits and payments are stored in this browser only; no real payment is taken.",
+  demoNote: "Demo mode: payments are not real; voice, image and video results are previews.",
   loading: "Loading…",
 
   hero: {
@@ -330,7 +333,8 @@ const en: Dict = {
       email: "Enter a valid email address.",
       password: "Password must be at least 8 characters.",
       terms: "Accept the terms to continue.",
-      accountMissing: "No account is registered with this email.",
+      invalidCredentials: "Incorrect email or password.",
+      network: "Couldn't reach the server. Check your connection and try again.",
       emailTaken: "This email is already registered. Try signing in.",
     },
   },
@@ -345,6 +349,7 @@ const en: Dict = {
     noPackage: "No active pack",
     buy: "Buy Credits",
     insufficient: "You don't have enough credits for this.",
+    failed: "Couldn't complete that. Try again.",
     seePackages: "See packs",
     cost: (n) => `Costs ${n} credits`,
     creditsShort: "cr",
@@ -419,6 +424,8 @@ const en: Dict = {
     goLabs: "Open Studio",
     goHistory: "Payment History",
     pickFirst: "Pick a pack to continue.",
+    failed: "Payment couldn't be completed. Try again.",
+    disabled: "Payments are currently disabled.",
   },
 
   history: {

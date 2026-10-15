@@ -62,25 +62,26 @@ export function AuthForm({
 
   const set = (k: keyof typeof values, v: string | boolean) => setValues((s) => ({ ...s, [k]: v }));
 
-  const submit = (ev: FormEvent) => {
+  const submit = async (ev: FormEvent) => {
     ev.preventDefault();
     const next: Errors = {};
     if (up && !values.name.trim()) next.name = e.required;
     if (!values.email.trim()) next.email = e.required;
     else if (!EMAIL_RE.test(values.email.trim())) next.email = e.email;
-    if (values.password.length < 8) next.password = e.password;
+    if (!values.password) next.password = e.required;
+    else if (up && values.password.length < 8) next.password = e.password;
     if (up && !values.terms) next.terms = e.terms;
     setErrors(next);
     if (Object.keys(next).length) return;
 
     setBusy(true);
-    setTimeout(() => {
-      const res = up ? signUp({ name: values.name, email: values.email }) : signIn(values.email);
-      setBusy(false);
-      if (!res.ok)
-        return setErrors({ form: res.error === "emailTaken" ? e.emailTaken : e.accountMissing });
-      router.history.push(safeRedirect(redirect));
-    }, 500);
+    const email = values.email.trim();
+    const res = up
+      ? await signUp({ name: values.name, email, password: values.password })
+      : await signIn({ email, password: values.password });
+    setBusy(false);
+    if (!res.ok) return setErrors({ form: e[res.error] });
+    router.history.push(safeRedirect(redirect));
   };
 
   const err = (k: keyof Errors) =>

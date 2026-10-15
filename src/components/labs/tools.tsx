@@ -31,7 +31,8 @@ import {
 } from "@/lib/credits";
 import { useFormat, useI18n } from "@/lib/i18n";
 import { gens } from "@/lib/samples";
-import { clock, useApp, type Generation } from "@/lib/store";
+import { clock } from "@/lib/clock";
+import { useApp, type Generation } from "@/lib/store";
 import { canSpeak, speak, stockVoices, stopSpeaking, type Voice } from "@/lib/voices";
 
 export const Panel = ({
@@ -113,7 +114,7 @@ export function TextToSpeech() {
   const [text, setText] = useState(t.labs.tts.sample);
   const [voiceId, setVoiceId] = useState(voices[0]?.id ?? "defne");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<"insufficient" | "empty" | null>(null);
+  const [error, setError] = useState<"insufficient" | "empty" | "failed" | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const [speechOk, setSpeechOk] = useState(true);
 
@@ -135,17 +136,15 @@ export function TextToSpeech() {
     speak(g.text, voiceOf(g.voiceId), () => setPlaying((p) => (p === g.id ? null : p)));
   };
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (cost === 0) return setError("empty");
     setError(null);
     setBusy(true);
-    setTimeout(() => {
-      const res = generate({ type: "tts", text: text.trim(), voiceId }, "voice", cost);
-      setBusy(false);
-      if (!res.ok) return setError("insufficient");
-      play(res.generation);
-    }, 900);
+    const res = await generate({ type: "tts", text: text.trim(), voiceId });
+    setBusy(false);
+    if (!res.ok) return setError(res.error === "insufficient" ? "insufficient" : "failed");
+    play(res.generation);
   };
 
   const label = (v: Voice) =>
@@ -194,6 +193,11 @@ export function TextToSpeech() {
           {error === "empty" && (
             <p role="alert" className="text-sm text-destructive">
               {t.labs.tts.emptyText}
+            </p>
+          )}
+          {error === "failed" && (
+            <p role="alert" className="text-sm text-destructive">
+              {t.labs.failed}
             </p>
           )}
           {!speechOk && <p className="text-xs text-muted-foreground">{t.labs.tts.noSpeech}</p>}
@@ -277,15 +281,16 @@ export function VoiceClone() {
     setStep(0);
     [1, 2, 3].forEach((s) =>
       timers.current.push(
-        window.setTimeout(() => {
-          setStep(s);
-          if (s === 3) {
-            const res = addClone(name);
-            if (!res.ok) setError(t.labs.clone.limit(MAX_CLONES));
-            setName("");
-            setFile(null);
-            setConsent(false);
+        window.setTimeout(async () => {
+          if (s < 3) return setStep(s);
+          const res = await addClone(name);
+          setStep(3);
+          if (!res.ok) {
+            return setError(res.error === "limit" ? t.labs.clone.limit(MAX_CLONES) : t.labs.failed);
           }
+          setName("");
+          setFile(null);
+          setConsent(false);
         }, s * 1100),
       ),
     );
@@ -470,7 +475,7 @@ export function MediaStudio({ type }: { type: MediaType }) {
   const [count, setCount] = useState(isVideo ? 1 : 2);
   const [style, setStyle] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<"insufficient" | "empty" | null>(null);
+  const [error, setError] = useState<"insufficient" | "empty" | "failed" | null>(null);
 
   const now = clock();
   const hasPass = balance(data.grants, "media", now) > 0;
@@ -479,28 +484,21 @@ export function MediaStudio({ type }: { type: MediaType }) {
 
   if (!hasPass && history.length === 0) return <Locked />;
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return setError("empty");
     setError(null);
     setBusy(true);
-    setTimeout(() => {
-      const start = Math.floor(Math.random() * gens.length);
-      const images = Array.from({ length: count }, (_, i) => (start + i) % gens.length);
-      const res = generate(
-        {
-          type,
-          text: prompt.trim(),
-          images,
-          style: isVideo ? t.labs.video.styles[style] : undefined,
-        },
-        "media",
-        cost,
-      );
-      setBusy(false);
-      if (!res.ok) setError("insufficient");
-    }, 1500);
+    const text = prompt.trim();
+    const res = await generate(
+      isVideo ? { type: "video", text, styleIndex: style } : { type: "image", text, count },
+    );
+    setBusy(false);
+    if (!res.ok) setError(res.error === "insufficient" ? "insufficient" : "failed");
   };
+
+  /** Video stili sunucuda sıra numarasıyla saklanır; ad seçili dile göre gösterilir. */
+  const styleName = (s?: string) => (s === undefined ? undefined : t.labs.video.styles[Number(s)]);
 
   return (
     <div className="space-y-6">
@@ -563,6 +561,11 @@ export function MediaStudio({ type }: { type: MediaType }) {
               {t.auth.errors.required}
             </p>
           )}
+          {error === "failed" && (
+            <p role="alert" className="text-sm text-destructive">
+              {t.labs.failed}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-4">
             <button type="submit" disabled={busy || !hasPass} className={btnPrimary}>
               {busy ? (
@@ -607,7 +610,7 @@ export function MediaStudio({ type }: { type: MediaType }) {
                     <span className="font-medium">{g.text}</span>
                     <span className="text-muted-foreground">
                       {" "}
-                      · {g.style ? `${g.style} · ` : ""}
+                      · {styleName(g.style) ? `${styleName(g.style)} · ` : ""}
                       {f.dateTime(g.createdAt)} · {f.num(g.cost)} {t.labs.creditsShort}
                     </span>
                   </p>

@@ -29,7 +29,8 @@ import {
 import { balance } from "@/lib/credits";
 import { useFormat, useI18n } from "@/lib/i18n";
 import { site } from "@/lib/packages";
-import { clock, useApp } from "@/lib/store";
+import { clock } from "@/lib/clock";
+import { useApp } from "@/lib/store";
 
 export const btnPrimary =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-gradient-brand px-7 py-3 font-semibold text-primary-foreground shadow-glow transition-transform hover:scale-105 disabled:pointer-events-none disabled:opacity-60 pulse-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -140,8 +141,8 @@ function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
-            signOut();
-            navigate({ to: "/" });
+            // Önce korumalı sayfadan çık, sonra oturumu kapat; aksi halde giriş sayfasına yönlenir.
+            void navigate({ to: "/" }).then(() => signOut());
           }}
         >
           <LogOut /> {t.signOut}
@@ -156,6 +157,7 @@ const navCls = "transition hover:text-foreground [&.active]:text-foreground";
 function Header() {
   const { t } = useI18n();
   const { user, hydrated, signOut } = useApp();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
 
@@ -262,8 +264,8 @@ function Header() {
               <button
                 className={btnOutline}
                 onClick={() => {
-                  signOut();
                   close();
+                  void navigate({ to: "/" }).then(() => signOut());
                 }}
               >
                 <LogOut className="h-4 w-4" /> {t.signOut}
