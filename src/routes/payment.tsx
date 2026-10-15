@@ -403,14 +403,19 @@ function Payment() {
 
 function PaymentPage() {
   const { t } = useI18n();
+  const config = usePaymentConfig();
+  const demoOnly =
+    !!config.data && !config.data.usdtBep20 && !config.data.binancePay && !config.data.paypal;
   return (
     <SiteShell>
       <PageHead title={t.payment.title} sub={t.payment.sub} />
       <RequireAuth>
         <Payment />
-        <div className="-mt-16 px-4 pb-16">
-          <DemoNote />
-        </div>
+        {demoOnly && (
+          <div className="-mt-16 px-4 pb-16">
+            <DemoNote text={t.demoNotes.payment} />
+          </div>
+        )}
       </RequireAuth>
     </SiteShell>
   );

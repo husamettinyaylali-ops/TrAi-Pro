@@ -9,7 +9,7 @@ import { useApp } from "@/lib/store";
 import { isGoogleError } from "@/lib/google-errors";
 
 import { GoogleMark } from "./google-mark";
-import { DemoNote, SiteShell, btnPrimary, field } from "./shell";
+import { SiteShell, btnPrimary, field } from "./shell";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -258,7 +258,6 @@ export function AuthForm({
             </Link>
           </p>
         </div>
-        <DemoNote />
       </section>
     </SiteShell>
   );

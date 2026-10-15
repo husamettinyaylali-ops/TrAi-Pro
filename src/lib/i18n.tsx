@@ -14,8 +14,12 @@ const tr = {
   account: "Hesabım",
   soon: "Yakında",
   theme: { toLight: "Açık temaya geç", toDark: "Koyu temaya geç" },
-  demoNote:
-    "Demo modu: ödemeler gerçek değildir; ses, görsel ve video sonuçları önizleme amaçlıdır.",
+  demoNotes: {
+    payment: "Demo modu: henüz gerçek bir ödeme yöntemi bağlı değil; demo bakiye gerçek değildir.",
+    studio: "Demo modu: ses, görsel ve video sonuçları önizleme amaçlıdır.",
+    media:
+      "Görsel ve video üretimi henüz önizleme: sonuçlar örnek görsellerdir. Gerçek üretim yakında.",
+  },
   loading: "Yükleniyor…",
 
   hero: {
@@ -473,7 +477,12 @@ const en: Dict = {
   account: "My account",
   soon: "Soon",
   theme: { toLight: "Switch to light theme", toDark: "Switch to dark theme" },
-  demoNote: "Demo mode: payments are not real; voice, image and video results are previews.",
+  demoNotes: {
+    payment: "Demo mode: no real payment method is connected yet; the demo balance isn't real.",
+    studio: "Demo mode: voice, image and video results are previews.",
+    media:
+      "Image and video generation is still a preview: results are sample images. Real generation is coming soon.",
+  },
   loading: "Loading…",
 
   hero: {

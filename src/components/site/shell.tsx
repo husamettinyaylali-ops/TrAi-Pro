@@ -442,11 +442,11 @@ export function PageHead({ kicker, title, sub }: { kicker?: string; title: strin
   );
 }
 
-export function DemoNote() {
-  const { t } = useI18n();
+/** Gerçekten demo olan kısımlar için bilgi notu; metni çağıran sayfa seçer. */
+export function DemoNote({ text }: { text: string }) {
   return (
     <p className="mx-auto mt-6 max-w-2xl rounded-2xl border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground">
-      {t.demoNote}
+      {text}
     </p>
   );
 }

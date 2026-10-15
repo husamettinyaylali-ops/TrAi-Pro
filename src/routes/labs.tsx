@@ -6,6 +6,7 @@ import { RequireAuth } from "@/components/site/require-auth";
 import { DemoNote, SiteShell } from "@/components/site/shell";
 import { VerifyBanner } from "@/components/site/verify-banner";
 import { useI18n } from "@/lib/i18n";
+import { useStudioConfig } from "@/lib/studio-config";
 
 const tabs = ["tts", "clone", "image", "video"] as const;
 type Tab = (typeof tabs)[number];
@@ -23,6 +24,7 @@ function Labs() {
   const { t } = useI18n();
   const { tab = "tts" } = Route.useSearch();
   const navigate = useNavigate({ from: "/labs" });
+  const studio = useStudioConfig();
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-12 sm:px-6">
@@ -60,7 +62,9 @@ function Labs() {
         {tab === "image" && <MediaStudio key="image" type="image" />}
         {tab === "video" && <MediaStudio key="video" type="video" />}
       </div>
-      <DemoNote />
+      {studio.data && (
+        <DemoNote text={studio.data.tts === "live" ? t.demoNotes.media : t.demoNotes.studio} />
+      )}
     </div>
   );
 }
