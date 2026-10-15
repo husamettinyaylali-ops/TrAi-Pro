@@ -15,6 +15,13 @@
       "when": 1792073714942,
       "tag": "0001_google_giris",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792074980387,
+      "tag": "0002_giris_denemeleri",
+      "breakpoints": true
     }
   ]
 }

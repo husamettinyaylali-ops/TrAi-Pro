@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { deleteCookie, getCookie, setCookie } from "@tanstack/react-start/server";
+import { deleteCookie, getCookie, getRequestIP, setCookie } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 import { clock } from "@/lib/clock";
@@ -30,6 +30,18 @@ function setSessionCookie(token: string, expires: Date) {
   });
 }
 
+/**
+ * İsteğin IP'si. X-Forwarded-For yalnız TRUST_PROXY=on iken okunur;
+ * aksi halde istemci sahte başlıkla sınırı aşabilir.
+ */
+function clientIp(): string | null {
+  try {
+    return getRequestIP({ xForwardedFor: env("TRUST_PROXY") === "on" }) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function currentUser(): Promise<Account | null> {
   const token = getCookie(SESSION_COOKIE);
   if (!token) return null;
@@ -57,7 +69,7 @@ export const getSession = createServerFn({ method: "GET" }).handler(async () => 
 export const signUp = createServerFn({ method: "POST" })
   .validator(parse(z.object({ name: z.string().trim().min(1).max(80), email, password })))
   .handler(async ({ data }) => {
-    const res = await svc.registerUser(await getDb(), data, clock());
+    const res = await svc.registerLimited(await getDb(), data, clientIp(), clock());
     if (!res.ok) return res;
     return { ok: true as const, session: await startSession(res.userId) };
   });
@@ -65,7 +77,7 @@ export const signUp = createServerFn({ method: "POST" })
 export const signIn = createServerFn({ method: "POST" })
   .validator(parse(z.object({ email, password: z.string().min(1).max(200) })))
   .handler(async ({ data }) => {
-    const res = await svc.authenticate(await getDb(), data);
+    const res = await svc.signInLimited(await getDb(), data, clientIp(), clock());
     if (!res.ok) return res;
     return { ok: true as const, session: await startSession(res.userId) };
   });

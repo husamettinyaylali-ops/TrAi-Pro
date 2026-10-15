@@ -59,6 +59,13 @@ export type GenerateInput =
   | { type: "video"; text: string; styleIndex: number };
 
 export type AuthErrorCode = "emailTaken" | "invalidCredentials";
+/** Çok fazla deneme; istemci bekleme süresini gösterir. */
+export interface RateLimited {
+  ok: false;
+  error: "tooManyAttempts";
+  retryAfterMinutes: number;
+}
+
 export type GoogleErrorCode =
   | "googleUnavailable"
   | "googleCancelled"

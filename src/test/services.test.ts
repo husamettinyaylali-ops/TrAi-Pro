@@ -18,8 +18,10 @@ import {
   getSessionUser,
   loadUserData,
   purchasePackage,
+  registerLimited,
   registerUser,
   removeGeneration,
+  signInLimited,
 } from "@/server/services.server";
 
 const now = new Date("2026-10-15T09:00:00Z");
@@ -203,5 +205,106 @@ describe("ses klonu", () => {
     expect(
       await generateContent(db, b, { type: "tts", text: "selam", voiceId: first.id }, now),
     ).toEqual({ ok: false, error: "invalidInput" });
+  });
+});
+
+describe("deneme sınırı", () => {
+  const ip = "203.0.113.7";
+  const minutes = (n: number) => new Date(now.getTime() + n * 60_000);
+
+  it("e-posta başına 5 yanlış denemeden sonra doğru şifre de 15 dakika reddedilir", async () => {
+    await newUser();
+    for (let i = 0; i < 5; i++) {
+      const res = await signInLimited(
+        db,
+        { email: "ayse@example.com", password: "yanlis" },
+        ip,
+        now,
+      );
+      expect(res).toEqual({ ok: false, error: "invalidCredentials" });
+    }
+    const blocked = await signInLimited(
+      db,
+      { email: "ayse@example.com", password: "gizli-sifre-1" },
+      ip,
+      now,
+    );
+    expect(blocked).toEqual({ ok: false, error: "tooManyAttempts", retryAfterMinutes: 15 });
+    const later = await signInLimited(
+      db,
+      { email: "ayse@example.com", password: "gizli-sifre-1" },
+      ip,
+      minutes(16),
+    );
+    expect(later.ok).toBe(true);
+  });
+
+  it("başarılı giriş e-posta sayacını sıfırlar", async () => {
+    await newUser();
+    for (let i = 0; i < 4; i++)
+      await signInLimited(db, { email: "ayse@example.com", password: "yanlis" }, ip, now);
+    expect(
+      (await signInLimited(db, { email: "ayse@example.com", password: "gizli-sifre-1" }, ip, now))
+        .ok,
+    ).toBe(true);
+    for (let i = 0; i < 4; i++)
+      await signInLimited(db, { email: "ayse@example.com", password: "yanlis" }, ip, now);
+    expect(
+      (await signInLimited(db, { email: "ayse@example.com", password: "gizli-sifre-1" }, ip, now))
+        .ok,
+    ).toBe(true);
+  });
+
+  it("aynı IP'den farklı e-postalara 20 yanlış denemeden sonra IP engellenir", async () => {
+    await newUser();
+    for (let i = 0; i < 20; i++) {
+      await signInLimited(db, { email: `kisi${i}@example.com`, password: "yanlis" }, ip, now);
+    }
+    const res = await signInLimited(
+      db,
+      { email: "ayse@example.com", password: "gizli-sifre-1" },
+      ip,
+      now,
+    );
+    expect(res.ok === false && res.error).toBe("tooManyAttempts");
+    expect(
+      (
+        await signInLimited(
+          db,
+          { email: "ayse@example.com", password: "gizli-sifre-1" },
+          "198.51.100.1",
+          now,
+        )
+      ).ok,
+    ).toBe(true);
+  });
+
+  it("aynı IP'den saatte en fazla 5 kayıt denemesi", async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await registerLimited(
+        db,
+        { name: "K", email: `k${i}@example.com`, password: "gizli-sifre-1" },
+        ip,
+        now,
+      );
+      expect(res.ok).toBe(true);
+    }
+    const sixth = await registerLimited(
+      db,
+      { name: "K", email: "k6@example.com", password: "gizli-sifre-1" },
+      ip,
+      now,
+    );
+    expect(sixth).toEqual({ ok: false, error: "tooManyAttempts", retryAfterMinutes: 60 });
+    expect(
+      (
+        await registerLimited(
+          db,
+          { name: "K", email: "k6@example.com", password: "gizli-sifre-1" },
+          ip,
+          minutes(61),
+        )
+      ).ok,
+    ).toBe(true);
   });
 });

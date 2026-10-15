@@ -11,6 +11,7 @@ import type {
   Generation,
   Order,
   PaymentMethod,
+  RateLimited,
   SessionPayload,
   UserData,
 } from "./types";
@@ -30,8 +31,11 @@ interface Store {
     name: string;
     email: string;
     password: string;
-  }) => Promise<Outcome<object, AuthErrorCode>>;
-  signIn: (input: { email: string; password: string }) => Promise<Outcome<object, AuthErrorCode>>;
+  }) => Promise<Outcome<object, AuthErrorCode> | RateLimited>;
+  signIn: (input: {
+    email: string;
+    password: string;
+  }) => Promise<Outcome<object, AuthErrorCode> | RateLimited>;
   signOut: () => Promise<void>;
   purchase: (
     packageId: string,

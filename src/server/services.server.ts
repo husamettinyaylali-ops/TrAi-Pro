@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 
-import { and, asc, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, lt } from "drizzle-orm";
 
 import {
   MAX_CLONES,
@@ -13,6 +13,7 @@ import {
   type Grant,
 } from "@/lib/credits";
 import { findPackage, signupBonus } from "@/lib/packages";
+import { LIMITS, checkLimit, retryMinutes, type Limit } from "@/lib/rate-limit";
 import type {
   Account,
   ActionErrorCode,
@@ -22,6 +23,7 @@ import type {
   Generation,
   Order,
   PaymentMethod,
+  RateLimited,
   UserData,
 } from "@/lib/types";
 import { stockVoices } from "@/lib/voices";
@@ -30,6 +32,7 @@ import type { Db } from "./db.server";
 import type { GoogleProfile } from "./google.server";
 import { DUMMY_HASH, hashPassword, verifyPassword } from "./password.server";
 import {
+  authAttempts,
   creditGrants,
   generations,
   oauthAccounts,
@@ -140,6 +143,88 @@ export async function signInWithGoogle(
     await tx.insert(creditGrants).values({ ...bonus, userId });
   });
   return { ok: true, userId, created: true };
+}
+
+// ---------------------------------------------------------------- deneme sınırı
+
+async function rateCheck(db: Db, key: string, limit: Limit, now: Date) {
+  const since = new Date(now.getTime() - limit.windowMs).toISOString();
+  const rows = await db
+    .select({ at: authAttempts.createdAt })
+    .from(authAttempts)
+    .where(and(eq(authAttempts.key, key), gt(authAttempts.createdAt, since)));
+  return checkLimit(
+    rows.map((r) => r.at),
+    limit,
+    now,
+  );
+}
+
+async function recordAttempt(db: Db, key: string, now: Date) {
+  await db.insert(authAttempts).values({ id: randomUUID(), key, createdAt: now.toISOString() });
+  // Bir günden eski kayıtlar artık hiçbir pencereye girmez.
+  await db
+    .delete(authAttempts)
+    .where(lt(authAttempts.createdAt, new Date(now.getTime() - DAY).toISOString()));
+}
+
+/** Kontrol edilen anahtarlardan en uzun bekleme süresini döner; hepsi serbestse null. */
+async function blocked(
+  db: Db,
+  checks: [key: string, limit: Limit][],
+  now: Date,
+): Promise<RateLimited | null> {
+  let wait = 0;
+  for (const [key, limit] of checks) {
+    const res = await rateCheck(db, key, limit, now);
+    if (!res.allowed) wait = Math.max(wait, res.retryAfterMs);
+  }
+  return wait > 0
+    ? { ok: false, error: "tooManyAttempts", retryAfterMinutes: retryMinutes(wait) }
+    : null;
+}
+
+const signInKeys = (email: string, ip: string | null) => ({
+  email: `signin:email:${normEmail(email)}`,
+  ip: ip ? `signin:ip:${ip}` : null,
+});
+
+/** Şifreyle giriş; başarısız denemeler e-posta ve IP başına sayılır, başarıda e-posta sayacı sıfırlanır. */
+export async function signInLimited(
+  db: Db,
+  input: { email: string; password: string },
+  ip: string | null,
+  now: Date,
+): Promise<Result<{ userId: string }, AuthErrorCode> | RateLimited> {
+  const keys = signInKeys(input.email, ip);
+  const checks: [string, Limit][] = [[keys.email, LIMITS.signInPerEmail]];
+  if (keys.ip) checks.push([keys.ip, LIMITS.signInPerIp]);
+  const stop = await blocked(db, checks, now);
+  if (stop) return stop;
+
+  const res = await authenticate(db, input);
+  if (!res.ok) {
+    for (const [key] of checks) await recordAttempt(db, key, now);
+    return res;
+  }
+  await db.delete(authAttempts).where(eq(authAttempts.key, keys.email));
+  return res;
+}
+
+/** Kayıt; IP başına her deneme sayılır (deneme kredisi toplamayı ve e-posta taramayı yavaşlatır). */
+export async function registerLimited(
+  db: Db,
+  input: { name: string; email: string; password: string },
+  ip: string | null,
+  now: Date,
+): Promise<Result<{ userId: string }, AuthErrorCode> | RateLimited> {
+  const key = ip ? `signup:ip:${ip}` : null;
+  if (key) {
+    const stop = await blocked(db, [[key, LIMITS.signUpPerIp]], now);
+    if (stop) return stop;
+    await recordAttempt(db, key, now);
+  }
+  return registerUser(db, input, now);
 }
 
 export async function createSession(db: Db, userId: string, now: Date) {

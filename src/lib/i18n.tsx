@@ -105,6 +105,7 @@ const tr = {
       password: "Şifre en az 8 karakter olmalı.",
       terms: "Devam etmek için şartları kabul et.",
       invalidCredentials: "E-posta veya şifre hatalı.",
+      tooManyAttempts: (n: number) => `Çok fazla deneme yapıldı. ${n} dakika sonra tekrar dene.`,
       network: "Sunucuya ulaşılamadı. Bağlantını kontrol edip tekrar dene.",
       googleUnavailable:
         "Google ile giriş şu an kullanılamıyor. E-posta ve şifreyle devam edebilirsin.",
@@ -349,6 +350,8 @@ const en: Dict = {
       password: "Password must be at least 8 characters.",
       terms: "Accept the terms to continue.",
       invalidCredentials: "Incorrect email or password.",
+      tooManyAttempts: (n) =>
+        `Too many attempts. Try again in ${n} ${n === 1 ? "minute" : "minutes"}.`,
       network: "Couldn't reach the server. Check your connection and try again.",
       googleUnavailable:
         "Google sign-in isn't available right now. You can continue with email and password.",

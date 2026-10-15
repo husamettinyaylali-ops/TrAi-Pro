@@ -109,3 +109,14 @@ export const voiceClones = sqliteTable(
   },
   (t) => [index("voice_clones_user_idx").on(t.userId)],
 );
+
+/** Giriş ve kayıt denemeleri; kaba kuvvete karşı sınır için. Anahtar ör. "signin:email:<e-posta>". */
+export const authAttempts = sqliteTable(
+  "auth_attempts",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("auth_attempts_key_idx").on(t.key, t.createdAt)],
+);

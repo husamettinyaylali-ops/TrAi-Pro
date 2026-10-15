@@ -118,7 +118,12 @@ export function AuthForm({
       ? await signUp({ name: values.name, email, password: values.password })
       : await signIn({ email, password: values.password });
     setBusy(false);
-    if (!res.ok) return setErrors({ form: e[res.error] });
+    if (!res.ok) {
+      return setErrors({
+        form:
+          res.error === "tooManyAttempts" ? e.tooManyAttempts(res.retryAfterMinutes) : e[res.error],
+      });
+    }
     router.history.push(safeRedirect(redirect));
   };
 
