@@ -132,6 +132,7 @@ const tr = {
     noPackage: "Aktif paket yok",
     buy: "Kredi Al",
     insufficient: "Bu işlem için yeterli kredin yok.",
+    providerFailed: "Ses servisi şu an yanıt vermiyor; kredin düşülmedi. Biraz sonra tekrar dene.",
     failed: "İşlem tamamlanamadı. Tekrar dene.",
     seePackages: "Paketleri gör",
     cost: (n: string) => `${n} kredi harcanır`,
@@ -156,6 +157,10 @@ const tr = {
       cloned: "Klon",
       female: "Kadın",
       male: "Erkek",
+      multilingual: "Çok dilli",
+      download: "MP3 indir",
+      serviceDown: "Ses servisine şu an ulaşılamıyor. Biraz sonra sayfayı yenile.",
+      unknownVoice: "Ses",
     },
     clone: {
       name: "Ses adı",
@@ -170,6 +175,11 @@ const tr = {
       mine: "Klonlanmış seslerin",
       none: "Henüz klonlanmış ses yok.",
       free: "Ses klonlama ücretsizdir.",
+      tooBig: (mb: number) => `Dosya en fazla ${mb} MB olabilir.`,
+      liveNote:
+        "Sesin yapay zeka servisinde klonlanır ve yalnız senin hesabında kullanılır. Klonu sildiğinde serviste de silinir.",
+      demoBadge: "Demo",
+      deleteClone: "Klonu sil",
     },
     image: {
       prompt: "İstem",
@@ -458,6 +468,7 @@ const en: Dict = {
     noPackage: "No active pack",
     buy: "Buy Credits",
     insufficient: "You don't have enough credits for this.",
+    providerFailed: "The voice service isn't responding; no credits were used. Try again shortly.",
     failed: "Couldn't complete that. Try again.",
     seePackages: "See packs",
     cost: (n) => `Costs ${n} credits`,
@@ -482,6 +493,10 @@ const en: Dict = {
       cloned: "Clone",
       female: "Female",
       male: "Male",
+      multilingual: "Multilingual",
+      download: "Download MP3",
+      serviceDown: "The voice service is unreachable right now. Refresh the page in a moment.",
+      unknownVoice: "Voice",
     },
     clone: {
       name: "Voice name",
@@ -496,6 +511,11 @@ const en: Dict = {
       mine: "Your cloned voices",
       none: "No cloned voices yet.",
       free: "Voice cloning is free.",
+      tooBig: (mb) => `The file can be at most ${mb} MB.`,
+      liveNote:
+        "Your voice is cloned on the AI service and used only in your account. Deleting the clone removes it there too.",
+      demoBadge: "Demo",
+      deleteClone: "Delete clone",
     },
     image: {
       prompt: "Prompt",

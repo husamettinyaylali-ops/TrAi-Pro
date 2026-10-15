@@ -46,9 +46,15 @@ interface Store {
     packageId: string,
     method: PaymentMethod,
   ) => Promise<Outcome<{ order: Order }, ActionErrorCode>>;
-  generate: (input: GenerateInput) => Promise<Outcome<{ generation: Generation }, ActionErrorCode>>;
+  generate: (
+    input: GenerateInput,
+  ) => Promise<Outcome<{ generation: Generation }, ActionErrorCode> | RateLimited>;
   deleteGeneration: (id: string) => Promise<void>;
+  /** Demo klon (yalnız ad). */
   addClone: (name: string) => Promise<Outcome<object, ActionErrorCode>>;
+  /** Gerçek klon: FormData içinde name, consent ("true") ve file. */
+  uploadClone: (form: FormData) => Promise<Outcome<object, ActionErrorCode> | RateLimited>;
+  deleteClone: (id: string) => Promise<Outcome<object, ActionErrorCode>>;
   updateName: (name: string) => Promise<Outcome<object, AccountErrorCode>>;
   changePassword: (input: {
     current?: string | undefined;
@@ -133,6 +139,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await call(() => api.deleteGeneration({ data: { id } }));
       },
       addClone: (name) => call(() => api.addClone({ data: { name } })),
+      uploadClone: (form) => call(() => api.uploadClone({ data: form })),
+      deleteClone: (id) => call(() => api.deleteClone({ data: { id } })),
       updateName: (name) => call(() => api.updateProfile({ data: { name } })),
       changePassword: (input) => call(() => api.changePassword({ data: input })),
       signOutOthers: () => call(() => api.signOutOthers()),

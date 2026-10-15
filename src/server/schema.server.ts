@@ -93,6 +93,8 @@ export const generations = sqliteTable(
     voiceId: text("voice_id"),
     style: text("style"),
     images: text("images", { mode: "json" }).$type<number[]>(),
+    /** Gerçek seslendirmede ses dosyasının depodaki anahtarı; demo üretimde boş. */
+    audioKey: text("audio_key"),
     cost: integer("cost").notNull(),
     createdAt: text("created_at").notNull(),
   },
@@ -107,6 +109,10 @@ export const voiceClones = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    /** Sağlayıcıdaki (ElevenLabs) ses kimliği; demo klonda boş. */
+    providerVoiceId: text("provider_voice_id"),
+    /** Kullanıcının "bu ses bana ait ya da izinliyim" onayını verdiği an. */
+    consentAt: text("consent_at"),
     createdAt: text("created_at").notNull(),
   },
   (t) => [index("voice_clones_user_idx").on(t.userId)],

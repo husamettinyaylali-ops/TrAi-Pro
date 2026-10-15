@@ -1,10 +1,11 @@
 import { randomInt, randomUUID } from "node:crypto";
 
-import { and, asc, count, desc, eq, gt, isNull, lt, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNotNull, isNull, lt, ne } from "drizzle-orm";
 
 import {
   MAX_CLONES,
   MAX_TTS_CHARS,
+  balance,
   createGrant,
   mediaCost,
   spend,
@@ -32,6 +33,7 @@ import { stockVoices } from "@/lib/voices";
 
 import type { Lang } from "@/lib/i18n";
 
+import type { AudioStorage } from "./audio-storage.server";
 import type { Db } from "./db.server";
 import type { EmailMessage, Mailer } from "./email.server";
 import {
@@ -53,6 +55,7 @@ import {
   voiceClones,
 } from "./schema.server";
 import { SESSION_DAYS, hashToken, newSessionToken } from "./session.server";
+import type { CloneFile, ProviderVoice, TtsProvider } from "./tts.server";
 
 const DAY = 86_400_000;
 const SAMPLE_IMAGE_COUNT = 4;
@@ -331,6 +334,7 @@ const toGeneration = (g: GenerationRow): Generation => ({
   voiceId: g.voiceId ?? undefined,
   style: g.style ?? undefined,
   images: g.images ?? undefined,
+  audioUrl: g.audioKey ? `/media/audio/${g.id}` : undefined,
   cost: g.cost,
   createdAt: g.createdAt,
 });
@@ -349,7 +353,12 @@ export async function loadUserData(db: Db, userId: string): Promise<UserData> {
       .where(eq(generations.userId, userId))
       .orderBy(desc(generations.createdAt)),
     db
-      .select({ id: voiceClones.id, name: voiceClones.name, createdAt: voiceClones.createdAt })
+      .select({
+        id: voiceClones.id,
+        name: voiceClones.name,
+        createdAt: voiceClones.createdAt,
+        providerVoiceId: voiceClones.providerVoiceId,
+      })
       .from(voiceClones)
       .where(eq(voiceClones.userId, userId))
       .orderBy(asc(voiceClones.createdAt)),
@@ -368,7 +377,10 @@ export async function loadUserData(db: Db, userId: string): Promise<UserData> {
     grants: grantRows.map(toGrant),
     orders: orderRows.map(toOrder),
     generations: genRows.map(toGeneration),
-    clones: cloneRows,
+    clones: cloneRows.map(({ providerVoiceId, ...c }) => ({
+      ...c,
+      live: Boolean(providerVoiceId),
+    })),
     security: {
       hasPassword: Boolean(auth?.passwordHash),
       googleLinked: Boolean(google),
@@ -446,7 +458,14 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
       return {
         kind: "voice",
         cost: ttsCost(text),
-        row: { type: "tts", text, voiceId: input.voiceId, style: null, images: null },
+        row: {
+          type: "tts",
+          text,
+          voiceId: input.voiceId,
+          style: null,
+          images: null,
+          audioKey: null,
+        },
       };
     }
     case "image": {
@@ -454,7 +473,14 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
       return {
         kind: "media",
         cost: mediaCost("image", input.count),
-        row: { type: "image", text, voiceId: null, style: null, images: pick(input.count) },
+        row: {
+          type: "image",
+          text,
+          voiceId: null,
+          style: null,
+          images: pick(input.count),
+          audioKey: null,
+        },
       };
     }
     case "video": {
@@ -474,6 +500,7 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           voiceId: null,
           style: String(input.styleIndex),
           images: pick(1),
+          audioKey: null,
         },
       };
     }
@@ -497,11 +524,26 @@ export async function generateContent(
     cost: plan.cost,
     createdAt: now.toISOString(),
   };
-  const ok = await db.transaction(async (tx) => {
+  if (!(await chargeAndRecord(db, userId, plan.kind, plan.cost, row, now))) {
+    return { ok: false, error: "insufficient" };
+  }
+  return { ok: true, generation: toGeneration(row) };
+}
+
+/** Krediyi düşer ve üretimi kaydeder; ikisi tek transaction'dadır. Bakiye yetmezse false. */
+async function chargeAndRecord(
+  db: Db,
+  userId: string,
+  kind: CreditKind,
+  cost: number,
+  row: GenerationRow,
+  now: Date,
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
     const current = (
       await tx.select().from(creditGrants).where(eq(creditGrants.userId, userId))
     ).map(toGrant);
-    const next = spend(current, plan.kind, plan.cost, now);
+    const next = spend(current, kind, cost, now);
     if (!next) return false;
     for (const g of next) {
       const before = current.find((c) => c.id === g.id);
@@ -515,12 +557,125 @@ export async function generateContent(
     await tx.insert(generations).values(row);
     return true;
   });
-  if (!ok) return { ok: false, error: "insufficient" };
-  return { ok: true, generation: toGeneration(row) };
 }
 
-export async function removeGeneration(db: Db, userId: string, id: string): Promise<void> {
+/** Üretimi siler; ses dosyası varsa depodan da kaldırılır. */
+export async function removeGeneration(
+  db: Db,
+  userId: string,
+  id: string,
+  storage?: AudioStorage,
+): Promise<void> {
+  const row = await db
+    .select({ audioKey: generations.audioKey })
+    .from(generations)
+    .where(and(eq(generations.id, id), eq(generations.userId, userId)))
+    .get();
+  if (!row) return;
   await db.delete(generations).where(and(eq(generations.id, id), eq(generations.userId, userId)));
+  if (row.audioKey && storage) await storage.remove(row.audioKey);
+}
+
+// ---------------------------------------------------------------- gerçek seslendirme (ElevenLabs)
+
+export interface SpeechDeps {
+  tts: TtsProvider;
+  storage: AudioStorage;
+  /** Herkese açık hazır sesler (kullanıcı klonları ayıklanmış). */
+  catalog: () => Promise<ProviderVoice[]>;
+}
+
+/** Veritabanındaki klonların sağlayıcı kimlikleri; hazır ses listesinden ayıklanır. */
+export async function clonedProviderIds(db: Db): Promise<Set<string>> {
+  const rows = await db
+    .select({ id: voiceClones.providerVoiceId })
+    .from(voiceClones)
+    .where(isNotNull(voiceClones.providerVoiceId));
+  return new Set(rows.flatMap((r) => (r.id ? [r.id] : [])));
+}
+
+/** Seçilen sesi sağlayıcı kimliğine çevirir: kullanıcının kendi klonu ya da katalogdaki hazır ses. */
+async function resolveVoice(
+  db: Db,
+  deps: SpeechDeps,
+  userId: string,
+  voiceId: string,
+): Promise<string | null> {
+  if (voiceId.startsWith("clone-")) {
+    const row = await db
+      .select({ pid: voiceClones.providerVoiceId })
+      .from(voiceClones)
+      .where(and(eq(voiceClones.id, voiceId), eq(voiceClones.userId, userId)))
+      .get();
+    return row?.pid ?? null;
+  }
+  const voices = await deps.catalog();
+  return voices.some((v) => v.id === voiceId) ? voiceId : null;
+}
+
+/**
+ * Gerçek seslendirme. Kredi yalnız başarıda düşer: bakiye ön kontrolü, sağlayıcı
+ * çağrısı, ardından tek transaction'da düşüm ve kayıt. Düşüm eşzamanlı başka bir
+ * istek yüzünden başarısız olursa üretilen dosya silinir.
+ */
+export async function generateSpeech(
+  db: Db,
+  deps: SpeechDeps,
+  userId: string,
+  input: { text: string; voiceId: string },
+  now: Date,
+): Promise<Result<{ generation: Generation }, ActionErrorCode> | RateLimited> {
+  const text = input.text.trim();
+  if (!text || [...text].length > MAX_TTS_CHARS) return { ok: false, error: "invalidInput" };
+  let providerVoiceId: string | null;
+  try {
+    providerVoiceId = await resolveVoice(db, deps, userId, input.voiceId);
+  } catch (err) {
+    // Sağlayıcının ses listesi alınamadı.
+    console.error("[ses] ses listesi alınamadı:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "providerFailed" };
+  }
+  if (!providerVoiceId) return { ok: false, error: "invalidInput" };
+
+  const cost = ttsCost(text);
+  const grants = (await db.select().from(creditGrants).where(eq(creditGrants.userId, userId))).map(
+    toGrant,
+  );
+  if (balance(grants, "voice", now) < cost) return { ok: false, error: "insufficient" };
+
+  const key = `tts:user:${userId}`;
+  const stop = await blocked(db, [[key, LIMITS.ttsPerUser]], now);
+  if (stop) return stop;
+  await recordAttempt(db, key, now);
+
+  let audio: Uint8Array;
+  try {
+    audio = await deps.tts.synthesize(providerVoiceId, text);
+  } catch (err) {
+    console.error("[ses] seslendirme başarısız:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "providerFailed" };
+  }
+
+  const id = randomUUID();
+  const audioKey = `${userId}/${id}.mp3`;
+  await deps.storage.put(audioKey, audio);
+  const row: GenerationRow = {
+    id,
+    userId,
+    type: "tts",
+    text,
+    voiceId: input.voiceId,
+    style: null,
+    images: null,
+    audioKey,
+    cost,
+    createdAt: now.toISOString(),
+  };
+  if (!(await chargeAndRecord(db, userId, "voice", cost, row, now))) {
+    await deps.storage.remove(audioKey);
+    return { ok: false, error: "insufficient" };
+  }
+  return { ok: true, generation: toGeneration(row) };
 }
 
 // ---------------------------------------------------------------- ses klonu
@@ -544,6 +699,105 @@ export async function addVoiceClone(
     await tx.insert(voiceClones).values({ id, userId, name: clean, createdAt: now.toISOString() });
     return { ok: true, id } as const;
   });
+}
+
+/** Klon için yüklenebilecek en büyük ses dosyası. */
+export const MAX_CLONE_BYTES = 10 * 1024 * 1024;
+
+async function cloneCount(conn: Conn, userId: string): Promise<number> {
+  const row = await conn
+    .select({ n: count() })
+    .from(voiceClones)
+    .where(eq(voiceClones.userId, userId))
+    .get();
+  return row?.n ?? 0;
+}
+
+/**
+ * Gerçek ses klonu (ElevenLabs Instant Voice Clone). Kullanıcının "bu ses bana ait
+ * ya da izinliyim" onayı zorunludur ve zamanıyla kaydedilir.
+ */
+export async function createVoiceClone(
+  db: Db,
+  deps: { tts: TtsProvider },
+  userId: string,
+  input: { name: string; consent: boolean; file: CloneFile },
+  now: Date,
+): Promise<Result<{ id: string }, ActionErrorCode> | RateLimited> {
+  const clean = input.name.trim();
+  const { file } = input;
+  if (!clean || clean.length > 40 || !input.consent) return { ok: false, error: "invalidInput" };
+  if (!file.type.startsWith("audio/") || file.data.byteLength === 0) {
+    return { ok: false, error: "invalidInput" };
+  }
+  if (file.data.byteLength > MAX_CLONE_BYTES) return { ok: false, error: "invalidInput" };
+  if ((await cloneCount(db, userId)) >= MAX_CLONES) return { ok: false, error: "limit" };
+
+  const key = `clone:user:${userId}`;
+  const stop = await blocked(db, [[key, LIMITS.clonePerUser]], now);
+  if (stop) return stop;
+  await recordAttempt(db, key, now);
+
+  let providerVoiceId: string;
+  try {
+    providerVoiceId = await deps.tts.cloneVoice({
+      name: `TrAi ${clean}`,
+      description: `TrAi Pro kullanıcı klonu (${userId})`,
+      file,
+    });
+  } catch (err) {
+    console.error("[ses] klonlama başarısız:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "providerFailed" };
+  }
+
+  const id = `clone-${randomUUID()}`;
+  const added = await db.transaction(async (tx) => {
+    // Eşzamanlı yüklemelerde sınır ikinci kez kontrol edilir.
+    if ((await cloneCount(tx, userId)) >= MAX_CLONES) return false;
+    await tx.insert(voiceClones).values({
+      id,
+      userId,
+      name: clean,
+      providerVoiceId,
+      consentAt: now.toISOString(),
+      createdAt: now.toISOString(),
+    });
+    return true;
+  });
+  if (!added) {
+    await deps.tts.deleteVoice(providerVoiceId).catch(() => undefined);
+    return { ok: false, error: "limit" };
+  }
+  return { ok: true, id };
+}
+
+/** Klonu siler; sağlayıcıdaki ses de (varsa) kaldırılır. */
+export async function deleteVoiceClone(
+  db: Db,
+  deps: { tts: TtsProvider | null },
+  userId: string,
+  cloneId: string,
+): Promise<Result<object, "invalidInput">> {
+  const row = await db
+    .select({ pid: voiceClones.providerVoiceId })
+    .from(voiceClones)
+    .where(and(eq(voiceClones.id, cloneId), eq(voiceClones.userId, userId)))
+    .get();
+  if (!row) return { ok: false, error: "invalidInput" };
+  if (row.pid && deps.tts) {
+    try {
+      await deps.tts.deleteVoice(row.pid);
+    } catch (err) {
+      console.error(
+        "[ses] sağlayıcıdaki klon silinemedi:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+  await db
+    .delete(voiceClones)
+    .where(and(eq(voiceClones.id, cloneId), eq(voiceClones.userId, userId)));
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------- hesap yönetimi
@@ -682,6 +936,7 @@ export async function deleteAccount(
   input: { confirmEmail: string; password?: string | undefined },
   ip: string | null,
   now: Date,
+  cleanup: { tts: TtsProvider | null; storage: AudioStorage | null } = { tts: null, storage: null },
 ): Promise<Result<object, "confirmMismatch" | "invalidCredentials"> | RateLimited> {
   const row = await authRow(db, userId);
   if (!row) return { ok: false, error: "invalidCredentials" };
@@ -696,6 +951,30 @@ export async function deleteAccount(
     );
     if (!check.ok) return check;
   }
+
+  // Kişisel veri dışarıda kalmasın: sağlayıcıdaki klonlar ve ses dosyaları da silinir.
+  // Bunlar en iyi çabayla yapılır; başarısızlık hesap silmeyi durdurmaz, loglanır.
+  if (cleanup.tts) {
+    const clones = await db
+      .select({ pid: voiceClones.providerVoiceId })
+      .from(voiceClones)
+      .where(and(eq(voiceClones.userId, userId), isNotNull(voiceClones.providerVoiceId)));
+    for (const c of clones) {
+      await cleanup.tts
+        .deleteVoice(c.pid!)
+        .catch((err: unknown) =>
+          console.error("[ses] klon silinemedi:", err instanceof Error ? err.message : err),
+        );
+    }
+  }
+  if (cleanup.storage) {
+    await cleanup.storage
+      .removePrefix(userId)
+      .catch((err: unknown) =>
+        console.error("[ses] dosyalar silinemedi:", err instanceof Error ? err.message : err),
+      );
+  }
+
   await db.transaction(async (tx) => {
     for (const table of [
       sessions,

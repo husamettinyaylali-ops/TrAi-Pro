@@ -19,6 +19,10 @@ export const LIMITS = {
   resetPerIp: { max: 10, windowMs: 60 * MINUTE },
   /** Aynı kullanıcıya saatte en fazla 3 doğrulama e-postası. */
   verifyResendPerUser: { max: 3, windowMs: 60 * MINUTE },
+  /** Aynı kullanıcı dakikada en fazla 20 seslendirme (ücretli servise yığılmayı önler). */
+  ttsPerUser: { max: 20, windowMs: MINUTE },
+  /** Aynı kullanıcı saatte en fazla 5 ses klonlama denemesi. */
+  clonePerUser: { max: 5, windowMs: 60 * MINUTE },
 } as const satisfies Record<string, Limit>;
 
 export type LimitCheck = { allowed: true } | { allowed: false; retryAfterMs: number };

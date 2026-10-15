@@ -29,6 +29,13 @@
       "when": 1792081965854,
       "tag": "0003_eposta",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792085145364,
+      "tag": "0004_ses_uretimi",
+      "breakpoints": true
     }
   ]
 }

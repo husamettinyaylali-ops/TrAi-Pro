@@ -11,13 +11,15 @@ import { z } from "zod";
 import { resolveAppUrl } from "@/lib/app-url";
 import { clock } from "@/lib/clock";
 import type { Lang } from "@/lib/i18n";
-import type { Account, SessionPayload } from "@/lib/types";
+import type { Account, SessionPayload, StudioConfig } from "@/lib/types";
 
+import { audioStorage } from "@/server/audio-storage.server";
 import { getDb } from "@/server/db.server";
 import { getMailer } from "@/server/email.server";
 import { env, isProduction } from "@/server/env.server";
 import * as svc from "@/server/services.server";
 import { SESSION_COOKIE } from "@/server/session.server";
+import { cachedVoices, publicVoices, ttsProvider, voiceAllowList } from "@/server/tts.server";
 
 // İstemci bu dosyadaki fonksiyonları RPC olarak çağırır; gövdeler yalnız sunucuda çalışır.
 
@@ -143,12 +145,57 @@ const generateSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("video"), text: z.string().max(1_000), styleIndex: z.number().int() }),
 ]);
 
+/** ElevenLabs bağlıysa gerçek seslendirme bağımlılıkları; değilse null (demo kip). */
+function speechDeps(): svc.SpeechDeps | null {
+  const tts = ttsProvider();
+  if (!tts) return null;
+  return {
+    tts,
+    storage: audioStorage(),
+    catalog: async () =>
+      publicVoices(
+        await cachedVoices(tts),
+        await svc.clonedProviderIds(await getDb()),
+        voiceAllowList(),
+      ),
+  };
+}
+
+/** Stüdyonun kipi ve hazır ses listesi. Liste alınamazsa canlı kipte boş döner. */
+export const getStudioConfig = createServerFn({ method: "GET" }).handler(
+  async (): Promise<StudioConfig> => {
+    const deps = speechDeps();
+    if (!deps) return { tts: "demo", cloning: false, voices: [] };
+    try {
+      const voices = await deps.catalog();
+      return {
+        tts: "live",
+        cloning: true,
+        voices: voices.map(({ id, name, gender }) => ({ id, name, gender })),
+      };
+    } catch (err) {
+      console.error("[ses] ses listesi alınamadı:", err instanceof Error ? err.message : err);
+      return { tts: "live", cloning: true, voices: [] };
+    }
+  },
+);
+
 export const generate = createServerFn({ method: "POST" })
   .validator(parse(generateSchema))
   .handler(async ({ data }) => {
     const user = await currentUser();
     if (!user) return { ok: false as const, error: "unauthorized" as const };
-    const res = await svc.generateContent(await getDb(), user.id, data, clock());
+    const db = await getDb();
+    if (data.type === "tts") {
+      // Servis bağlıyken demo seslendirmeye hiç düşülmez (sahte çıktıya kredi düşmesin).
+      const deps = speechDeps();
+      if (deps) {
+        const res = await svc.generateSpeech(db, deps, user.id, data, clock());
+        if (!res.ok) return res;
+        return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
+      }
+    }
+    const res = await svc.generateContent(db, user.id, data, clock());
     if (!res.ok) return res;
     return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
   });
@@ -158,16 +205,65 @@ export const deleteGeneration = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const user = await currentUser();
     if (!user) return { ok: false as const, error: "unauthorized" as const };
-    await svc.removeGeneration(await getDb(), user.id, data.id);
+    await svc.removeGeneration(await getDb(), user.id, data.id, audioStorage());
     return { ok: true as const, session: await payloadFor(user) };
   });
 
+/** Demo klon (yalnız ad). Servis bağlıyken kullanılmaz; gerçek klon uploadClone ile. */
 export const addClone = createServerFn({ method: "POST" })
   .validator(parse(z.object({ name: z.string().max(80) })))
   .handler(async ({ data }) => {
     const user = await currentUser();
     if (!user) return { ok: false as const, error: "unauthorized" as const };
+    if (ttsProvider()) return { ok: false as const, error: "invalidInput" as const };
     const res = await svc.addVoiceClone(await getDb(), user.id, data.name, clock());
+    if (!res.ok) return res;
+    return { ok: true as const, session: await payloadFor(user) };
+  });
+
+/** Gerçek ses klonu: FormData ile ad, izin onayı ve ses dosyası. */
+export const uploadClone = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    if (!(input instanceof FormData)) throw new Error("FormData bekleniyor");
+    return input;
+  })
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    const tts = ttsProvider();
+    const name = data.get("name");
+    const file = data.get("file");
+    if (!tts || typeof name !== "string" || !(file instanceof File)) {
+      return { ok: false as const, error: "invalidInput" as const };
+    }
+    // Boyut, dosya belleğe okunmadan önce kontrol edilir.
+    if (file.size > svc.MAX_CLONE_BYTES)
+      return { ok: false as const, error: "invalidInput" as const };
+    const res = await svc.createVoiceClone(
+      await getDb(),
+      { tts },
+      user.id,
+      {
+        name,
+        consent: data.get("consent") === "true",
+        file: {
+          name: file.name || "ornek",
+          type: file.type,
+          data: new Uint8Array(await file.arrayBuffer()),
+        },
+      },
+      clock(),
+    );
+    if (!res.ok) return res;
+    return { ok: true as const, session: await payloadFor(user) };
+  });
+
+export const deleteClone = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ id: z.string().max(80) })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    const res = await svc.deleteVoiceClone(await getDb(), { tts: ttsProvider() }, user.id, data.id);
     if (!res.ok) return res;
     return { ok: true as const, session: await payloadFor(user) };
   });
@@ -232,7 +328,10 @@ export const deleteAccount = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const user = await currentUser();
     if (!user) return unauthorized;
-    const res = await svc.deleteAccount(await getDb(), user.id, data, clientIp(), clock());
+    const res = await svc.deleteAccount(await getDb(), user.id, data, clientIp(), clock(), {
+      tts: ttsProvider(),
+      storage: audioStorage(),
+    });
     if (!res.ok) return res;
     deleteCookie(SESSION_COOKIE, { path: "/" });
     return { ok: true as const };

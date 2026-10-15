@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Check,
   Coins,
+  Download,
   Film,
   ImageIcon,
   Loader2,
@@ -33,6 +34,7 @@ import { useFormat, useI18n } from "@/lib/i18n";
 import { gens } from "@/lib/samples";
 import { clock } from "@/lib/clock";
 import { useApp, type Generation } from "@/lib/store";
+import { useStudioConfig } from "@/lib/studio-config";
 import { canSpeak, speak, stockVoices, stopSpeaking, type Voice } from "@/lib/voices";
 
 export const Panel = ({
@@ -95,60 +97,144 @@ export function Balances() {
   );
 }
 
-function useVoices(): Voice[] {
+/**
+ * Canlı kipte: sağlayıcının hazır sesleri ve kullanıcının canlı klonları.
+ * Demo kipte: örnek sesler ve tüm klonlar. Yapılandırma yüklenirken liste boştur.
+ */
+function useVoices(): { voices: Voice[]; live: boolean; loading: boolean } {
   const { data } = useApp();
-  return [
-    ...data.clones.map(
-      (c) =>
-        ({ id: c.id, name: c.name, lang: "tr-TR", gender: null, cloned: true }) satisfies Voice,
-    ),
-    ...stockVoices,
-  ];
+  const config = useStudioConfig();
+  if (config.isPending) return { voices: [], live: false, loading: true };
+  if (config.data?.tts === "live") {
+    return {
+      live: true,
+      loading: false,
+      voices: [
+        ...data.clones
+          .filter((c) => c.live)
+          .map(
+            (c) =>
+              ({
+                id: c.id,
+                name: c.name,
+                lang: "multi",
+                gender: null,
+                cloned: true,
+              }) satisfies Voice,
+          ),
+        ...config.data.voices.map(
+          (v) => ({ id: v.id, name: v.name, lang: "multi", gender: v.gender }) satisfies Voice,
+        ),
+      ],
+    };
+  }
+  return {
+    live: false,
+    loading: false,
+    voices: [
+      ...data.clones.map(
+        (c) =>
+          ({ id: c.id, name: c.name, lang: "tr-TR", gender: null, cloned: true }) satisfies Voice,
+      ),
+      ...stockVoices,
+    ],
+  };
+}
+
+/** Sunucudan dönen hata sonucunu kullanıcı metnine çevirir. */
+function useActionError() {
+  const { t } = useI18n();
+  return (res: { error: string; retryAfterMinutes?: number }) => {
+    if (res.error === "tooManyAttempts" && res.retryAfterMinutes) {
+      return t.auth.errors.tooManyAttempts(res.retryAfterMinutes);
+    }
+    if (res.error === "providerFailed") return t.labs.providerFailed;
+    if (res.error === "network") return t.auth.errors.network;
+    return t.labs.failed;
+  };
 }
 
 export function TextToSpeech() {
   const { t } = useI18n();
   const f = useFormat();
   const { generate, deleteGeneration, data } = useApp();
-  const voices = useVoices();
+  const { voices, live, loading } = useVoices();
+  const actionError = useActionError();
   const [text, setText] = useState(t.labs.tts.sample);
-  const [voiceId, setVoiceId] = useState(voices[0]?.id ?? "defne");
+  const [voiceId, setVoiceId] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<"insufficient" | "empty" | "failed" | null>(null);
+  const [error, setError] = useState<
+    { kind: "insufficient" } | { kind: "text"; text: string } | null
+  >(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const [speechOk, setSpeechOk] = useState(true);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     setSpeechOk(canSpeak());
-    return () => stopSpeaking();
+    return () => {
+      stopSpeaking();
+      audioRef.current?.pause();
+    };
   }, []);
 
-  const cost = ttsCost(text);
-  const voiceOf = (id?: string) => voices.find((v) => v.id === id) ?? stockVoices[0]!;
-  const history = data.generations.filter((g) => g.type === "tts");
+  // Seçili ses listede yoksa (ilk yükleme, kip değişimi) ilk sese geçilir.
+  useEffect(() => {
+    if (voices.length && !voices.some((v) => v.id === voiceId)) setVoiceId(voices[0]!.id);
+  }, [voices, voiceId]);
 
-  const play = (g: Generation) => {
+  const cost = ttsCost(text);
+  const voiceOf = (id?: string) => voices.find((v) => v.id === id);
+  const history = data.generations.filter((g) => g.type === "tts");
+  const serviceDown = live && !loading && voices.length === 0;
+
+  /** Demo üretimi tarayıcının konuşma sentezi ile önizler. */
+  const preview = (g: Generation) => {
     if (playing === g.id) {
       stopSpeaking();
       return setPlaying(null);
     }
     setPlaying(g.id);
-    speak(g.text, voiceOf(g.voiceId), () => setPlaying((p) => (p === g.id ? null : p)));
+    speak(g.text, voiceOf(g.voiceId) ?? stockVoices[0]!, () =>
+      setPlaying((p) => (p === g.id ? null : p)),
+    );
   };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (cost === 0) return setError("empty");
+    if (cost === 0) return setError({ kind: "text", text: t.labs.tts.emptyText });
     setError(null);
     setBusy(true);
     const res = await generate({ type: "tts", text: text.trim(), voiceId });
     setBusy(false);
-    if (!res.ok) return setError(res.error === "insufficient" ? "insufficient" : "failed");
-    play(res.generation);
+    if (!res.ok) {
+      return setError(
+        res.error === "insufficient"
+          ? { kind: "insufficient" }
+          : { kind: "text", text: actionError(res) },
+      );
+    }
+    if (res.generation.audioUrl) {
+      audioRef.current?.pause();
+      audioRef.current = new Audio(res.generation.audioUrl);
+      // Otomatik oynatma tarayıcıca engellenirse kullanıcı geçmişten dinler.
+      void audioRef.current.play().catch(() => undefined);
+    } else {
+      preview(res.generation);
+    }
   };
 
-  const label = (v: Voice) =>
-    `${v.name} · ${v.cloned ? t.labs.tts.cloned : v.gender === "male" ? t.labs.tts.male : t.labs.tts.female} · ${v.lang}`;
+  const label = (v: Voice) => {
+    const kind = v.cloned
+      ? t.labs.tts.cloned
+      : v.gender === "male"
+        ? t.labs.tts.male
+        : v.gender === "female"
+          ? t.labs.tts.female
+          : null;
+    const lang = v.lang === "multi" ? t.labs.tts.multilingual : v.lang;
+    return [v.name, kind, lang].filter(Boolean).join(" · ");
+  };
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[1.4fr_1fr]">
@@ -180,8 +266,10 @@ export function TextToSpeech() {
               id="tts-voice"
               className={field}
               value={voiceId}
+              disabled={loading || serviceDown}
               onChange={(e) => setVoiceId(e.target.value)}
             >
+              {loading && <option value="">{t.loading}</option>}
               {voices.map((v) => (
                 <option key={v.id} value={v.id}>
                   {label(v)}
@@ -189,23 +277,31 @@ export function TextToSpeech() {
               ))}
             </select>
           </div>
-          {error === "insufficient" && <Insufficient />}
-          {error === "empty" && (
+          {serviceDown && (
             <p role="alert" className="text-sm text-destructive">
-              {t.labs.tts.emptyText}
+              {t.labs.tts.serviceDown}
             </p>
           )}
-          {error === "failed" && (
+          {error?.kind === "insufficient" && <Insufficient />}
+          {error?.kind === "text" && (
             <p role="alert" className="text-sm text-destructive">
-              {t.labs.failed}
+              {error.text}
             </p>
           )}
-          {!speechOk && <p className="text-xs text-muted-foreground">{t.labs.tts.noSpeech}</p>}
-          <button type="submit" disabled={busy} className={btnPrimary}>
+          {!live && !speechOk && (
+            <p className="text-xs text-muted-foreground">{t.labs.tts.noSpeech}</p>
+          )}
+          <button
+            type="submit"
+            disabled={busy || loading || serviceDown || !voiceId}
+            className={btnPrimary}
+          >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
             {busy ? t.labs.tts.working : t.labs.tts.submit}
           </button>
-          <p className="text-xs text-muted-foreground">{t.labs.demoResult}</p>
+          {!live && !loading && (
+            <p className="text-xs text-muted-foreground">{t.labs.demoResult}</p>
+          )}
         </form>
       </Panel>
 
@@ -218,24 +314,36 @@ export function TextToSpeech() {
             {history.map((g) => (
               <li key={g.id} className="rounded-2xl bg-muted/50 p-3">
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => play(g)}
-                    aria-label={playing === g.id ? t.labs.tts.stop : t.labs.tts.play}
-                    className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-brand text-primary-foreground"
-                  >
-                    {playing === g.id ? (
-                      <Square className="h-4 w-4" />
-                    ) : (
-                      <Play className="h-4 w-4" />
-                    )}
-                  </button>
+                  {!g.audioUrl && (
+                    <button
+                      onClick={() => preview(g)}
+                      aria-label={playing === g.id ? t.labs.tts.stop : t.labs.tts.play}
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-brand text-primary-foreground"
+                    >
+                      {playing === g.id ? (
+                        <Square className="h-4 w-4" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{g.text}</p>
                     <p className="text-xs text-muted-foreground">
-                      {voiceOf(g.voiceId).name} · {f.dateTime(g.createdAt)} · {f.num(g.cost)}{" "}
-                      {t.labs.creditsShort}
+                      {voiceOf(g.voiceId)?.name ?? t.labs.tts.unknownVoice} ·{" "}
+                      {f.dateTime(g.createdAt)} · {f.num(g.cost)} {t.labs.creditsShort}
                     </p>
                   </div>
+                  {g.audioUrl && (
+                    <a
+                      href={`${g.audioUrl}?download=1`}
+                      aria-label={t.labs.tts.download}
+                      title={t.labs.tts.download}
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:text-cyan"
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
+                  )}
                   <button
                     onClick={() => deleteGeneration(g.id)}
                     aria-label={t.labs.delete}
@@ -244,10 +352,20 @@ export function TextToSpeech() {
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
-                {playing === g.id && (
-                  <div className="mt-2 overflow-hidden">
-                    <Waveform playing bars={40} />
-                  </div>
+                {g.audioUrl ? (
+                  <audio
+                    controls
+                    preload="none"
+                    src={g.audioUrl}
+                    className="mt-2 w-full"
+                    aria-label={`${t.labs.tts.play}: ${g.text.slice(0, 60)}`}
+                  />
+                ) : (
+                  playing === g.id && (
+                    <div className="mt-2 overflow-hidden">
+                      <Waveform playing bars={40} />
+                    </div>
+                  )
                 )}
               </li>
             ))}
@@ -258,10 +376,16 @@ export function TextToSpeech() {
   );
 }
 
+/** Klon için yüklenebilecek en büyük dosya (sunucudaki sınırla aynı). */
+const MAX_CLONE_MB = 10;
+
 export function VoiceClone() {
   const { t } = useI18n();
   const f = useFormat();
-  const { data, addClone } = useApp();
+  const { data, addClone, uploadClone, deleteClone } = useApp();
+  const config = useStudioConfig();
+  const actionError = useActionError();
+  const live = config.data?.cloning === true;
   const [name, setName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [consent, setConsent] = useState(false);
@@ -272,27 +396,51 @@ export function VoiceClone() {
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const full = data.clones.length >= MAX_CLONES;
-  const ready = name.trim() && file && consent && !full;
+  const ready = name.trim() && file && consent && !full && !config.isPending;
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!ready) return;
-    setError(null);
+  const reset = () => {
+    setName("");
+    setFile(null);
+    setConsent(false);
+  };
+
+  /** Adımlar yükleme sürerken ilerler; son adım yanıt gelince tamamlanır. */
+  const animate = () => {
     setStep(0);
-    [1, 2, 3].forEach((s) =>
-      timers.current.push(
-        window.setTimeout(async () => {
-          if (s < 3) return setStep(s);
-          const res = await addClone(name);
-          setStep(3);
-          if (!res.ok) {
-            return setError(res.error === "limit" ? t.labs.clone.limit(MAX_CLONES) : t.labs.failed);
-          }
-          setName("");
-          setFile(null);
-          setConsent(false);
-        }, s * 1100),
-      ),
+    [1, 2].forEach((s) => timers.current.push(window.setTimeout(() => setStep(s), s * 1100)));
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!ready || !file) return;
+    setError(null);
+    if (live) {
+      if (file.size > MAX_CLONE_MB * 1024 * 1024)
+        return setError(t.labs.clone.tooBig(MAX_CLONE_MB));
+      animate();
+      const form = new FormData();
+      form.append("name", name.trim());
+      form.append("consent", "true");
+      form.append("file", file);
+      const res = await uploadClone(form);
+      timers.current.forEach(clearTimeout);
+      if (!res.ok) {
+        setStep(-1);
+        return setError(res.error === "limit" ? t.labs.clone.limit(MAX_CLONES) : actionError(res));
+      }
+      setStep(3);
+      return reset();
+    }
+    animate();
+    timers.current.push(
+      window.setTimeout(async () => {
+        const res = await addClone(name);
+        setStep(3);
+        if (!res.ok) {
+          return setError(res.error === "limit" ? t.labs.clone.limit(MAX_CLONES) : t.labs.failed);
+        }
+        reset();
+      }, 3300),
     );
   };
 
@@ -361,7 +509,7 @@ export function VoiceClone() {
             {t.labs.clone.submit}
           </button>
           <p className="text-xs text-muted-foreground">
-            {t.labs.clone.free} {t.labs.demoResult}
+            {live ? t.labs.clone.liveNote : `${t.labs.clone.free} ${t.labs.demoResult}`}
           </p>
         </form>
       </Panel>
@@ -375,13 +523,28 @@ export function VoiceClone() {
             {data.clones.map((c) => (
               <li
                 key={c.id}
-                className="flex items-center justify-between rounded-2xl bg-muted/50 px-4 py-3 text-sm"
+                className="flex items-center justify-between gap-3 rounded-2xl bg-muted/50 py-1 pl-4 pr-1 text-sm"
               >
-                <span className="flex items-center gap-2 font-medium">
-                  <Mic className="h-4 w-4 text-cyan" />
-                  {c.name}
+                <span className="flex min-w-0 items-center gap-2 font-medium">
+                  <Mic className="h-4 w-4 shrink-0 text-cyan" aria-hidden />
+                  <span className="truncate">{c.name}</span>
+                  {live && !c.live && (
+                    <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                      {t.labs.clone.demoBadge}
+                    </span>
+                  )}
                 </span>
-                <span className="text-xs text-muted-foreground">{f.date(c.createdAt)}</span>
+                <span className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">{f.date(c.createdAt)}</span>
+                  <button
+                    type="button"
+                    onClick={() => deleteClone(c.id)}
+                    aria-label={`${t.labs.clone.deleteClone}: ${c.name}`}
+                    className="grid h-11 w-11 place-items-center rounded-full text-muted-foreground transition hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
