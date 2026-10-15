@@ -19,6 +19,8 @@ Kredi tabanlı yapay zeka ses, video ve görsel platformu. Yapı ve kapsam için
 - **Ücretli dış servisler** (ElevenLabs vb.) bir arayüz arkasındadır (`TtsProvider`); testlerde sahte uygulama verilir, gerçek servise istek gitmez. Kredi yalnız servis başarılı olduktan sonra, tek transaction'da düşülür (`chargeAndRecord`). Servis bağlıyken demo üretim yoluna düşülmez (sahte çıktıya kredi düşmesin). Sağlayıcı hata gövdeleri loglanmaz (girdi metnini yansıtabilir).
 - **Ses klonu** kullanıcının izin onayı olmadan açılmaz; onay zamanı `consent_at`'e yazılır. Hazır ses listesinden kullanıcı klonları ayıklanır (`publicVoices`). Klon ya da hesap silinince sağlayıcıdaki ses ve depodaki dosyalar da silinir.
 - **Kullanıcı dosyaları** (`/media/...`) yalnız sahibine sunulur; başkasının kaydı için 404 döner.
+- **Bakiye** yalnız defter kayıtlarıyla değişir (`wallet_entries`, değiştirilmez). Bakiyeye yükleme yalnız `completeTopUp()` ile yazılır (idempotent; işlem kimliği yöntem başına benzersiz); paket alımı `purchasePackage()` ile bakiyeden, tek transaction'da.
+- **Ödeme alıcı bilgileri** (cüzdan adresi, Binance kimliği, PayPal hesabı) yalnız `.env`'den gelir; koda yazılmaz. Başka bir sitenin ekran görüntüsündeki alıcı bilgileri asla kullanılmaz.
 - **Deneme kredisi** yalnız `markEmailVerified()` ile tanımlanır (doğrulama, şifre sıfırlama ya da Google); tekrar çağrılması zararsızdır.
 - **Ortam değişkenleri** yalnız `env()` (`src/server/env.server.ts`) ile okunur; geliştirmede `.env` oradan yüklenir.
 - **Dış kimlik (Google):** hesaplar `oauth_accounts` ile bağlanır. Aynı e-postalı şifreli hesap otomatik bağlanmaz (önceden ele geçirme riski). Sunucu rotaları (`src/routes/auth/…`) yalnız `server.handlers` içerir ve tam sayfa bağlantıyla (`<a href>`) açılır.
