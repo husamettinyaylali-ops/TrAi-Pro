@@ -40,7 +40,7 @@ npm run db:generate  # şema değişince yeni migration üretir (drizzle/)
 npm run db:studio    # veritabanını tarayıcıda incele
 ```
 
-Ortam değişkenleri için `.env.example` dosyasına bakın. Hiçbiri zorunlu değildir; varsayılan veritabanı `data/trai-pro.db`'dir. `.env` sunucu başlarken okunur; değiştirdikten sonra sunucuyu yeniden başlatın.
+Ortam değişkenleri için `.env.example` dosyasına bakın. Hiçbiri zorunlu değildir; varsayılan veritabanı `data/trai-pro.db`'dir. Geliştirmede `.env`'ye yeni eklenen değerler sunucu yeniden başlatılmadan okunur; var olan bir değeri değiştirdiyseniz sunucuyu yeniden başlatın.
 
 ## Google ile giriş kurulumu
 
