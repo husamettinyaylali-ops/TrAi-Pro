@@ -19,15 +19,15 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 
 ## Durum
 
-**Hazır:** Hesaplar, oturumlar, krediler, siparişler ve üretim geçmişi sunucuda, SQLite veritabanında tutulur (Drizzle ORM + libSQL). Şifreler scrypt ile özetlenir; oturum `httpOnly` çerezle taşınır, veritabanında yalnız token özeti durur. Kredi maliyeti sunucuda hesaplanır ve tek transaction içinde düşülür. E-posta/şifreye ek olarak Google ile giriş ve kayıt vardır (aşağıdaki kuruluma bakın). Kaba kuvvete karşı deneme sınırı uygulanır: aynı e-postaya 15 dakikada 5, aynı IP'den 15 dakikada 20 başarısız şifre denemesi; aynı IP'den saatte 5 kayıt (`src/lib/rate-limit.ts`). Proxy arkasında `TRUST_PROXY=on` ayarlanmalıdır. Hesap sayfasında şifre değişince diğer cihazlardaki oturumlar kapanır; şifreyle açılmış hesaba Google kullanıcının kendi isteğiyle bağlanabilir; hesap silme e-posta onayı (şifreli hesapta şifre de) ister ve kullanıcının tüm verisini siler. Kayıtta doğrulama e-postası gider; **5.000 deneme kredisi e-posta doğrulanınca** tanımlanır (Google ile açılan hesaplar doğrulanmış sayılır). Şifremi unuttum bağlantısı 1 saat, doğrulama bağlantısı 24 saat geçerlidir; ikisi de tek kullanımlıktır ve veritabanında yalnız özetleri durur. Şifre değişince "şifren değiştirildi" bildirimi gider.
+**Hazır:** Hesaplar, oturumlar, krediler, siparişler ve üretim geçmişi sunucuda, SQLite veritabanında tutulur (Drizzle ORM + libSQL). Şifreler scrypt ile özetlenir; oturum `httpOnly` çerezle taşınır, veritabanında yalnız token özeti durur. Kredi maliyeti sunucuda hesaplanır ve tek transaction içinde düşülür. E-posta/şifreye ek olarak Google ile giriş ve kayıt vardır (aşağıdaki kuruluma bakın). Kaba kuvvete karşı deneme sınırı uygulanır: aynı e-postaya 15 dakikada 5, aynı IP'den 15 dakikada 20 başarısız şifre denemesi; aynı IP'den saatte 5 kayıt (`src/lib/rate-limit.ts`). Proxy arkasında `TRUST_PROXY=on` ayarlanmalıdır. Hesap sayfasında şifre değişince diğer cihazlardaki oturumlar kapanır; şifreyle açılmış hesaba Google kullanıcının kendi isteğiyle bağlanabilir; hesap silme e-posta onayı (şifreli hesapta şifre de) ister; kişisel veriler (oturumlar, krediler, üretimler, ses klonları, Google bağlantısı) silinir, ödeme ve sipariş kayıtları yasal saklama için ad ve e-posta olmadan tutulur (`users.deleted_at`). Aynı e-postayla yeniden kayıt olunabilir. Kayıtta doğrulama e-postası gider; **5.000 deneme kredisi e-posta doğrulanınca** tanımlanır (Google ile açılan hesaplar doğrulanmış sayılır). Şifremi unuttum bağlantısı 1 saat, doğrulama bağlantısı 24 saat geçerlidir; ikisi de tek kullanımlıktır ve veritabanında yalnız özetleri durur. Şifre değişince "şifren değiştirildi" bildirimi gider.
 
 **Ödeme modeli (genaipro.io ile aynı):** Kullanıcı önce USD bakiye yükler (en az $5), paketleri bakiyeden alır. Bakiye, değiştirilemez bir defterde tutulur (`wallet_entries`): yükleme artı, alım eksi kayıt; düzeltme yeni kayıtla yapılır. Bakiye yükleme talepleri (`payment_intents`) 1 saat geçerlidir; kripto yöntemlerinde ödemeyi kullanıcıya bağlamak için kuruşuna kadar benzersiz tutar atanır (ör. 10,0347 USDT). Sağlayıcı işlem kimliği benzersizdir, aynı ödeme iki kez bakiyeye yazılamaz. Yöntemler: USDT (BEP20), Binance Pay, PayPal/kart. Geliştirmede (üretimde yalnız `DEMO_PAYMENTS=on` ile) "Demo bakiye" yöntemi gerçek ödeme almadan bakiye yükler.
 
-**Demo olan kısımlar:**
+**Anahtara bağlı ya da demo olan kısımlar:**
 
-- Ödeme: gerçek yöntemler bağlanana kadar yalnız demo bakiye yüklemesi vardır.
-- Üretim: seslendirme önizlemesi tarayıcının konuşma sentezini, görsel/video sonuçları örnek görselleri kullanır. Yapay zeka API'leri henüz bağlı değil.
-- Ses klonlama: yüklenen dosya saklanmaz; yalnız klon adı kaydedilir.
+- Ödeme: her yöntem kendi anahtarları `.env`'e yazılınca açılır (aşağıdaki kurulumlar). Hiçbiri açık değilse geliştirmede yalnız demo bakiye vardır ve ödeme sayfası bunu belirtir.
+- Seslendirme ve ses klonlama: `ELEVENLABS_API_KEY` varsa gerçek; yoksa seslendirme tarayıcının konuşma sentezini kullanır, klonda yalnız ad kaydedilir.
+- Görsel ve video: yapay zeka API'si henüz bağlı değil; sonuçlar örnek görsellerdir ve stüdyo bunu belirtir.
 
 ## Geliştirme
 
@@ -44,7 +44,7 @@ npm run db:generate  # şema değişince yeni migration üretir (drizzle/)
 npm run db:studio    # veritabanını tarayıcıda incele
 ```
 
-Ortam değişkenleri için `.env.example` dosyasına bakın. Hiçbiri zorunlu değildir; varsayılan veritabanı `data/trai-pro.db`'dir. Geliştirmede `.env`'ye yeni eklenen değerler sunucu yeniden başlatılmadan okunur; var olan bir değeri değiştirdiyseniz sunucuyu yeniden başlatın.
+Ortam değişkenleri için `.env.example` dosyasına bakın. Hiçbiri zorunlu değildir; varsayılan veritabanı `data/trai-pro.db`'dir. Geliştirmede `.env`'ye yeni eklenen değerler sunucu yeniden başlatılmadan okunur; var olan bir değeri değiştirdiyseniz (`.env`'de boş duran bir anahtarı doldurmak dahil) sunucuyu yeniden başlatın.
 
 ## USDT (BEP20) ile bakiye yükleme
 
