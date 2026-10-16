@@ -182,7 +182,7 @@ Gereken: Docker ve Docker Compose kurulu bir Linux sunucu (2 GB RAM yeterli), su
    - PayPal webhook: `https://<DOMAIN>/webhooks/paypal` (`PAYMENT.CAPTURE.COMPLETED`) → `PAYPAL_WEBHOOK_ID`
    - fal.ai video webhook'u ayrıca ayar istemez; `PUBLIC_URL` varken her işle birlikte gönderilir (`/webhooks/fal`).
 
-**Veri ve yedek:** Veritabanı, üretilen dosyalar ve yedekler `trai-data` Docker biriminde (`/data`) durur; imaj yenilense de korunur. Uygulama her gün `VACUUM INTO` ile tutarlı bir veritabanı yedeği alır (`/data/backups`, son 7 gün). Yedekleri ve dosyaları sunucu dışına da kopyalayın, ör. her gece:
+**Veri ve yedek:** Veritabanı, üretilen dosyalar ve yedekler `trai-data` Docker biriminde (`/data`) durur; imaj yenilense de korunur. Uygulama her gün `VACUUM INTO` ile tutarlı bir veritabanı yedeği alır (`/data/backups`, son 7 gün). Aynı günlük bakım süresi dolmuş oturumları siler ve hesabı silinmiş kullanıcıların anonim ödeme/sipariş kayıtlarını saklama süresi (`RETENTION_YEARS`, varsayılan 10 yıl; `off` kapatır) dolunca temizler. Yedekleri ve dosyaları sunucu dışına da kopyalayın, ör. her gece:
 
 ```sh
 docker run --rm -v trai-pro_trai-data:/data -v "$PWD/yedek":/yedek alpine \

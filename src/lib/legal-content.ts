@@ -85,7 +85,7 @@ export const legalContent: Record<LegalDoc, Record<Lang, Section[]>> = {
       },
       {
         h: "5. Saklama ve güvenlik",
-        p: "Bağlantılar HTTPS ile şifrelenir; şifreler ve oturum anahtarları geri döndürülemez özet olarak saklanır. Hesap silindiğinde kişisel veriler (üretimler ve dosyaları, ses klonları, oturumlar, API anahtarları) silinir; ödeme ve sipariş kayıtları yasal saklama süresince ad ve e-posta olmadan tutulur. Sunucudaki günlük veritabanı yedekleri 7 gün saklanır.",
+        p: "Bağlantılar HTTPS ile şifrelenir; şifreler ve oturum anahtarları geri döndürülemez özet olarak saklanır. Hesap silindiğinde kişisel veriler (üretimler ve dosyaları, ses klonları, oturumlar, API anahtarları) silinir; ödeme ve sipariş kayıtları yasal saklama için 10 yıl boyunca ad ve e-posta olmadan tutulur, sonra silinir. Sunucudaki günlük veritabanı yedekleri 7 gün saklanır.",
       },
       {
         h: "6. Çerezler",
@@ -115,7 +115,7 @@ export const legalContent: Record<LegalDoc, Record<Lang, Section[]>> = {
       },
       {
         h: "5. Retention and security",
-        p: "Connections are encrypted with HTTPS; passwords and session keys are stored as irreversible hashes. When you delete your account, personal data (generations and their files, voice clones, sessions, API keys) is deleted; payment and order records are kept without your name or email for the legally required period. Daily database backups on the server are kept for 7 days.",
+        p: "Connections are encrypted with HTTPS; passwords and session keys are stored as irreversible hashes. When you delete your account, personal data (generations and their files, voice clones, sessions, API keys) is deleted; payment and order records are kept without your name or email for 10 years for legal retention, then deleted. Daily database backups on the server are kept for 7 days.",
       },
       {
         h: "6. Cookies",
