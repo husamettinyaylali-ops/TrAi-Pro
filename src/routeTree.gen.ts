@@ -26,6 +26,7 @@ import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AuthGoogleRouteImport } from './routes/auth/google'
+import { Route as WebhooksFalRouteImport } from './routes/webhooks/fal'
 import { Route as WebhooksPaypalRouteImport } from './routes/webhooks/paypal'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as MediaAudioIdRouteImport } from './routes/media/audio/$id'
@@ -116,6 +117,11 @@ const AuthGoogleRoute = AuthGoogleRouteImport.update({
   path: '/auth/google',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WebhooksFalRoute = WebhooksFalRouteImport.update({
+  id: '/webhooks/fal',
+  path: '/webhooks/fal',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WebhooksPaypalRoute = WebhooksPaypalRouteImport.update({
   id: '/webhooks/paypal',
   path: '/webhooks/paypal',
@@ -155,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
+  '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
+  '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
+  '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
+    | '/webhooks/fal'
     | '/webhooks/paypal'
     | '/auth/google/callback'
     | '/media/audio/$id'
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
+    | '/webhooks/fal'
     | '/webhooks/paypal'
     | '/auth/google/callback'
     | '/media/audio/$id'
@@ -273,6 +284,7 @@ export interface FileRouteTypes {
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
+    | '/webhooks/fal'
     | '/webhooks/paypal'
     | '/auth/google/callback'
     | '/media/audio/$id'
@@ -297,6 +309,7 @@ export interface RootRouteChildren {
   TermsOfServiceRoute: typeof TermsOfServiceRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AuthGoogleRoute: typeof AuthGoogleRouteWithChildren
+  WebhooksFalRoute: typeof WebhooksFalRoute
   WebhooksPaypalRoute: typeof WebhooksPaypalRoute
   MediaAudioIdRoute: typeof MediaAudioIdRoute
   MediaFileIdIndexRoute: typeof MediaFileIdIndexRoute
@@ -423,6 +436,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthGoogleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/webhooks/fal': {
+      id: '/webhooks/fal'
+      path: '/webhooks/fal'
+      fullPath: '/webhooks/fal'
+      preLoaderRoute: typeof WebhooksFalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/webhooks/paypal': {
       id: '/webhooks/paypal'
       path: '/webhooks/paypal'
@@ -484,6 +504,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsOfServiceRoute: TermsOfServiceRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AuthGoogleRoute: AuthGoogleRouteWithChildren,
+  WebhooksFalRoute: WebhooksFalRoute,
   WebhooksPaypalRoute: WebhooksPaypalRoute,
   MediaAudioIdRoute: MediaAudioIdRoute,
   MediaFileIdIndexRoute: MediaFileIdIndexRoute,

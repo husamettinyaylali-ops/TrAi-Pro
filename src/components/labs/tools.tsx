@@ -628,10 +628,13 @@ function Locked() {
   );
 }
 
+/** Hazırlanan videoların kontrol aralığı. */
+const VIDEO_POLL_MS = 8_000;
+
 export function MediaStudio({ type }: { type: MediaType }) {
   const { t } = useI18n();
   const f = useFormat();
-  const { data, generate, deleteGeneration } = useApp();
+  const { data, generate, deleteGeneration, checkVideo } = useApp();
   const isVideo = type === "video";
   const copy = isVideo ? t.labs.video : t.labs.image;
   const [prompt, setPrompt] = useState(copy.placeholder);
@@ -639,16 +642,35 @@ export function MediaStudio({ type }: { type: MediaType }) {
   const [style, setStyle] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<
-    "insufficient" | "empty" | "failed" | "providerFailed" | "contentRejected" | null
+    "insufficient" | "empty" | "failed" | "providerFailed" | "contentRejected" | "limit" | null
   >(null);
   const config = useStudioConfig();
-  // Video henüz bir servise bağlı değil; görsel FAL_KEY varsa gerçektir.
-  const live = !isVideo && config.data?.image === "live";
+  // FAL_KEY varsa görsel ve video gerçektir; yoksa örnek görseller.
+  const live = config.data?.[isVideo ? "video" : "image"] === "live";
 
   const now = clock();
   const hasPass = balance(data.grants, "media", now) > 0;
   const cost = mediaCost(type, count);
   const history = data.generations.filter((g) => g.type === type);
+
+  // Hazırlanan videolar sayfa açıkken düzenli kontrol edilir (bitince ya da iade olunca güncellenir).
+  const pendingIds = history
+    .filter((g) => g.status === "pending")
+    .map((g) => g.id)
+    .join(",");
+  const check = useRef(checkVideo);
+  useEffect(() => {
+    check.current = checkVideo;
+  });
+  useEffect(() => {
+    if (!pendingIds) return;
+    const tick = () => {
+      if (!document.hidden) for (const id of pendingIds.split(",")) void check.current(id);
+    };
+    tick();
+    const timer = window.setInterval(tick, VIDEO_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [pendingIds]);
 
   if (!hasPass && history.length === 0) return <Locked />;
 
@@ -666,7 +688,8 @@ export function MediaStudio({ type }: { type: MediaType }) {
     setError(
       res.error === "insufficient" ||
         res.error === "providerFailed" ||
-        res.error === "contentRejected"
+        res.error === "contentRejected" ||
+        res.error === "limit"
         ? res.error
         : "failed",
     );
@@ -736,13 +759,19 @@ export function MediaStudio({ type }: { type: MediaType }) {
               {t.auth.errors.required}
             </p>
           )}
-          {(error === "failed" || error === "providerFailed" || error === "contentRejected") && (
+          {(error === "failed" ||
+            error === "providerFailed" ||
+            error === "contentRejected" ||
+            error === "limit") && (
             <p role="alert" className="text-sm text-destructive">
-              {error === "providerFailed"
-                ? t.labs.imageFailed
-                : error === "contentRejected"
-                  ? t.labs.contentRejected
-                  : t.labs.failed}
+              {
+                {
+                  failed: t.labs.failed,
+                  providerFailed: t.labs.mediaFailed,
+                  contentRejected: t.labs.contentRejected,
+                  limit: t.labs.video.tooMany,
+                }[error]
+              }
             </p>
           )}
           <div className="flex flex-wrap items-center gap-4">
@@ -793,36 +822,74 @@ export function MediaStudio({ type }: { type: MediaType }) {
                       {f.dateTime(g.createdAt)} · {f.num(g.cost)} {t.labs.creditsShort}
                     </span>
                   </p>
-                  <button
-                    onClick={() => deleteGeneration(g.id)}
-                    aria-label={t.labs.delete}
-                    className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {g.status !== "pending" && (
+                    <button
+                      onClick={() => deleteGeneration(g.id)}
+                      aria-label={t.labs.delete}
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
                 <div
                   className={`grid gap-3 ${isVideo ? "sm:grid-cols-2" : "grid-cols-2 md:grid-cols-4"}`}
                 >
-                  {g.fileUrls?.map((url, i) => (
-                    <div key={url} className="group relative overflow-hidden rounded-xl">
-                      <img
-                        src={url}
-                        alt={g.text}
-                        loading="lazy"
-                        className="aspect-square h-full w-full object-cover animate-in fade-in zoom-in-95"
-                      />
-                      <a
-                        href={`${url}?download=1`}
-                        download
-                        aria-label={`${t.labs.downloadImage} ${i + 1}`}
-                        className="absolute bottom-2 right-2 grid h-11 w-11 place-items-center rounded-full bg-background/80 text-foreground opacity-90 transition hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <Download className="h-4 w-4" aria-hidden />
-                      </a>
-                    </div>
-                  ))}
+                  {g.status === "pending" && (
+                    <p
+                      role="status"
+                      className="flex aspect-video flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground"
+                    >
+                      <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                      {t.labs.video.pending}
+                    </p>
+                  )}
+                  {g.status === "failed" && (
+                    <p className="flex aspect-video items-center justify-center rounded-xl border border-destructive/40 p-4 text-center text-sm text-destructive">
+                      {t.labs.video.failedRefund(f.num(g.cost))}
+                    </p>
+                  )}
+                  {isVideo &&
+                    g.fileUrls?.map((url) => (
+                      <div key={url}>
+                        <video
+                          controls
+                          preload="metadata"
+                          src={url}
+                          aria-label={g.text}
+                          className="aspect-video w-full rounded-xl bg-muted"
+                        />
+                        <a
+                          href={`${url}?download=1`}
+                          download
+                          className="mt-1 inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition hover:text-cyan"
+                        >
+                          <Download className="h-4 w-4" aria-hidden />
+                          {t.labs.video.download}
+                        </a>
+                      </div>
+                    ))}
+                  {!isVideo &&
+                    g.fileUrls?.map((url, i) => (
+                      <div key={url} className="group relative overflow-hidden rounded-xl">
+                        <img
+                          src={url}
+                          alt={g.text}
+                          loading="lazy"
+                          className="aspect-square h-full w-full object-cover animate-in fade-in zoom-in-95"
+                        />
+                        <a
+                          href={`${url}?download=1`}
+                          download
+                          aria-label={`${t.labs.downloadImage} ${i + 1}`}
+                          className="absolute bottom-2 right-2 grid h-11 w-11 place-items-center rounded-full bg-background/80 text-foreground opacity-90 transition hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <Download className="h-4 w-4" aria-hidden />
+                        </a>
+                      </div>
+                    ))}
                   {!g.fileUrls &&
+                    !g.status &&
                     (g.images ?? [0]).map((idx, i) => (
                       <div
                         key={i}

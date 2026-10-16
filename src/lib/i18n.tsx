@@ -57,7 +57,7 @@ const tr = {
     costRows: [
       ["Metinden ses", "1 karakter = 1 kredi"],
       ["Görsel üretimi", "Görsel başına 1 kredi"],
-      ["Video üretimi", "Video başına 5 kredi"],
+      ["Video üretimi", "Video başına 15 kredi (5 saniye)"],
       ["Ses klonlama", "Ücretsiz, hesap başına 5 ses"],
     ] as [string, string][],
     faqTitle: "Sıkça Sorulan Sorular",
@@ -136,7 +136,7 @@ const tr = {
     buy: "Kredi Al",
     insufficient: "Bu işlem için yeterli kredin yok.",
     providerFailed: "Ses servisi şu an yanıt vermiyor; kredin düşülmedi. Biraz sonra tekrar dene.",
-    imageFailed: "Görsel servisi şu an yanıt vermiyor; kredin düşülmedi. Biraz sonra tekrar dene.",
+    mediaFailed: "Üretim servisi şu an yanıt vermiyor; kredin düşülmedi. Biraz sonra tekrar dene.",
     contentRejected:
       "Bu istek içerik kurallarına takıldı; kredin düşülmedi. Farklı bir açıklama dene.",
     downloadImage: "Görseli indir",
@@ -202,6 +202,10 @@ const tr = {
       styles: ["Sinematik", "Anime", "3D", "Belgesel"],
       submit: "Video Üret",
       empty: "Henüz video yok.",
+      pending: "Video hazırlanıyor; genellikle 1–3 dakika sürer. Bu sayfadan ayrılabilirsin.",
+      failedRefund: (n: string) => `Video üretilemedi; ${n} kredi iade edildi.`,
+      download: "Videoyu indir",
+      tooMany: "Aynı anda en fazla 3 video hazırlanabilir; birinin bitmesini bekle.",
     },
     working: "Üretiliyor…",
     locked: "Video ve görsel üretimi için aktif bir Video & Görsel paketi gerekir.",
@@ -623,7 +627,7 @@ const en: Dict = {
     costRows: [
       ["Text to speech", "1 character = 1 credit"],
       ["Image generation", "1 credit per image"],
-      ["Video generation", "5 credits per video"],
+      ["Video generation", "15 credits per video (5 seconds)"],
       ["Voice cloning", "Free, up to 5 voices per account"],
     ],
     faqTitle: "Frequently Asked Questions",
@@ -702,7 +706,8 @@ const en: Dict = {
     buy: "Buy Credits",
     insufficient: "You don't have enough credits for this.",
     providerFailed: "The voice service isn't responding; no credits were used. Try again shortly.",
-    imageFailed: "The image service isn't responding; no credits were used. Try again shortly.",
+    mediaFailed:
+      "The generation service isn't responding; no credits were used. Try again shortly.",
     contentRejected:
       "This request was blocked by the content rules; no credits were used. Try a different description.",
     downloadImage: "Download image",
@@ -768,6 +773,11 @@ const en: Dict = {
       styles: ["Cinematic", "Anime", "3D", "Documentary"],
       submit: "Generate Video",
       empty: "No videos yet.",
+      pending:
+        "Your video is being prepared; this usually takes 1–3 minutes. You can leave this page.",
+      failedRefund: (n) => `The video couldn't be generated; ${n} credits were refunded.`,
+      download: "Download video",
+      tooMany: "Up to 3 videos can be prepared at once; wait for one to finish.",
     },
     working: "Generating…",
     locked: "An active Video & Image pack is required to generate video and images.",

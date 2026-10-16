@@ -68,6 +68,8 @@ export interface Generation {
   audioUrl?: string | undefined;
   /** Gerçek görsel/video dosyalarının adresleri (yalnız sahibine sunulur); demo üretimde yok. */
   fileUrls?: string[] | undefined;
+  /** Video hazırlanıyor ya da başarısız oldu (kredisi iade edildi); boşsa tamamlandı. */
+  status?: "pending" | "failed" | undefined;
   cost: number;
   createdAt: string;
 }
@@ -88,6 +90,8 @@ export interface StudioConfig {
   cloning: boolean;
   /** "live": görsel üretim servisi bağlı; "demo": örnek görseller. */
   image: "live" | "demo";
+  /** "live": video üretim servisi bağlı; "demo": örnek görseller. */
+  video: "live" | "demo";
   /** Hazır sesler (live kipte sağlayıcıdan). */
   voices: { id: string; name: string; gender: "female" | "male" | null }[];
 }

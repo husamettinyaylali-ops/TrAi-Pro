@@ -69,9 +69,9 @@ describe("maliyet", () => {
     expect(ttsCost("")).toBe(0);
   });
 
-  it("görsel 1, video 5 kredi", () => {
+  it("görsel 1, video 15 kredi", () => {
     expect(mediaCost("image", 4)).toBe(4);
-    expect(mediaCost("video", 1)).toBe(5);
+    expect(mediaCost("video", 1)).toBe(15);
   });
 
   it("1 USD karşılığı kredi", () => {

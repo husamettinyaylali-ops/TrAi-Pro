@@ -111,10 +111,24 @@ export const generations = sqliteTable(
     audioKey: text("audio_key"),
     /** Gerçek görsel/video üretiminde dosyaların depodaki anahtarları; demo üretimde boş. */
     files: text("files", { mode: "json" }).$type<string[]>(),
+    /**
+     * Uzun süren üretimde (video) iş durumu; boşsa tamamlanmış sayılır.
+     * "failed" olan işin kredisi iade edilmiştir.
+     */
+    status: text("status", { enum: ["pending", "failed"] }),
+    /** Sağlayıcıdaki iş: kuyruk kimliği ve durum/sonuç adresleri. */
+    job: text("job", { mode: "json" }).$type<{
+      requestId: string;
+      statusUrl: string;
+      responseUrl: string;
+      cancelUrl: string | null;
+    }>(),
+    /** Hangi paketten kaç kredi düşüldüğü; başarısız işte aynı paketlere iade edilir. */
+    charges: text("charges", { mode: "json" }).$type<{ grantId: string; amount: number }[]>(),
     cost: integer("cost").notNull(),
     createdAt: text("created_at").notNull(),
   },
-  (t) => [index("generations_user_idx").on(t.userId)],
+  (t) => [index("generations_user_idx").on(t.userId), index("generations_status_idx").on(t.status)],
 );
 
 export const voiceClones = sqliteTable(

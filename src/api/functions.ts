@@ -30,6 +30,7 @@ import { checkUsdtTransfer, rpcClient, usdtConfig } from "@/server/bsc.server";
 import { getDb } from "@/server/db.server";
 import { getMailer } from "@/server/email.server";
 import { imageProvider } from "@/server/image.server";
+import { videoProvider } from "@/server/video.server";
 import { paypalConfig, sharedPaypal } from "@/server/paypal.server";
 import { env, isProduction } from "@/server/env.server";
 import * as svc from "@/server/services.server";
@@ -319,22 +320,36 @@ function imageDeps(): svc.ImageDeps | null {
   return images ? { images, storage: fileStorage() } : null;
 }
 
+/** Yayında (PUBLIC_URL varken) fal.ai iş bitince /webhooks/fal'a haber verir. */
+export function videoDeps(): svc.VideoDeps | null {
+  const video = videoProvider();
+  if (!video) return null;
+  const base = env("PUBLIC_URL");
+  return {
+    video,
+    storage: fileStorage(),
+    webhookUrl: base ? `${base.replace(/\/$/, "")}/webhooks/fal` : null,
+  };
+}
+
 export const getStudioConfig = createServerFn({ method: "GET" }).handler(
   async (): Promise<StudioConfig> => {
     const image = imageDeps() ? ("live" as const) : ("demo" as const);
+    const video = videoDeps() ? ("live" as const) : ("demo" as const);
     const deps = speechDeps();
-    if (!deps) return { tts: "demo", cloning: false, image, voices: [] };
+    if (!deps) return { tts: "demo", cloning: false, image, video, voices: [] };
     try {
       const voices = await deps.catalog();
       return {
         tts: "live",
         cloning: true,
         image,
+        video,
         voices: voices.map(({ id, name, gender }) => ({ id, name, gender })),
       };
     } catch (err) {
       console.error("[ses] ses listesi alınamadı:", err instanceof Error ? err.message : err);
-      return { tts: "live", cloning: true, image, voices: [] };
+      return { tts: "live", cloning: true, image, video, voices: [] };
     }
   },
 );
@@ -363,7 +378,28 @@ export const generate = createServerFn({ method: "POST" })
         return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
       }
     }
+    if (data.type === "video") {
+      const deps = videoDeps();
+      if (deps) {
+        const res = await svc.startVideo(db, deps, user.id, data, clock());
+        if (!res.ok) return res;
+        return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
+      }
+    }
     const res = await svc.generateContent(db, user.id, data, clock());
+    if (!res.ok) return res;
+    return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
+  });
+
+/** Hazırlanan videonun durumunu sağlayıcıdan sorar; stüdyo bekleyen video varken düzenli çağırır. */
+export const checkVideo = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ id: z.string().max(80) })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    const deps = videoDeps();
+    if (!deps) return { ok: false as const, error: "notFound" as const };
+    const res = await svc.refreshVideo(await getDb(), deps, user.id, data.id, clock());
     if (!res.ok) return res;
     return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
   });

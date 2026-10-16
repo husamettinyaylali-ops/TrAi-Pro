@@ -25,13 +25,11 @@ function Labs() {
   const { tab = "tts" } = Route.useSearch();
   const navigate = useNavigate({ from: "/labs" });
   const studio = useStudioConfig();
-  // Video henüz bir servise bağlı değil; ses ve görsel anahtar varsa gerçektir.
+  // Anahtarı olmayan servisler demo kipte çalışır; not yalnız onları sayar.
   const demoParts = studio.data
-    ? [
-        ...(studio.data.tts === "demo" ? [t.demoNotes.parts.tts] : []),
-        ...(studio.data.image === "demo" ? [t.demoNotes.parts.image] : []),
-        t.demoNotes.parts.video,
-      ]
+    ? (["tts", "image", "video"] as const)
+        .filter((k) => studio.data[k] === "demo")
+        .map((k) => t.demoNotes.parts[k])
     : [];
 
   return (

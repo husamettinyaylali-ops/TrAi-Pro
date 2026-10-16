@@ -208,12 +208,12 @@ describe("satın alma ve üretim", () => {
       });
   });
 
-  it("görsel 1, video 5 kredi düşer", async () => {
+  it("görsel 1, video 15 kredi düşer", async () => {
     const id = await newUser();
     await buy(id, "media-2d");
     await generateContent(db, id, { type: "image", text: "kedi", count: 4 }, now);
     await generateContent(db, id, { type: "video", text: "gemi", styleIndex: 1 }, now);
-    expect(balance((await loadUserData(db, id)).grants, "media", now)).toBe(91);
+    expect(balance((await loadUserData(db, id)).grants, "media", now)).toBe(81);
   });
 
   it("kullanıcı başkasının üretimini silemez", async () => {

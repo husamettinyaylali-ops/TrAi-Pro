@@ -14,7 +14,7 @@ const DAY = 86_400_000;
 
 export const MAX_TTS_CHARS = 5_000;
 export const MAX_CLONES = 5;
-export const MEDIA_COST = { image: 1, video: 5 } as const;
+export const MEDIA_COST = { image: 1, video: 15 } as const;
 /** Tek istekte üretilebilecek görsel sayıları. */
 export const IMAGE_COUNTS = [1, 2, 4] as const;
 export type MediaType = keyof typeof MEDIA_COST;

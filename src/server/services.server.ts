@@ -1,6 +1,20 @@
 import { randomInt, randomUUID } from "node:crypto";
 
-import { and, asc, count, desc, eq, gt, isNotNull, isNull, lt, lte, ne, sum } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  ne,
+  sql,
+  sum,
+} from "drizzle-orm";
 
 import {
   IMAGE_COUNTS,
@@ -54,6 +68,13 @@ import {
   type GeneratedImage,
   type ImageProvider,
 } from "./image.server";
+import {
+  VIDEO_STYLE_COUNT,
+  stylePrompt,
+  type VideoCheck,
+  type VideoJob,
+  type VideoProvider,
+} from "./video.server";
 import type { BinanceIncome, IncomingFetcher } from "./binance.server";
 import {
   ORDER_ID_RE,
@@ -89,7 +110,6 @@ import type { CloneFile, ProviderVoice, TtsProvider } from "./tts.server";
 
 const DAY = 86_400_000;
 const SAMPLE_IMAGE_COUNT = 4;
-const VIDEO_STYLE_COUNT = 4;
 
 export type Result<T, E extends string> = ({ ok: true } & T) | { ok: false; error: E };
 
@@ -366,6 +386,7 @@ const toGeneration = (g: GenerationRow): Generation => ({
   images: g.images ?? undefined,
   audioUrl: g.audioKey ? `/media/audio/${g.id}` : undefined,
   fileUrls: g.files?.map((_, i) => `/media/file/${g.id}/${i}`),
+  status: g.status ?? undefined,
   cost: g.cost,
   createdAt: g.createdAt,
 });
@@ -991,6 +1012,9 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           images: null,
           audioKey: null,
           files: null,
+          status: null,
+          job: null,
+          charges: null,
         },
       };
     }
@@ -1007,6 +1031,9 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           images: pick(input.count),
           audioKey: null,
           files: null,
+          status: null,
+          job: null,
+          charges: null,
         },
       };
     }
@@ -1029,6 +1056,9 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           images: pick(1),
           audioKey: null,
           files: null,
+          status: null,
+          job: null,
+          charges: null,
         },
       };
     }
@@ -1058,7 +1088,11 @@ export async function generateContent(
   return { ok: true, generation: toGeneration(row) };
 }
 
-/** Krediyi düşer ve üretimi kaydeder; ikisi tek transaction'dadır. Bakiye yetmezse false. */
+/**
+ * Krediyi düşer ve üretimi kaydeder; ikisi tek transaction'dadır. Hangi
+ * paketten kaç kredi düşüldüğü kayda yazılır (başarısız işte iade için).
+ * Bakiye yetmezse false; row.charges çağırana göre doldurulur.
+ */
 async function chargeAndRecord(
   db: Db,
   userId: string,
@@ -1073,15 +1107,18 @@ async function chargeAndRecord(
     ).map(toGrant);
     const next = spend(current, kind, cost, now);
     if (!next) return false;
+    const charges: { grantId: string; amount: number }[] = [];
     for (const g of next) {
       const before = current.find((c) => c.id === g.id);
       if (before && before.remaining !== g.remaining) {
+        charges.push({ grantId: g.id, amount: before.remaining - g.remaining });
         await tx
           .update(creditGrants)
           .set({ remaining: g.remaining })
           .where(eq(creditGrants.id, g.id));
       }
     }
+    row.charges = charges;
     await tx.insert(generations).values(row);
     return true;
   });
@@ -1165,6 +1202,9 @@ export async function generateImages(
     images: null,
     audioKey: null,
     files,
+    status: null,
+    job: null,
+    charges: null,
     cost,
     createdAt: now.toISOString(),
   };
@@ -1173,6 +1213,187 @@ export async function generateImages(
     return { ok: false, error: "insufficient" };
   }
   return { ok: true, generation: toGeneration(row) };
+}
+
+// ---------------------------------------------------------------- gerçek video üretimi (fal.ai kuyruğu)
+
+export interface VideoDeps {
+  video: VideoProvider;
+  storage: FileStorage;
+  /** Yayında fal.ai'nin iş bitince haber vereceği adres; yoksa yalnız sorgulama. */
+  webhookUrl: string | null;
+}
+
+/** Aynı anda hazırlanabilecek video sayısı. */
+export const VIDEO_MAX_PENDING = 3;
+/** Bu süreyi aşan iş iptal edilir, kredi iade edilir. */
+export const VIDEO_MAX_AGE_MS = 60 * 60_000;
+
+/**
+ * Video işini sağlayıcıya gönderir ve krediyi hemen düşer (beklerken başka
+ * harcamada kullanılmasın). Gönderim başarısızsa kredi düşülmez; iş sonradan
+ * başarısız olursa refreshVideo krediyi aynı paketlere iade eder.
+ */
+export async function startVideo(
+  db: Db,
+  deps: VideoDeps,
+  userId: string,
+  input: { text: string; styleIndex: number },
+  now: Date,
+): Promise<Result<{ generation: Generation }, ActionErrorCode> | RateLimited> {
+  const text = input.text.trim();
+  if (
+    !text ||
+    text.length > 400 ||
+    !Number.isInteger(input.styleIndex) ||
+    input.styleIndex < 0 ||
+    input.styleIndex >= VIDEO_STYLE_COUNT
+  ) {
+    return { ok: false, error: "invalidInput" };
+  }
+  const cost = mediaCost("video", 1);
+  const grants = (await db.select().from(creditGrants).where(eq(creditGrants.userId, userId))).map(
+    toGrant,
+  );
+  if (balance(grants, "media", now) < cost) return { ok: false, error: "insufficient" };
+
+  const pending = await db
+    .select({ n: count() })
+    .from(generations)
+    .where(and(eq(generations.userId, userId), eq(generations.status, "pending")))
+    .get();
+  if ((pending?.n ?? 0) >= VIDEO_MAX_PENDING) return { ok: false, error: "limit" };
+
+  const key = `video:user:${userId}`;
+  const stop = await blocked(db, [[key, LIMITS.videoPerUser]], now);
+  if (stop) return stop;
+  await recordAttempt(db, key, now);
+
+  let job: VideoJob;
+  try {
+    job = await deps.video.submit({
+      prompt: stylePrompt(text, input.styleIndex),
+      webhookUrl: deps.webhookUrl,
+    });
+  } catch (err) {
+    console.error("[video] iş gönderilemedi:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "providerFailed" };
+  }
+
+  const row: GenerationRow = {
+    id: randomUUID(),
+    userId,
+    type: "video",
+    text,
+    voiceId: null,
+    style: String(input.styleIndex),
+    images: null,
+    audioKey: null,
+    files: null,
+    status: "pending",
+    job,
+    charges: null,
+    cost,
+    createdAt: now.toISOString(),
+  };
+  if (!(await chargeAndRecord(db, userId, "media", cost, row, now))) {
+    await deps.video.cancel(job).catch(() => {});
+    return { ok: false, error: "insufficient" };
+  }
+  return { ok: true, generation: toGeneration(row) };
+}
+
+/** Başarısız işi işaretler ve krediyi düşüldüğü paketlere iade eder (bir kez). */
+async function failVideo(db: Db, row: GenerationRow): Promise<GenerationRow> {
+  return db.transaction(async (tx) => {
+    const res = await tx
+      .update(generations)
+      .set({ status: "failed" })
+      .where(and(eq(generations.id, row.id), eq(generations.status, "pending")));
+    if (res.rowsAffected === 0) {
+      return (await tx.select().from(generations).where(eq(generations.id, row.id)).get()) ?? row;
+    }
+    for (const c of row.charges ?? []) {
+      await tx
+        .update(creditGrants)
+        .set({ remaining: sql`${creditGrants.remaining} + ${c.amount}` })
+        .where(eq(creditGrants.id, c.grantId));
+    }
+    return { ...row, status: "failed" as const };
+  });
+}
+
+/**
+ * Bekleyen video işinin durumunu sağlayıcıdan sorar. Bittiyse video depoya
+ * yazılır; başarısızsa ya da çok uzun sürdüyse kredi iade edilir. Aynı anda
+ * gelen iki kontrol (sayfa ve webhook) işi bir kez sonuçlandırır.
+ */
+async function settleVideo(db: Db, deps: VideoDeps, row: GenerationRow, now: Date) {
+  if (row.status !== "pending" || !row.job) return row;
+  let check: VideoCheck;
+  try {
+    check = await deps.video.check(row.job);
+  } catch (err) {
+    console.error("[video] iş durumu alınamadı:", err instanceof Error ? err.message : err);
+    check = { state: "pending" };
+  }
+  if (check.state === "pending") {
+    if (now.getTime() - Date.parse(row.createdAt) < VIDEO_MAX_AGE_MS) return row;
+    await deps.video.cancel(row.job).catch(() => {});
+    return failVideo(db, row);
+  }
+  if (check.state === "failed") return failVideo(db, row);
+
+  const key = `${row.userId}/${row.id}-0.mp4`;
+  await deps.storage.put(key, check.video);
+  const files = [key];
+  await db
+    .update(generations)
+    .set({ status: null, files })
+    .where(and(eq(generations.id, row.id), eq(generations.status, "pending")));
+  return { ...row, status: null, files };
+}
+
+/** Kullanıcının kendi video işini kontrol eder (stüdyo sayfası düzenli çağırır). */
+export async function refreshVideo(
+  db: Db,
+  deps: VideoDeps,
+  userId: string,
+  id: string,
+  now: Date,
+): Promise<Result<{ generation: Generation }, "notFound">> {
+  const row = await db
+    .select()
+    .from(generations)
+    .where(and(eq(generations.id, id), eq(generations.userId, userId)))
+    .get();
+  if (!row || row.type !== "video") return { ok: false, error: "notFound" };
+  return { ok: true, generation: toGeneration(await settleVideo(db, deps, row, now)) };
+}
+
+/**
+ * Webhook'tan gelen iş kimliğiyle kontrol. Webhook gövdesine güvenilmez:
+ * yalnız hangi işin kontrol edileceğini söyler, sonuç sağlayıcıdan okunur.
+ */
+export async function refreshVideoByRequest(
+  db: Db,
+  deps: VideoDeps,
+  requestId: string,
+  now: Date,
+): Promise<boolean> {
+  const row = await db
+    .select()
+    .from(generations)
+    .where(
+      and(
+        eq(generations.status, "pending"),
+        sql`json_extract(${generations.job}, '$.requestId') = ${requestId}`,
+      ),
+    )
+    .get();
+  if (!row) return false;
+  await settleVideo(db, deps, row, now);
+  return true;
 }
 
 // ---------------------------------------------------------------- gerçek seslendirme (ElevenLabs)
@@ -1268,6 +1489,9 @@ export async function generateSpeech(
     images: null,
     audioKey,
     files: null,
+    status: null,
+    job: null,
+    charges: null,
     cost,
     createdAt: now.toISOString(),
   };

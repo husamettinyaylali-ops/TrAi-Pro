@@ -78,6 +78,8 @@ interface Store {
     input: GenerateInput,
   ) => Promise<Outcome<{ generation: Generation }, ActionErrorCode> | RateLimited>;
   deleteGeneration: (id: string) => Promise<void>;
+  /** Hazırlanan videonun durumunu yeniler. */
+  checkVideo: (id: string) => Promise<void>;
   /** Demo klon (yalnız ad). */
   addClone: (name: string) => Promise<Outcome<object, ActionErrorCode>>;
   /** Gerçek klon: FormData içinde name, consent ("true") ve file. */
@@ -170,6 +172,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       startPaypal: (intentId) => call(() => api.startPaypal({ data: { intentId } })),
       capturePaypal: (orderId) => call(() => api.capturePaypal({ data: { orderId } })),
       generate: (input) => call(() => api.generate({ data: input })),
+      checkVideo: async (id) => {
+        await call(() => api.checkVideo({ data: { id } }));
+      },
       deleteGeneration: async (id) => {
         await call(() => api.deleteGeneration({ data: { id } }));
       },
