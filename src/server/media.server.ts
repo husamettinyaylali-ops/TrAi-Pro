@@ -28,6 +28,12 @@ export type KeyOf = (row: {
   files: string[] | null;
 }) => string | null | undefined;
 
+/** İstek çerezindeki oturumun kullanıcısı; oturum yoksa ya da geçersizse null. */
+export async function requestUser(request: Request, db: Db, now: Date) {
+  const token = parseCookies(request.headers.get("cookie"))[SESSION_COOKIE];
+  return token ? getSessionUser(db, token, now) : null;
+}
+
 /**
  * Üretimin dosyasını yalnız sahibine sunar. Başkasının üretimi için de
  * "bulunamadı" döner; kaydın varlığı ele verilmez. `?download=1` ile dosya
@@ -39,10 +45,8 @@ async function serveOwned(
   keyOf: KeyOf,
   deps: MediaDeps,
 ): Promise<Response> {
-  const token = parseCookies(request.headers.get("cookie"))[SESSION_COOKIE];
   const db = deps.db ?? (await getDb());
-  const now = deps.now ?? clock();
-  const user = token ? await getSessionUser(db, token, now) : null;
+  const user = await requestUser(request, db, deps.now ?? clock());
   if (!user) return new Response("Oturum gerekli", { status: 401 });
   const download = new URL(request.url).searchParams.has("download");
   return ownedFileResponse(db, deps.storage ?? fileStorage(), user.id, id, keyOf, download);

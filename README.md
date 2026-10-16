@@ -9,7 +9,8 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 | `/`                                                                                | Hero, Ses AI kredi paketleri, Video & Görsel paketleri                        |
 | `/pricing`                                                                         | Paketler, kredi harcama tablosu, SSS                                          |
 | `/sign-in`, `/sign-up`                                                             | Giriş ve kayıt (`?redirect=` ile dönüş)                                       |
-| `/labs`                                                                            | Stüdyo: Metinden Ses, Ses Klonlama, Görsel, Video (`?tab=`)                   |
+| `/labs`                                                                            | Stüdyo: Metinden Ses, Ses Klonlama, Görsel, Video (`?tab=`, `?project=`)      |
+| `/projects`, `/projects/:id`                                                       | Projeler: not, projedeki üretimler, tümünü ZIP olarak indirme                 |
 | `/payment`                                                                         | Paket ve ödeme yöntemi seçimi (`?package=`)                                   |
 | `/payment-history`                                                                 | Siparişler ve kalan krediler                                                  |
 | `/account`                                                                         | Hesabım: ad, şifre, Google bağlantısı, diğer oturumları kapatma, hesabı silme |
@@ -85,6 +86,13 @@ Görselle aynı `FAL_KEY` kullanılır; model varsayılan olarak Kling 1.6 stand
 - Biten video `data/media/<kullanıcı>/` altında saklanır ve `/media/file/:id/0` adresinden yalnız sahibine sunulur (oynatma ve indirme).
 - Bir kullanıcı aynı anda en fazla 3 video hazırlatabilir ve saatte en fazla 10 video isteği gönderebilir.
 - **Maliyet:** Kling 1.6 standart fal.ai'de 5 saniyelik video başına yaklaşık 0,25 $'dır; 15 kredi Video & Görsel paketlerinde yaklaşık 0,40–0,45 $ eder. Güncel fiyatı fal.ai'den kontrol edin; model değişirse kredi maliyetini de gözden geçirin.
+
+## Projeler ve üretimlerin düzeltilmesi
+
+- **Proje:** kullanıcının çalışma alanı (ad, serbest not; kullanıcı başına en fazla 100). Stüdyonun üstündeki proje çubuğundan seçilir (`/labs?project=`): seçiliyken yeni üretimler o projeye kaydedilir ve geçmiş yalnız onu gösterir. Projesiz seçimde geçmiş tüm üretimleri, her kaydın projesiyle gösterir.
+- **Her üretimde** "Diğer işlemler" menüsü: _Düzenle ve yeniden üret_ (metin/istem, ses, adet ya da stil forma gelir; üretince yeni sürüm kaydedilir, eskisi silinmez ve kredi yeniden harcanır; yeni sürüm eski kaydın projesinde ve adıyla kalır), _Yeniden adlandır_, _Projeye taşı_, _Sil_. Gerçek üretimler indirilebilir; demo üretimde indirme düğmesi nedenini söyleyerek kapalıdır.
+- **Proje sayfası** (`/projects/:id`): ad ve not düzenleme, projedeki üretimler (türe göre süzülür; dinleme, önizleme, indirme, menü), stüdyoda açma ve silme. Proje silinince üretimler silinmez, projesiz kalır.
+- **Tümünü indir (ZIP)** (`/media/project/:id`, yalnız sahibine): gerçek dosyalar tür klasörlerinde (`ses/`, `gorsel/`, `video/`; `?lang=en` ile İngilizce), sonda proje notu, metinler ve dosya listesini içeren `icerik.txt`. Dosyalar sıkıştırılmadan akış olarak eklenir (medya zaten sıkıştırılmıştır; bellekte bir anda tek dosya durur); en fazla 300 üretim, 4 GB'a yaklaşınca kalan dosyalar atlanıp listede belirtilir. Kullanıcı başına saatte 20 arşiv.
 
 ## Ödeme makbuzları
 

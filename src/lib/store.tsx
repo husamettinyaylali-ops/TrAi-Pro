@@ -90,6 +90,8 @@ interface Store {
   deleteGeneration: (id: string) => Promise<void>;
   /** Hazırlanan videonun durumunu yeniler. */
   checkVideo: (id: string) => Promise<void>;
+  /** Tek üretim (stüdyoda düzenlemeye açmak için). */
+  getGeneration: (id: string) => Promise<Outcome<{ generation: Generation }, ProjectErrorCode>>;
   /** Üretime ad verir; boş ad adı kaldırır. */
   renameGeneration: (
     id: string,
@@ -275,6 +277,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           void qc.invalidateQueries({ queryKey: [PROJECTS] });
         }
       },
+      getGeneration: (id) => call(() => api.getGeneration({ data: { id } })),
       renameGeneration: async (id, title) => {
         const res = await call(() => api.renameGeneration({ data: { id, title } }));
         if (res.ok && userId) upsertHistory(qc, userId, res.generation, false);

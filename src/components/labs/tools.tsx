@@ -54,7 +54,7 @@ export const Panel = ({
 }) => <div className={`glass glow-border rounded-3xl p-6 ${className}`}>{children}</div>;
 
 /** Geçmiş listesinin yükleniyor, hata ve boş durumları; altta daha eski üretimler. */
-function HistoryView({
+export function HistoryView({
   history,
   empty,
   children,
@@ -225,7 +225,16 @@ type RowError = { id: string; text: string } | null;
  * Seslendirme. `projectId` seçiliyse yeni üretimler o projeye kaydedilir ve
  * geçmiş yalnız o projeyi gösterir.
  */
-export function TextToSpeech({ projectId }: { projectId?: string | undefined } = {}) {
+export function TextToSpeech({
+  projectId,
+  editId,
+  onEditLoaded,
+}: {
+  projectId?: string | undefined;
+  /** Başka sayfadan düzenlemeye açılan kayıt (?edit=). */
+  editId?: string | undefined;
+  onEditLoaded?: () => void;
+} = {}) {
   const { t } = useI18n();
   const f = useFormat();
   const { generate } = useApp();
@@ -267,10 +276,12 @@ export function TextToSpeech({ projectId }: { projectId?: string | undefined } =
   /** Düzeltme: kaydın metni ve sesi forma gelir; üretince yeni sürüm kaydedilir. */
   const startEdit = (g: Generation) => {
     setText(g.text);
-    if (g.voiceId && voices.some((v) => v.id === g.voiceId)) setVoiceId(g.voiceId);
+    // Ses listesi henüz yüklenmediyse de seçilir; listede yoksa ilk sese geçilir.
+    if (g.voiceId) setVoiceId(g.voiceId);
     setEditing(g);
     setError(null);
   };
+  useEditRequest("tts", editId, startEdit, onEditLoaded);
   // Düzeltme başlayınca form görünür olur ve metne odaklanılır (menü kapandıktan sonra).
   useEffect(() => {
     if (!editing) return;
@@ -746,6 +757,35 @@ function Locked() {
   );
 }
 
+/**
+ * Proje sayfasından "Düzenle ve yeniden üret" ile gelen kaydı (?edit=) bir kez
+ * yükler ve forma koyar; kayıt bu sekmenin türünde değilse yok sayılır.
+ */
+function useEditRequest(
+  type: Generation["type"],
+  editId: string | undefined,
+  start: (g: Generation) => void,
+  done: (() => void) | undefined,
+) {
+  const { getGeneration } = useApp();
+  const handlers = useRef({ start, done, getGeneration });
+  useEffect(() => {
+    handlers.current = { start, done, getGeneration };
+  });
+  useEffect(() => {
+    if (!editId) return;
+    let live = true;
+    void handlers.current.getGeneration(editId).then((res) => {
+      if (!live) return;
+      if (res.ok && res.generation.type === type) handlers.current.start(res.generation);
+      handlers.current.done?.();
+    });
+    return () => {
+      live = false;
+    };
+  }, [editId, type]);
+}
+
 /** Hazırlanan videoların kontrol aralığı. */
 const VIDEO_POLL_MS = 8_000;
 
@@ -753,9 +793,14 @@ const VIDEO_POLL_MS = 8_000;
 export function MediaStudio({
   type,
   projectId,
+  editId,
+  onEditLoaded,
 }: {
   type: MediaType;
   projectId?: string | undefined;
+  /** Başka sayfadan düzenlemeye açılan kayıt (?edit=). */
+  editId?: string | undefined;
+  onEditLoaded?: () => void;
 }) {
   const { t } = useI18n();
   const f = useFormat();
@@ -788,6 +833,9 @@ export function MediaStudio({
   const hasPass = balance(data.grants, "media", now) > 0;
   const cost = mediaCost(type, count);
   const history = useHistory(type, projectId);
+  // Kilit ekranından önce: düzenleme isteği paketsiz kullanıcıda da tüketilir.
+  const editRequest = useRef<(g: Generation) => void>(() => undefined);
+  useEditRequest(type, editId, (g) => editRequest.current(g), onEditLoaded);
 
   // Hazırlanan videolar sayfa açıkken düzenli kontrol edilir (bitince ya da iade olunca güncellenir).
   const pendingIds = history.items
@@ -825,6 +873,7 @@ export function MediaStudio({
     setEditing(g);
     setError(null);
   };
+  editRequest.current = startEdit;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

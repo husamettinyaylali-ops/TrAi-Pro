@@ -30,11 +30,14 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AuthGoogleRouteImport } from './routes/auth/google'
+import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
+import { Route as ProjectsIdRouteImport } from './routes/projects/$id'
 import { Route as WebhooksFalRouteImport } from './routes/webhooks/fal'
 import { Route as WebhooksPaypalRouteImport } from './routes/webhooks/paypal'
 import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as MediaAudioIdRouteImport } from './routes/media/audio/$id'
+import { Route as MediaProjectIdRouteImport } from './routes/media/project/$id'
 import { Route as MediaFileIdIndexRouteImport } from './routes/media/file/$id/$index'
 
 const IndexRoute = IndexRouteImport.update({
@@ -142,6 +145,16 @@ const AuthGoogleRoute = AuthGoogleRouteImport.update({
   path: '/auth/google',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
+  id: '/projects/',
+  path: '/projects/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsIdRoute = ProjectsIdRouteImport.update({
+  id: '/projects/$id',
+  path: '/projects/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WebhooksFalRoute = WebhooksFalRouteImport.update({
   id: '/webhooks/fal',
   path: '/webhooks/fal',
@@ -165,6 +178,11 @@ const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
 const MediaAudioIdRoute = MediaAudioIdRouteImport.update({
   id: '/media/audio/$id',
   path: '/media/audio/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MediaProjectIdRoute = MediaProjectIdRouteImport.update({
+  id: '/media/project/$id',
+  path: '/media/project/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MediaFileIdIndexRoute = MediaFileIdIndexRouteImport.update({
@@ -195,11 +213,14 @@ export interface FileRoutesByFullPath {
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
+  '/projects/$id': typeof ProjectsIdRoute
   '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
+  '/projects/': typeof ProjectsIndexRoute
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
+  '/media/project/$id': typeof MediaProjectIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -224,11 +245,14 @@ export interface FileRoutesByTo {
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
+  '/projects/$id': typeof ProjectsIdRoute
   '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
+  '/projects': typeof ProjectsIndexRoute
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
+  '/media/project/$id': typeof MediaProjectIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRoutesById {
@@ -254,11 +278,14 @@ export interface FileRoutesById {
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
+  '/projects/$id': typeof ProjectsIdRoute
   '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
+  '/projects/': typeof ProjectsIndexRoute
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
+  '/media/project/$id': typeof MediaProjectIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -285,11 +312,14 @@ export interface FileRouteTypes {
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
+    | '/projects/$id'
     | '/webhooks/fal'
     | '/webhooks/paypal'
+    | '/projects/'
     | '/api/v1/$'
     | '/auth/google/callback'
     | '/media/audio/$id'
+    | '/media/project/$id'
     | '/media/file/$id/$index'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -314,11 +344,14 @@ export interface FileRouteTypes {
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
+    | '/projects/$id'
     | '/webhooks/fal'
     | '/webhooks/paypal'
+    | '/projects'
     | '/api/v1/$'
     | '/auth/google/callback'
     | '/media/audio/$id'
+    | '/media/project/$id'
     | '/media/file/$id/$index'
   id:
     | '__root__'
@@ -343,11 +376,14 @@ export interface FileRouteTypes {
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
+    | '/projects/$id'
     | '/webhooks/fal'
     | '/webhooks/paypal'
+    | '/projects/'
     | '/api/v1/$'
     | '/auth/google/callback'
     | '/media/audio/$id'
+    | '/media/project/$id'
     | '/media/file/$id/$index'
   fileRoutesById: FileRoutesById
 }
@@ -373,10 +409,13 @@ export interface RootRouteChildren {
   TermsOfServiceRoute: typeof TermsOfServiceRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AuthGoogleRoute: typeof AuthGoogleRouteWithChildren
+  ProjectsIdRoute: typeof ProjectsIdRoute
   WebhooksFalRoute: typeof WebhooksFalRoute
   WebhooksPaypalRoute: typeof WebhooksPaypalRoute
+  ProjectsIndexRoute: typeof ProjectsIndexRoute
   ApiV1SplatRoute: typeof ApiV1SplatRoute
   MediaAudioIdRoute: typeof MediaAudioIdRoute
+  MediaProjectIdRoute: typeof MediaProjectIdRoute
   MediaFileIdIndexRoute: typeof MediaFileIdIndexRoute
 }
 
@@ -529,6 +568,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthGoogleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/projects/': {
+      id: '/projects/'
+      path: '/projects'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof ProjectsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$id': {
+      id: '/projects/$id'
+      path: '/projects/$id'
+      fullPath: '/projects/$id'
+      preLoaderRoute: typeof ProjectsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/webhooks/fal': {
       id: '/webhooks/fal'
       path: '/webhooks/fal'
@@ -562,6 +615,13 @@ declare module '@tanstack/react-router' {
       path: '/media/audio/$id'
       fullPath: '/media/audio/$id'
       preLoaderRoute: typeof MediaAudioIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/media/project/$id': {
+      id: '/media/project/$id'
+      path: '/media/project/$id'
+      fullPath: '/media/project/$id'
+      preLoaderRoute: typeof MediaProjectIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/media/file/$id/$index': {
@@ -608,10 +668,13 @@ const rootRouteChildren: RootRouteChildren = {
   TermsOfServiceRoute: TermsOfServiceRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AuthGoogleRoute: AuthGoogleRouteWithChildren,
+  ProjectsIdRoute: ProjectsIdRoute,
   WebhooksFalRoute: WebhooksFalRoute,
   WebhooksPaypalRoute: WebhooksPaypalRoute,
+  ProjectsIndexRoute: ProjectsIndexRoute,
   ApiV1SplatRoute: ApiV1SplatRoute,
   MediaAudioIdRoute: MediaAudioIdRoute,
+  MediaProjectIdRoute: MediaProjectIdRoute,
   MediaFileIdIndexRoute: MediaFileIdIndexRoute,
 }
 export const routeTree = rootRouteImport

@@ -3,6 +3,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import {
   Coins,
   CreditCard,
+  FolderOpen,
   LogOut,
   Mail,
   Menu,
@@ -143,6 +144,9 @@ function UserMenu() {
         <DropdownMenuItem onSelect={() => navigate({ to: "/labs" })}>
           <Wand2 /> {t.labs.title}
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => navigate({ to: "/projects" })}>
+          <FolderOpen /> {t.projects.nav}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => navigate({ to: "/payment" })}>
           <CreditCard /> {t.footer.payment}
         </DropdownMenuItem>
@@ -191,6 +195,11 @@ function Header() {
           <Link to="/pricing" className={navCls}>
             {t.nav.pricing}
           </Link>
+          {user && (
+            <Link to="/projects" className={navCls}>
+              {t.projects.nav}
+            </Link>
+          )}
         </nav>
         <div className="hidden items-center gap-3 lg:flex">
           <ThemeToggle />
@@ -262,6 +271,9 @@ function Header() {
             </Link>
             {user && (
               <>
+                <Link to="/projects" onClick={close}>
+                  {t.projects.nav}
+                </Link>
                 <Link to="/account" onClick={close}>
                   {t.accountPage.title}
                 </Link>

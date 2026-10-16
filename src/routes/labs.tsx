@@ -15,7 +15,7 @@ const tabs = ["tts", "clone", "image", "video"] as const;
 type Tab = (typeof tabs)[number];
 
 const PROJECT_RE = /^[\w-]{1,80}$/;
-type LabsSearch = { tab?: Tab; project?: string };
+type LabsSearch = { tab?: Tab; project?: string; edit?: string };
 
 /** Aramadaki etkin projeyi değiştirir; id yoksa parametre kaldırılır. */
 function withProject({ project: _old, ...rest }: LabsSearch, id: string | undefined): LabsSearch {
@@ -29,6 +29,8 @@ export const Route = createFileRoute("/labs")({
     ...(typeof s["project"] === "string" && PROJECT_RE.test(s["project"])
       ? { project: s["project"] }
       : {}),
+    // ?edit= proje sayfasından düzenlemeye açılan kayıt; yüklenince kaldırılır.
+    ...(typeof s["edit"] === "string" && PROJECT_RE.test(s["edit"]) ? { edit: s["edit"] } : {}),
   }),
   head: () => ({ meta: [{ title: "Stüdyo — TrAi Pro" }] }),
   component: LabsPage,
@@ -38,7 +40,8 @@ const icons = { tts: Mic, clone: Upload, image: ImageIcon, video: Film };
 
 function Labs() {
   const { t, locale } = useI18n();
-  const { tab = "tts", project } = Route.useSearch();
+  const { tab = "tts", project, edit } = Route.useSearch();
+  const editDone = () => void navigate({ search: ({ edit: _e, ...s }) => s, replace: true });
   const navigate = useNavigate({ from: "/labs" });
   const studio = useStudioConfig();
   const projects = useProjects();
@@ -95,10 +98,28 @@ function Labs() {
             onSelect={(id) => void navigate({ search: (s) => withProject(s, id), replace: true })}
           />
         )}
-        {tab === "tts" && <TextToSpeech projectId={projectId} />}
+        {tab === "tts" && (
+          <TextToSpeech projectId={projectId} editId={edit} onEditLoaded={editDone} />
+        )}
         {tab === "clone" && <VoiceClone />}
-        {tab === "image" && <MediaStudio key="image" type="image" projectId={projectId} />}
-        {tab === "video" && <MediaStudio key="video" type="video" projectId={projectId} />}
+        {tab === "image" && (
+          <MediaStudio
+            key="image"
+            type="image"
+            projectId={projectId}
+            editId={edit}
+            onEditLoaded={editDone}
+          />
+        )}
+        {tab === "video" && (
+          <MediaStudio
+            key="video"
+            type="video"
+            projectId={projectId}
+            editId={edit}
+            onEditLoaded={editDone}
+          />
+        )}
       </div>
       {demoParts.length > 0 && (
         <DemoNote

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { FolderOpen, Plus } from "lucide-react";
 
@@ -6,6 +7,9 @@ import { btnOutline, btnPrimary, field } from "@/components/site/shell";
 import { useFormat, useI18n } from "@/lib/i18n";
 import { MAX_PROJECTS, PROJECT_NAME_MAX } from "@/lib/projects";
 import { useApp, useProjects } from "@/lib/store";
+
+const linkCls =
+  "inline-flex min-h-11 items-center text-sm font-semibold text-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /**
  * Stüdyonun etkin projesi: seçiliyken yeni üretimler o projeye kaydedilir ve
@@ -121,6 +125,26 @@ export function ProjectBar({
         <FolderOpen className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
         {active ? t.projects.activeHint(active.name) : t.projects.noneHint}
       </p>
+      {active?.notes && (
+        <details className="rounded-xl bg-muted/40 px-3 text-sm">
+          <summary className="flex min-h-11 cursor-pointer items-center font-medium">
+            {t.projects.notes}
+          </summary>
+          <p className="whitespace-pre-wrap break-words pb-3 text-muted-foreground">
+            {active.notes}
+          </p>
+        </details>
+      )}
+      <div className="flex flex-wrap gap-x-5">
+        {active && (
+          <Link to="/projects/$id" params={{ id: active.id }} className={linkCls}>
+            {t.projects.editProject}
+          </Link>
+        )}
+        <Link to="/projects" className={linkCls}>
+          {t.projects.manage}
+        </Link>
+      </div>
     </Panel>
   );
 }

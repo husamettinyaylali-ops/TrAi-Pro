@@ -433,6 +433,18 @@ export const listGenerations = createServerFn({ method: "POST" })
     return { ok: true as const, ...(await svc.listGenerations(await getDb(), user.id, data)) };
   });
 
+/** Kullanıcının tek üretimi (proje sayfasından stüdyoda düzenlemeye açmak için). */
+export const getGeneration = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ id })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    const generation = await svc.getGeneration(await getDb(), user.id, data.id);
+    return generation
+      ? { ok: true as const, generation }
+      : { ok: false as const, error: "notFound" as const };
+  });
+
 /** Üretimi projeye taşır ya da projeden çıkarır (`projectId: null`). */
 export const moveGeneration = createServerFn({ method: "POST" })
   .validator(parse(z.object({ id, projectId: id.nullable() })))
