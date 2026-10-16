@@ -2,11 +2,11 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
-import { startBackups } from "./server/backup.server";
+import { startMaintenance } from "./server/maintenance.server";
 import { withSecurityHeaders } from "./server/site-meta.server";
 
-// Yayında (BACKUP_DIR varsa) günlük veritabanı yedeği.
-startBackups();
+// Yayında günlük bakım: veritabanı yedeği (BACKUP_DIR varsa) ve saklama süresi dolan kayıtların temizliği.
+startMaintenance();
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
