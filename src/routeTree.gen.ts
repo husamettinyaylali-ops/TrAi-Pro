@@ -22,8 +22,10 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as RefundPolicyRouteImport } from './routes/refund-policy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AuthGoogleRouteImport } from './routes/auth/google'
@@ -98,6 +100,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
@@ -106,6 +113,11 @@ const SignInRoute = SignInRouteImport.update({
 const SignUpRoute = SignUpRouteImport.update({
   id: '/sign-up',
   path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
@@ -163,8 +175,10 @@ export interface FileRoutesByFullPath {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
@@ -188,8 +202,10 @@ export interface FileRoutesByTo {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
@@ -214,8 +230,10 @@ export interface FileRoutesById {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
@@ -241,8 +259,10 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/refund-policy'
     | '/reset-password'
+    | '/robots.txt'
     | '/sign-in'
     | '/sign-up'
+    | '/sitemap.xml'
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
@@ -266,8 +286,10 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/refund-policy'
     | '/reset-password'
+    | '/robots.txt'
     | '/sign-in'
     | '/sign-up'
+    | '/sitemap.xml'
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
@@ -291,8 +313,10 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/refund-policy'
     | '/reset-password'
+    | '/robots.txt'
     | '/sign-in'
     | '/sign-up'
+    | '/sitemap.xml'
     | '/terms-of-service'
     | '/verify-email'
     | '/auth/google'
@@ -317,8 +341,10 @@ export interface RootRouteChildren {
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   RefundPolicyRoute: typeof RefundPolicyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsOfServiceRoute: typeof TermsOfServiceRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AuthGoogleRoute: typeof AuthGoogleRouteWithChildren
@@ -421,6 +447,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sign-in': {
       id: '/sign-in'
       path: '/sign-in'
@@ -433,6 +466,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-up'
       fullPath: '/sign-up'
       preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms-of-service': {
@@ -520,8 +560,10 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   RefundPolicyRoute: RefundPolicyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsOfServiceRoute: TermsOfServiceRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AuthGoogleRoute: AuthGoogleRouteWithChildren,

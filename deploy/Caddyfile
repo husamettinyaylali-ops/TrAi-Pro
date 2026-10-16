@@ -3,5 +3,7 @@
 # (uygulamada TRUST_PROXY=on güvenle kullanılır).
 {$DOMAIN} {
 	encode zstd gzip
+	# Tarayıcı bu alan adına bir yıl boyunca yalnız HTTPS ile bağlanır.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	reverse_proxy app:3000
 }
