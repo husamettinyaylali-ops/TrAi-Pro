@@ -95,6 +95,24 @@ export const orders = sqliteTable(
   (t) => [index("orders_user_idx").on(t.userId)],
 );
 
+/** Kullanıcının çalışma alanı: üretimler bir projede toplanır (kişisel veri). */
+export const projects = sqliteTable(
+  "projects",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Serbest proje notu: senaryo, müşteri, teslim tarihi… */
+    notes: text("notes").notNull().default(""),
+    createdAt: text("created_at").notNull(),
+    /** Son düzenleme ya da projeye son üretim; liste bu sırayla gösterilir. */
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("projects_user_idx").on(t.userId, t.updatedAt)],
+);
+
 export const generations = sqliteTable(
   "generations",
   {
@@ -127,9 +145,19 @@ export const generations = sqliteTable(
     charges: text("charges", { mode: "json" }).$type<{ grantId: string; amount: number }[]>(),
     cost: integer("cost").notNull(),
     createdAt: text("created_at").notNull(),
+    /**
+     * Bağlı olduğu proje; boşsa projesiz. Yabancı anahtar kısıtı bilinçli olarak
+     * yok (SQLite'ta sütun eklemek tabloyu yeniden kurdururdu): sahiplik
+     * `chargeAndRecord`/`moveGeneration`'da denetlenir, proje silinince
+     * `deleteProject` bağı boşaltır.
+     */
+    projectId: text("project_id"),
+    /** Kullanıcının verdiği ad; boşsa metin/istem gösterilir. */
+    title: text("title"),
   },
   (t) => [
     index("generations_user_idx").on(t.userId),
+    index("generations_project_idx").on(t.projectId, t.createdAt, t.id),
     index("generations_status_idx").on(t.status),
     // Stüdyo geçmişi sayfası: kullanıcı + tür, yeniden eskiye.
     index("generations_history_idx").on(t.userId, t.type, t.createdAt, t.id),

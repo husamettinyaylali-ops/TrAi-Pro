@@ -31,6 +31,7 @@ import {
 } from "@/lib/credits";
 import { clock } from "@/lib/clock";
 import { findPackage, signupBonus } from "@/lib/packages";
+import { GENERATION_TITLE_MAX } from "@/lib/projects";
 import { LIMITS, checkLimit, retryMinutes, type Limit } from "@/lib/rate-limit";
 import {
   MAX_TOPUP_CENTS,
@@ -106,6 +107,7 @@ import {
   oauthAccounts,
   orders,
   paymentIntents,
+  projects,
   sessions,
   users,
   voiceClones,
@@ -116,6 +118,9 @@ import type { CloneFile, ProviderVoice, TtsProvider } from "./tts.server";
 
 const DAY = 86_400_000;
 const SAMPLE_IMAGE_COUNT = 4;
+
+/** Üretimin projesi ve adı (düzeltilen sürüm eski adı taşır). */
+type GenerationMeta = Pick<GenerateInput, "projectId" | "title">;
 
 export type Result<T, E extends string> = ({ ok: true } & T) | { ok: false; error: E };
 
@@ -395,7 +400,16 @@ const toGeneration = (g: GenerationRow): Generation => ({
   status: g.status ?? undefined,
   cost: g.cost,
   createdAt: g.createdAt,
+  title: g.title ?? undefined,
+  projectId: g.projectId ?? undefined,
 });
+
+/** Kullanıcının verdiği ad: kırpılır; boşsa null, sınırı aşarsa geçersiz (undefined). */
+export function cleanTitle(raw: string | null | undefined): string | null | undefined {
+  const t = raw?.trim() ?? "";
+  if (!t) return null;
+  return [...t].length <= GENERATION_TITLE_MAX ? t : undefined;
+}
 
 export async function loadUserData(db: Db, userId: string, now: Date = clock()): Promise<UserData> {
   const [grantRows, orderRows, cloneRows, auth, google, wallet] = await Promise.all([
@@ -1021,6 +1035,8 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           status: null,
           job: null,
           charges: null,
+          projectId: null,
+          title: null,
         },
       };
     }
@@ -1040,6 +1056,8 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           status: null,
           job: null,
           charges: null,
+          projectId: null,
+          title: null,
         },
       };
     }
@@ -1065,6 +1083,8 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           status: null,
           job: null,
           charges: null,
+          projectId: null,
+          title: null,
         },
       };
     }
@@ -1088,7 +1108,7 @@ export async function generateContent(
     cost: plan.cost,
     createdAt: now.toISOString(),
   };
-  if (!(await chargeAndRecord(db, userId, plan.kind, plan.cost, row, now))) {
+  if (!(await chargeAndRecord(db, userId, plan.kind, plan.cost, row, now, input))) {
     return { ok: false, error: "insufficient" };
   }
   return { ok: true, generation: toGeneration(row) };
@@ -1106,8 +1126,20 @@ async function chargeAndRecord(
   cost: number,
   row: GenerationRow,
   now: Date,
+  meta: GenerationMeta = {},
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
+    // Proje yalnız kullanıcının kendisininse bağlanır (silinmiş ya da başkasının
+    // projesi yok sayılır, üretim projesiz kaydedilir). Projenin son etkinliği güncellenir.
+    row.projectId = null;
+    if (meta.projectId) {
+      const touched = await tx
+        .update(projects)
+        .set({ updatedAt: now.toISOString() })
+        .where(and(eq(projects.id, meta.projectId), eq(projects.userId, userId)));
+      if (touched.rowsAffected === 1) row.projectId = meta.projectId;
+    }
+    row.title = cleanTitle(meta.title) ?? null;
     const current = (
       await tx.select().from(creditGrants).where(eq(creditGrants.userId, userId))
     ).map(toGrant);
@@ -1150,17 +1182,23 @@ export const HISTORY_PAGE_SIZE = 20;
 export const HISTORY_CURSOR_RE = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z\|[\w-]{1,80}$/;
 
 /**
- * Kullanıcının bir türdeki üretimleri, yeniden eskiye sayfa sayfa. Oturum
- * yanıtı geçmişi taşımaz; stüdyo bu sayfaları ayrıca ister. Aynı anda oluşan
- * üretimler kimliğe göre sıralanır, böylece sayfa sınırında kayıt atlanmaz.
+ * Kullanıcının üretimleri, yeniden eskiye sayfa sayfa; türe ve projeye göre
+ * süzülebilir. Oturum yanıtı geçmişi taşımaz; stüdyo bu sayfaları ayrıca ister.
+ * Aynı anda oluşan üretimler kimliğe göre sıralanır, sayfa sınırında kayıt atlanmaz.
  */
 export async function listGenerations(
   db: Db,
   userId: string,
-  input: { type: GenerationType; cursor?: string | undefined },
+  input: {
+    type?: GenerationType | undefined;
+    projectId?: string | undefined;
+    cursor?: string | undefined;
+  },
   limit = HISTORY_PAGE_SIZE,
 ): Promise<GenerationPage> {
-  const where = [eq(generations.userId, userId), eq(generations.type, input.type)];
+  const where = [eq(generations.userId, userId)];
+  if (input.type) where.push(eq(generations.type, input.type));
+  if (input.projectId) where.push(eq(generations.projectId, input.projectId));
   if (input.cursor !== undefined) {
     if (!HISTORY_CURSOR_RE.test(input.cursor)) return { items: [], next: null };
     const [at, id] = input.cursor.split("|") as [string, string];
@@ -1183,6 +1221,54 @@ export async function listGenerations(
     items: page.map(toGeneration),
     next: rows.length > limit && last ? `${last.createdAt}|${last.id}` : null,
   };
+}
+
+/**
+ * Üretimi bir projeye taşır ya da projeden çıkarır (`projectId` null). Üretim
+ * ve hedef proje kullanıcının değilse "bulunamadı"; hedef projenin son
+ * etkinliği güncellenir.
+ */
+export async function moveGeneration(
+  db: Db,
+  userId: string,
+  id: string,
+  projectId: string | null,
+  now: Date,
+): Promise<Result<{ generation: Generation }, "notFound">> {
+  return db.transaction(async (tx) => {
+    if (projectId) {
+      const touched = await tx
+        .update(projects)
+        .set({ updatedAt: now.toISOString() })
+        .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
+      if (touched.rowsAffected !== 1) return { ok: false, error: "notFound" };
+    }
+    const row = await tx
+      .update(generations)
+      .set({ projectId })
+      .where(and(eq(generations.id, id), eq(generations.userId, userId)))
+      .returning()
+      .get();
+    return row ? { ok: true, generation: toGeneration(row) } : { ok: false, error: "notFound" };
+  });
+}
+
+/** Üretime ad verir; boş ad adı kaldırır (metin/istem gösterilir). */
+export async function renameGeneration(
+  db: Db,
+  userId: string,
+  id: string,
+  title: string,
+): Promise<Result<{ generation: Generation }, "notFound" | "invalidInput">> {
+  const clean = cleanTitle(title);
+  if (clean === undefined) return { ok: false, error: "invalidInput" };
+  const row = await db
+    .update(generations)
+    .set({ title: clean })
+    .where(and(eq(generations.id, id), eq(generations.userId, userId)))
+    .returning()
+    .get();
+  return row ? { ok: true, generation: toGeneration(row) } : { ok: false, error: "notFound" };
 }
 
 /** Üretimi siler; ses, görsel ya da video dosyası varsa depodan da kaldırılır. */
@@ -1221,7 +1307,7 @@ export async function generateImages(
   db: Db,
   deps: ImageDeps,
   userId: string,
-  input: { text: string; count: number },
+  input: { text: string; count: number } & GenerationMeta,
   now: Date,
 ): Promise<Result<{ generation: Generation }, ActionErrorCode> | RateLimited> {
   const text = input.text.trim();
@@ -1266,10 +1352,12 @@ export async function generateImages(
     status: null,
     job: null,
     charges: null,
+    projectId: null,
+    title: null,
     cost,
     createdAt: now.toISOString(),
   };
-  if (!(await chargeAndRecord(db, userId, "media", cost, row, now))) {
+  if (!(await chargeAndRecord(db, userId, "media", cost, row, now, input))) {
     await Promise.all(files.map((k) => deps.storage.remove(k)));
     return { ok: false, error: "insufficient" };
   }
@@ -1299,7 +1387,7 @@ export async function startVideo(
   db: Db,
   deps: VideoDeps,
   userId: string,
-  input: { text: string; styleIndex: number },
+  input: { text: string; styleIndex: number } & GenerationMeta,
   now: Date,
 ): Promise<Result<{ generation: Generation }, ActionErrorCode> | RateLimited> {
   const text = input.text.trim();
@@ -1354,10 +1442,12 @@ export async function startVideo(
     status: "pending",
     job,
     charges: null,
+    projectId: null,
+    title: null,
     cost,
     createdAt: now.toISOString(),
   };
-  if (!(await chargeAndRecord(db, userId, "media", cost, row, now))) {
+  if (!(await chargeAndRecord(db, userId, "media", cost, row, now, input))) {
     await deps.video.cancel(job).catch(() => {});
     return { ok: false, error: "insufficient" };
   }
@@ -1503,7 +1593,7 @@ export async function generateSpeech(
   db: Db,
   deps: SpeechDeps,
   userId: string,
-  input: { text: string; voiceId: string },
+  input: { text: string; voiceId: string } & GenerationMeta,
   now: Date,
 ): Promise<Result<{ generation: Generation }, ActionErrorCode> | RateLimited> {
   const text = input.text.trim();
@@ -1553,10 +1643,12 @@ export async function generateSpeech(
     status: null,
     job: null,
     charges: null,
+    projectId: null,
+    title: null,
     cost,
     createdAt: now.toISOString(),
   };
-  if (!(await chargeAndRecord(db, userId, "voice", cost, row, now))) {
+  if (!(await chargeAndRecord(db, userId, "voice", cost, row, now, input))) {
     await deps.storage.remove(audioKey);
     return { ok: false, error: "insufficient" };
   }
@@ -1865,6 +1957,7 @@ export async function deleteAccount(
       sessions,
       creditGrants,
       generations,
+      projects,
       voiceClones,
       oauthAccounts,
       emailTokens,

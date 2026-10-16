@@ -11,6 +11,7 @@ import { findPackage } from "@/lib/packages";
 import { MIN_TOPUP_CENTS } from "@/lib/wallet";
 import { openDb, type Db } from "@/server/db.server";
 import { hashPassword, verifyPassword } from "@/server/password.server";
+import { createProject } from "@/server/projects.server";
 import {
   addVoiceClone,
   authenticate,
@@ -512,6 +513,7 @@ describe("hesap yönetimi", () => {
     await buy(id, "media-2d");
     await generateContent(db, id, { type: "image", text: "kedi", count: 1 }, now);
     await addVoiceClone(db, id, "Sesim", now);
+    await createProject(db, id, { name: "Kişisel proje" }, now);
     await createTopUp(db, id, { method: "usdt_bep20", amountCents: 1_000 }, now);
 
     expect(
@@ -559,6 +561,7 @@ describe("hesap yönetimi", () => {
       "sessions",
       "credit_grants",
       "generations",
+      "projects",
       "voice_clones",
       "oauth_accounts",
       "email_tokens",

@@ -37,6 +37,7 @@ import { imageDeps, receiptContext, speechDeps, videoDeps } from "@/server/deps.
 import { getMailer } from "@/server/email.server";
 import { paypalConfig, sharedPaypal } from "@/server/paypal.server";
 import { env, isProduction } from "@/server/env.server";
+import * as projectSvc from "@/server/projects.server";
 import * as svc from "@/server/services.server";
 import { SESSION_COOKIE } from "@/server/session.server";
 import { ttsProvider } from "@/server/tts.server";
@@ -310,10 +311,28 @@ export const purchase = createServerFn({ method: "POST" })
     return { ok: true as const, order: res.order, session: await payloadFor(user) };
   });
 
+const id = z.string().min(1).max(80);
+// Proje kullanıcının değilse sunucuda yok sayılır; ad düzeltilen sürüme eski adı taşır.
+const generationMeta = { projectId: id.optional(), title: z.string().max(200).optional() };
 const generateSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("tts"), text: z.string().max(10_000), voiceId: z.string().max(80) }),
-  z.object({ type: z.literal("image"), text: z.string().max(1_000), count: z.number().int() }),
-  z.object({ type: z.literal("video"), text: z.string().max(1_000), styleIndex: z.number().int() }),
+  z.object({
+    type: z.literal("tts"),
+    text: z.string().max(10_000),
+    voiceId: z.string().max(80),
+    ...generationMeta,
+  }),
+  z.object({
+    type: z.literal("image"),
+    text: z.string().max(1_000),
+    count: z.number().int(),
+    ...generationMeta,
+  }),
+  z.object({
+    type: z.literal("video"),
+    text: z.string().max(1_000),
+    styleIndex: z.number().int(),
+    ...generationMeta,
+  }),
 ]);
 
 export const getStudioConfig = createServerFn({ method: "GET" }).handler(
@@ -397,12 +416,13 @@ export const deleteGeneration = createServerFn({ method: "POST" })
     return { ok: true as const, session: await payloadFor(user) };
   });
 
-/** Stüdyo geçmişi: bir türdeki üretimler, yeniden eskiye sayfa sayfa (oturum yanıtında yok). */
+/** Stüdyo/proje geçmişi: üretimler yeniden eskiye sayfa sayfa (oturum yanıtında yok). */
 export const listGenerations = createServerFn({ method: "POST" })
   .validator(
     parse(
       z.object({
-        type: z.enum(["tts", "image", "video"]),
+        type: z.enum(["tts", "image", "video"]).optional(),
+        projectId: id.optional(),
         cursor: z.string().max(120).regex(svc.HISTORY_CURSOR_RE).optional(),
       }),
     ),
@@ -411,6 +431,72 @@ export const listGenerations = createServerFn({ method: "POST" })
     const user = await currentUser();
     if (!user) return { ok: false as const, error: "unauthorized" as const };
     return { ok: true as const, ...(await svc.listGenerations(await getDb(), user.id, data)) };
+  });
+
+/** Üretimi projeye taşır ya da projeden çıkarır (`projectId: null`). */
+export const moveGeneration = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ id, projectId: id.nullable() })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    return svc.moveGeneration(await getDb(), user.id, data.id, data.projectId, clock());
+  });
+
+/** Üretime ad verir; boş ad adı kaldırır. */
+export const renameGeneration = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ id, title: z.string().max(200) })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    return svc.renameGeneration(await getDb(), user.id, data.id, data.title);
+  });
+
+// ---------------------------------------------------------------- projeler
+
+const projectFields = { name: z.string().max(200), notes: z.string().max(10_000).optional() };
+
+export const listProjects = createServerFn({ method: "POST" }).handler(async () => {
+  const user = await currentUser();
+  if (!user) return { ok: false as const, error: "unauthorized" as const };
+  return { ok: true as const, projects: await projectSvc.listProjects(await getDb(), user.id) };
+});
+
+export const getProject = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ id })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    const project = await projectSvc.getProject(await getDb(), user.id, data.id);
+    return project
+      ? { ok: true as const, project }
+      : { ok: false as const, error: "notFound" as const };
+  });
+
+export const createProject = createServerFn({ method: "POST" })
+  .validator(parse(z.object(projectFields)))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    return projectSvc.createProject(await getDb(), user.id, data, clock());
+  });
+
+export const updateProject = createServerFn({ method: "POST" })
+  .validator(
+    parse(z.object({ id, name: projectFields.name.optional(), notes: projectFields.notes })),
+  )
+  .handler(async ({ data: { id: projectId, ...changes } }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    return projectSvc.updateProject(await getDb(), user.id, projectId, changes, clock());
+  });
+
+/** Projeyi siler; üretimleri projesiz kalır. */
+export const deleteProject = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ id })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    return projectSvc.deleteProject(await getDb(), user.id, data.id);
   });
 
 /** Demo klon (yalnız ad). Servis bağlıyken kullanılmaz; gerçek klon uploadClone ile. */

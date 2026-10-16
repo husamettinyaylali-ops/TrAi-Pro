@@ -72,7 +72,23 @@ export interface Generation {
   status?: "pending" | "failed" | undefined;
   cost: number;
   createdAt: string;
+  /** Kullanıcının verdiği ad; yoksa metin/istem gösterilir. */
+  title?: string | undefined;
+  projectId?: string | undefined;
 }
+
+/** Kullanıcının çalışma alanı; üretimler bir projede toplanır. */
+export interface Project {
+  id: string;
+  name: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Projedeki üretim sayıları, türe göre. */
+  counts: Record<GenerationType, number>;
+}
+
+export type ProjectErrorCode = "unauthorized" | "notFound" | "invalidInput" | "limit";
 
 /** Stüdyo geçmişinin bir sayfası; `next` sonraki (daha eski) sayfanın imleci. */
 export interface GenerationPage {
@@ -117,11 +133,16 @@ export interface SessionPayload {
   admin: boolean;
 }
 
-/** Üretim isteği; maliyet istemciden alınmaz, sunucuda hesaplanır. */
-export type GenerateInput =
+/**
+ * Üretim isteği; maliyet istemciden alınmaz, sunucuda hesaplanır. `projectId`
+ * kullanıcının kendi projesi değilse yok sayılır; `title` düzeltilen sürüme
+ * eski kaydın adını taşır.
+ */
+export type GenerateInput = (
   | { type: "tts"; text: string; voiceId: string }
   | { type: "image"; text: string; count: number }
-  | { type: "video"; text: string; styleIndex: number };
+  | { type: "video"; text: string; styleIndex: number }
+) & { projectId?: string | undefined; title?: string | undefined };
 
 export type AuthErrorCode = "emailTaken" | "invalidCredentials";
 /** Çok fazla deneme; istemci bekleme süresini gösterir. */
