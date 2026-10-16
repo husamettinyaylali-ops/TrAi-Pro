@@ -15,6 +15,7 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 | `/account`                                                                         | Hesabım: ad, şifre, Google bağlantısı, diğer oturumları kapatma, hesabı silme |
 | `/forgot-password`, `/reset-password`                                              | Şifremi unuttum: e-postayla sıfırlama bağlantısı ve yeni şifre                |
 | `/verify-email`                                                                    | E-posta doğrulama bağlantısının açıldığı sayfa                                |
+| `/api-docs`                                                                        | Geliştirici API belgeleri (herkese açık); API anahtarları Hesabım'da          |
 | `/admin`                                                                           | Yönetim: özet, kullanıcı/ödeme arama, bakiye düzeltme, elle tamamlama, kayıt  |
 | `/terms-of-service`, `/privacy-policy`, `/refund-policy`, `/acceptable-use-policy` | Yasal şablon metinler                                                         |
 
@@ -88,6 +89,16 @@ Görselle aynı `FAL_KEY` kullanılır; model varsayılan olarak Kling 1.6 stand
 ## Bakiyeye yazılan tutar
 
 Kripto yöntemlerde benzersizlik için eklenen kuruşlar kullanıcıda kalır: bakiyeye, ödenen tutar sente aşağı yuvarlanarak yazılır (10,37 USDT → $10,37; 10,0347 USDT → $10,03). Bir talebin tutarı, o talebe ödeme gelebileceği sürece (talep beklerken, kullanıcı yeni tutar istediğinde ve süresi dolduktan sonraki 5 dakika) başka bir kullanıcıya verilmez.
+
+## Geliştirici API'si
+
+Kullanıcılar Hesabım sayfasından API anahtarı oluşturur (en fazla 5 etkin anahtar, e-postası doğrulanmış hesap) ve `/api/v1` uç noktalarını `Authorization: Bearer trai_…` başlığıyla çağırır. Belgeler: `/api-docs`.
+
+- Uç noktalar: `GET me`, `GET voices`, `POST tts`, `POST images`, `POST videos` (202, kuyruk), `GET generations/:id`, `GET generations/:id/files/:sıra`.
+- Kredi, fiyat, sınır ve "hata/redde kredi düşmez" kuralları stüdyoyla aynı servis fonksiyonlarından geçer. Ek olarak anahtar başına dakikada 120 istek.
+- Anahtarın kendisi saklanmaz (SHA-256 özeti); kullanıcı oluştururken bir kez görür. İptal edilen anahtar ve silinen hesabın anahtarları kabul edilmez.
+- Hatalar `{"error":{"code","message"}}` biçiminde, uygun HTTP durumuyla döner; ilgili servis bu sunucuda açık değilse 503.
+- API sunucudan sunucuya kullanım içindir; CORS açık değildir.
 
 ## Yönetim paneli
 
