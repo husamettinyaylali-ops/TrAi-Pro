@@ -86,6 +86,10 @@ Görselle aynı `FAL_KEY` kullanılır; model varsayılan olarak Kling 1.6 stand
 - Bir kullanıcı aynı anda en fazla 3 video hazırlatabilir ve saatte en fazla 10 video isteği gönderebilir.
 - **Maliyet:** Kling 1.6 standart fal.ai'de 5 saniyelik video başına yaklaşık 0,25 $'dır; 15 kredi Video & Görsel paketlerinde yaklaşık 0,40–0,45 $ eder. Güncel fiyatı fal.ai'den kontrol edin; model değişirse kredi maliyetini de gözden geçirin.
 
+## Ödeme makbuzları
+
+Bakiye yüklemesi tamamlanınca (kullanıcının kendi doğrulaması, PayPal webhook'u ya da yönetici elle tamamlaması) ve bakiyeden paket alınınca kullanıcıya makbuz e-postası gider: yöntem, yazılan tutar, güncel bakiye, işlem numarası; pakette kredi, son kullanma ve kalan bakiye. Makbuz talep anındaki dilde gider ve her ödeme için bir kez gönderilir (`payment_intents.receipt_sent_at`). Demo yüklemeye ve silinmiş hesaba gönderilmez; e-posta gönderilemezse ödeme etkilenmez, loglanır.
+
 ## Bakiyeye yazılan tutar
 
 Kripto yöntemlerde benzersizlik için eklenen kuruşlar kullanıcıda kalır: bakiyeye, ödenen tutar sente aşağı yuvarlanarak yazılır (10,37 USDT → $10,37; 10,0347 USDT → $10,03). Bir talebin tutarı, o talebe ödeme gelebileceği sürece (talep beklerken, kullanıcı yeni tutar istediğinde ve süresi dolduktan sonraki 5 dakika) başka bir kullanıcıya verilmez.
