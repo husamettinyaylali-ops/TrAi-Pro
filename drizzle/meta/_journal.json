@@ -71,6 +71,13 @@
       "when": 1792135002709,
       "tag": "0009_video_isleri",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792137610574,
+      "tag": "0010_api_anahtarlari",
+      "breakpoints": true
     }
   ]
 }

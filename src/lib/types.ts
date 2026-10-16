@@ -248,3 +248,12 @@ export interface AdminIntentRow extends TopUpIntent {
   userId: string;
   userEmail: string;
 }
+
+/** Hesap sayfasında listelenen API anahtarı (anahtarın kendisi yalnız oluşturulurken görünür). */
+export interface ApiKeyInfo {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}

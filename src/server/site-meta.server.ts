@@ -50,6 +50,7 @@ const PRIVATE_PATHS = [
   "/auth/",
   "/media/",
   "/webhooks/",
+  "/api/",
 ];
 
 const base = (publicUrl: string | undefined) => publicUrl?.replace(/\/$/, "") || null;

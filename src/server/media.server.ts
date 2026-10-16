@@ -23,7 +23,7 @@ const CONTENT_TYPES: Record<string, string> = {
   mp4: "video/mp4",
 };
 
-type KeyOf = (row: {
+export type KeyOf = (row: {
   audioKey: string | null;
   files: string[] | null;
 }) => string | null | undefined;
@@ -44,20 +44,31 @@ async function serveOwned(
   const now = deps.now ?? clock();
   const user = token ? await getSessionUser(db, token, now) : null;
   if (!user) return new Response("Oturum gerekli", { status: 401 });
+  const download = new URL(request.url).searchParams.has("download");
+  return ownedFileResponse(db, deps.storage ?? fileStorage(), user.id, id, keyOf, download);
+}
 
+/** Kimliği doğrulanmış kullanıcının üretim dosyası (oturum ya da API anahtarı). */
+export async function ownedFileResponse(
+  db: Db,
+  storage: FileStorage,
+  userId: string,
+  id: string,
+  keyOf: KeyOf,
+  download: boolean,
+): Promise<Response> {
   const row = await db
     .select({ audioKey: generations.audioKey, files: generations.files })
     .from(generations)
-    .where(and(eq(generations.id, id), eq(generations.userId, user.id)))
+    .where(and(eq(generations.id, id), eq(generations.userId, userId)))
     .get();
   const key = row ? keyOf(row) : null;
   if (!key) return new Response("Bulunamadı", { status: 404 });
 
-  const data = await (deps.storage ?? fileStorage()).read(key);
+  const data = await storage.read(key);
   if (!data) return new Response("Bulunamadı", { status: 404 });
 
   const ext = key.slice(key.lastIndexOf(".") + 1);
-  const download = new URL(request.url).searchParams.has("download");
   return new Response(new Uint8Array(data), {
     headers: {
       "content-type": CONTENT_TYPES[ext] ?? "application/octet-stream",

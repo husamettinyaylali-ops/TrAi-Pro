@@ -1,0 +1,52 @@
+import { getDb } from "./db.server";
+import { env } from "./env.server";
+import { fileStorage } from "./file-storage.server";
+import { imageProvider } from "./image.server";
+import {
+  clonedProviderIds,
+  type ImageDeps,
+  type SpeechDeps,
+  type VideoDeps,
+} from "./services.server";
+import { cachedVoices, publicVoices, ttsProvider, voiceAllowList } from "./tts.server";
+import { videoProvider } from "./video.server";
+
+/**
+ * Ücretli servislerin bağımlılıkları; anahtar yoksa null (demo kip). Stüdyo
+ * (src/api/functions.ts) ve geliştirici API'si (public-api.server.ts) aynı
+ * yardımcıları kullanır.
+ */
+
+/** ElevenLabs bağlıysa gerçek seslendirme bağımlılıkları. */
+export function speechDeps(): SpeechDeps | null {
+  const tts = ttsProvider();
+  if (!tts) return null;
+  return {
+    tts,
+    storage: fileStorage(),
+    catalog: async () =>
+      publicVoices(
+        await cachedVoices(tts),
+        await clonedProviderIds(await getDb()),
+        voiceAllowList(),
+      ),
+  };
+}
+
+/** fal.ai bağlıysa gerçek görsel üretimi bağımlılıkları. */
+export function imageDeps(): ImageDeps | null {
+  const images = imageProvider();
+  return images ? { images, storage: fileStorage() } : null;
+}
+
+/** fal.ai bağlıysa video bağımlılıkları; yayında (PUBLIC_URL varken) iş bitince /webhooks/fal'a haber verilir. */
+export function videoDeps(): VideoDeps | null {
+  const video = videoProvider();
+  if (!video) return null;
+  const base = env("PUBLIC_URL");
+  return {
+    video,
+    storage: fileStorage(),
+    webhookUrl: base ? `${base.replace(/\/$/, "")}/webhooks/fal` : null,
+  };
+}

@@ -25,6 +25,8 @@ export const LIMITS = {
   imagePerUser: { max: 30, windowMs: 10 * MINUTE },
   /** Aynı kullanıcı saatte en fazla 10 video isteği. */
   videoPerUser: { max: 10, windowMs: 60 * MINUTE },
+  /** Bir API anahtarıyla dakikada en fazla 120 istek (üretim sınırları ayrıca geçerlidir). */
+  apiPerKey: { max: 120, windowMs: MINUTE },
   /** Aynı kullanıcı saatte en fazla 5 ses klonlama denemesi. */
   clonePerUser: { max: 5, windowMs: 60 * MINUTE },
   /** Aynı kullanıcı saatte en fazla 20 ödeme doğrulama denemesi (zincir/servis sorgusu). */

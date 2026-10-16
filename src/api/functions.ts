@@ -28,14 +28,13 @@ import { fileStorage } from "@/server/file-storage.server";
 import { binanceConfig, sharedIncoming } from "@/server/binance.server";
 import { checkUsdtTransfer, rpcClient, usdtConfig } from "@/server/bsc.server";
 import { getDb } from "@/server/db.server";
+import { imageDeps, speechDeps, videoDeps } from "@/server/deps.server";
 import { getMailer } from "@/server/email.server";
-import { imageProvider } from "@/server/image.server";
-import { videoProvider } from "@/server/video.server";
 import { paypalConfig, sharedPaypal } from "@/server/paypal.server";
 import { env, isProduction } from "@/server/env.server";
 import * as svc from "@/server/services.server";
 import { SESSION_COOKIE } from "@/server/session.server";
-import { cachedVoices, publicVoices, ttsProvider, voiceAllowList } from "@/server/tts.server";
+import { ttsProvider } from "@/server/tts.server";
 
 // İstemci bu dosyadaki fonksiyonları RPC olarak çağırır; gövdeler yalnız sunucuda çalışır.
 
@@ -297,40 +296,6 @@ const generateSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("image"), text: z.string().max(1_000), count: z.number().int() }),
   z.object({ type: z.literal("video"), text: z.string().max(1_000), styleIndex: z.number().int() }),
 ]);
-
-/** ElevenLabs bağlıysa gerçek seslendirme bağımlılıkları; değilse null (demo kip). */
-function speechDeps(): svc.SpeechDeps | null {
-  const tts = ttsProvider();
-  if (!tts) return null;
-  return {
-    tts,
-    storage: fileStorage(),
-    catalog: async () =>
-      publicVoices(
-        await cachedVoices(tts),
-        await svc.clonedProviderIds(await getDb()),
-        voiceAllowList(),
-      ),
-  };
-}
-
-/** Stüdyonun kipi ve hazır ses listesi. Liste alınamazsa canlı kipte boş döner. */
-function imageDeps(): svc.ImageDeps | null {
-  const images = imageProvider();
-  return images ? { images, storage: fileStorage() } : null;
-}
-
-/** Yayında (PUBLIC_URL varken) fal.ai iş bitince /webhooks/fal'a haber verir. */
-function videoDeps(): svc.VideoDeps | null {
-  const video = videoProvider();
-  if (!video) return null;
-  const base = env("PUBLIC_URL");
-  return {
-    video,
-    storage: fileStorage(),
-    webhookUrl: base ? `${base.replace(/\/$/, "")}/webhooks/fal` : null,
-  };
-}
 
 export const getStudioConfig = createServerFn({ method: "GET" }).handler(
   async (): Promise<StudioConfig> => {

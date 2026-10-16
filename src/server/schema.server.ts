@@ -253,3 +253,26 @@ export const adminActions = sqliteTable(
     index("admin_actions_created_idx").on(t.createdAt),
   ],
 );
+
+/**
+ * Geliştirici API anahtarı. Anahtarın kendisi saklanmaz, yalnız SHA-256 özeti;
+ * kullanıcı anahtarı oluşturduğunda bir kez görür. İptal edilen anahtar kalır
+ * (revokedAt) ama kabul edilmez.
+ */
+export const apiKeys = sqliteTable(
+  "api_keys",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Listede gösterilen baş kısım, ör. "trai_AbC123xy". */
+    prefix: text("prefix").notNull(),
+    keyHash: text("key_hash").notNull().unique(),
+    createdAt: text("created_at").notNull(),
+    lastUsedAt: text("last_used_at"),
+    revokedAt: text("revoked_at"),
+  },
+  (t) => [index("api_keys_user_idx").on(t.userId)],
+);

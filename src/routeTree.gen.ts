@@ -31,6 +31,7 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AuthGoogleRouteImport } from './routes/auth/google'
 import { Route as WebhooksFalRouteImport } from './routes/webhooks/fal'
 import { Route as WebhooksPaypalRouteImport } from './routes/webhooks/paypal'
+import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as MediaAudioIdRouteImport } from './routes/media/audio/$id'
 import { Route as MediaFileIdIndexRouteImport } from './routes/media/file/$id/$index'
@@ -145,6 +146,11 @@ const WebhooksPaypalRoute = WebhooksPaypalRouteImport.update({
   path: '/webhooks/paypal',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV1SplatRoute = ApiV1SplatRouteImport.update({
+  id: '/api/v1/$',
+  path: '/api/v1/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
@@ -184,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/auth/google': typeof AuthGoogleRouteWithChildren
   '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
+  '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
@@ -211,6 +218,7 @@ export interface FileRoutesByTo {
   '/auth/google': typeof AuthGoogleRouteWithChildren
   '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
+  '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
@@ -239,6 +247,7 @@ export interface FileRoutesById {
   '/auth/google': typeof AuthGoogleRouteWithChildren
   '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
+  '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
@@ -268,6 +277,7 @@ export interface FileRouteTypes {
     | '/auth/google'
     | '/webhooks/fal'
     | '/webhooks/paypal'
+    | '/api/v1/$'
     | '/auth/google/callback'
     | '/media/audio/$id'
     | '/media/file/$id/$index'
@@ -295,6 +305,7 @@ export interface FileRouteTypes {
     | '/auth/google'
     | '/webhooks/fal'
     | '/webhooks/paypal'
+    | '/api/v1/$'
     | '/auth/google/callback'
     | '/media/audio/$id'
     | '/media/file/$id/$index'
@@ -322,6 +333,7 @@ export interface FileRouteTypes {
     | '/auth/google'
     | '/webhooks/fal'
     | '/webhooks/paypal'
+    | '/api/v1/$'
     | '/auth/google/callback'
     | '/media/audio/$id'
     | '/media/file/$id/$index'
@@ -350,6 +362,7 @@ export interface RootRouteChildren {
   AuthGoogleRoute: typeof AuthGoogleRouteWithChildren
   WebhooksFalRoute: typeof WebhooksFalRoute
   WebhooksPaypalRoute: typeof WebhooksPaypalRoute
+  ApiV1SplatRoute: typeof ApiV1SplatRoute
   MediaAudioIdRoute: typeof MediaAudioIdRoute
   MediaFileIdIndexRoute: typeof MediaFileIdIndexRoute
 }
@@ -510,6 +523,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WebhooksPaypalRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/$': {
+      id: '/api/v1/$'
+      path: '/api/v1/$'
+      fullPath: '/api/v1/$'
+      preLoaderRoute: typeof ApiV1SplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/google/callback': {
       id: '/auth/google/callback'
       path: '/callback'
@@ -569,6 +589,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthGoogleRoute: AuthGoogleRouteWithChildren,
   WebhooksFalRoute: WebhooksFalRoute,
   WebhooksPaypalRoute: WebhooksPaypalRoute,
+  ApiV1SplatRoute: ApiV1SplatRoute,
   MediaAudioIdRoute: MediaAudioIdRoute,
   MediaFileIdIndexRoute: MediaFileIdIndexRoute,
 }

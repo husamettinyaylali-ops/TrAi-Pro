@@ -93,6 +93,7 @@ import {
 import type { GoogleProfile } from "./google.server";
 import { DUMMY_HASH, hashPassword, verifyPassword } from "./password.server";
 import {
+  apiKeys,
   authAttempts,
   creditGrants,
   emailTokens,
@@ -259,7 +260,7 @@ async function rateCheck(db: Db, key: string, limit: Limit, now: Date) {
   );
 }
 
-async function recordAttempt(db: Db, key: string, now: Date) {
+export async function recordAttempt(db: Db, key: string, now: Date) {
   await db.insert(authAttempts).values({ id: randomUUID(), key, createdAt: now.toISOString() });
   // Bir günden eski kayıtlar artık hiçbir pencereye girmez.
   await db
@@ -268,7 +269,7 @@ async function recordAttempt(db: Db, key: string, now: Date) {
 }
 
 /** Kontrol edilen anahtarlardan en uzun bekleme süresini döner; hepsi serbestse null. */
-async function blocked(
+export async function blocked(
   db: Db,
   checks: [key: string, limit: Limit][],
   now: Date,
@@ -1124,6 +1125,20 @@ async function chargeAndRecord(
   });
 }
 
+/** Kullanıcının tek bir üretimi; başkasınınki ya da yoksa null. */
+export async function getGeneration(
+  db: Db,
+  userId: string,
+  id: string,
+): Promise<Generation | null> {
+  const row = await db
+    .select()
+    .from(generations)
+    .where(and(eq(generations.id, id), eq(generations.userId, userId)))
+    .get();
+  return row ? toGeneration(row) : null;
+}
+
 /** Üretimi siler; ses, görsel ya da video dosyası varsa depodan da kaldırılır. */
 export async function removeGeneration(
   db: Db,
@@ -1807,6 +1822,7 @@ export async function deleteAccount(
       voiceClones,
       oauthAccounts,
       emailTokens,
+      apiKeys,
     ]) {
       await tx.delete(table).where(eq(table.userId, userId));
     }
