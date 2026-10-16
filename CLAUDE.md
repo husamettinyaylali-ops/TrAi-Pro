@@ -35,7 +35,7 @@ Kredi tabanlı yapay zeka ses, video ve görsel platformu. Yapı ve kapsam için
 - **Paket ve fiyatlar** yalnız `src/lib/packages.ts` içinde değişir.
 - **Yönlendirme** parametreleri `safeRedirect()` ile süzülür; dış adrese yönlendirme yapılmaz.
 - **Erişilebilirlik:** dokunma hedefi en az 44 px (`min-h-11`), görünür odak halkası, simge düğmelerde `aria-label`, durum yalnız renkle verilmez.
-- **Mobil:** 375 px genişlikte yatay taşma olmamalı. Grid'lerde mobil sütun `grid-cols-[minmax(0,1fr)]` olarak sınırlandırılır.
+- **Mobil:** 375 px genişlikte yatay taşma olmamalı. Grid'lerde mobil sütun `grid-cols-[minmax(0,1fr)]` olarak sınırlandırılır. Kullanıcı metni (geçmiş, istem) içeren masaüstü sütunları da `minmax(0,…)` ile yazılır (`lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]`); yalın `1fr` tek satıra kısaltılan uzun metinle sütunu sayfa dışına genişletir.
 - **Gizli bilgiler** (API anahtarları, ödeme anahtarları) koda yazılmaz; `.env` (git'e girmez) ve sunucu tarafında kullanılır.
 
 ## Çalışma biçimi

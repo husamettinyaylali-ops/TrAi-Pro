@@ -237,7 +237,7 @@ export function TextToSpeech() {
   };
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[1.4fr_1fr]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <Panel>
         <form onSubmit={submit} className="space-y-4">
           <div>
@@ -445,7 +445,7 @@ export function VoiceClone() {
   };
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[1.4fr_1fr]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <Panel>
         <form onSubmit={submit} className="space-y-5">
           <div>
