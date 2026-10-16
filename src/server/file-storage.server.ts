@@ -3,8 +3,12 @@ import { dirname, join, resolve, sep } from "node:path";
 
 import { env } from "./env.server";
 
-/** Üretilen ses dosyalarının deposu. Yayın ortamına göre (ör. R2/S3) değiştirilebilir. */
-export interface AudioStorage {
+/**
+ * Üretilen dosyaların (ses, görsel, video) deposu. Anahtar biçimi
+ * `<kullanıcı>/<dosya>.<uzantı>`; hesap silinince kullanıcı öneki toptan silinir.
+ * Yayın ortamına göre (ör. R2/S3) değiştirilebilir.
+ */
+export interface FileStorage {
   put(key: string, data: Uint8Array): Promise<void>;
   read(key: string): Promise<Uint8Array | null>;
   remove(key: string): Promise<void>;
@@ -12,7 +16,7 @@ export interface AudioStorage {
   removePrefix(prefix: string): Promise<void>;
 }
 
-const KEY_RE = /^[A-Za-z0-9-]+(\/[A-Za-z0-9-]+)*(\.mp3)?$/;
+const KEY_RE = /^[A-Za-z0-9-]+(\/[A-Za-z0-9-]+)*(\.(mp3|jpg|png|webp|mp4))?$/;
 
 /** Anahtar yalnız kendi ürettiğimiz biçimde olabilir; dizin dışına çıkış engellenir. */
 function pathFor(root: string, key: string): string {
@@ -22,7 +26,7 @@ function pathFor(root: string, key: string): string {
   return full;
 }
 
-export function localAudioStorage(root: string): AudioStorage {
+export function localFileStorage(root: string): FileStorage {
   return {
     async put(key, data) {
       const p = pathFor(root, key);
@@ -45,7 +49,7 @@ export function localAudioStorage(root: string): AudioStorage {
   };
 }
 
-/** AUDIO_DIR yoksa data/audio. */
-export function audioStorage(): AudioStorage {
-  return localAudioStorage(env("AUDIO_DIR") ?? join("data", "audio"));
+/** MEDIA_DIR (eski adıyla AUDIO_DIR) yoksa data/media. */
+export function fileStorage(): FileStorage {
+  return localFileStorage(env("MEDIA_DIR") ?? env("AUDIO_DIR") ?? join("data", "media"));
 }

@@ -3,6 +3,7 @@ import { randomInt, randomUUID } from "node:crypto";
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, lt, lte, ne, sum } from "drizzle-orm";
 
 import {
+  IMAGE_COUNTS,
   MAX_CLONES,
   MAX_TTS_CHARS,
   balance,
@@ -46,7 +47,13 @@ import { stockVoices } from "@/lib/voices";
 
 import type { Lang } from "@/lib/i18n";
 
-import type { AudioStorage } from "./audio-storage.server";
+import type { FileStorage } from "./file-storage.server";
+import {
+  ContentRejected,
+  extensionOf,
+  type GeneratedImage,
+  type ImageProvider,
+} from "./image.server";
 import type { BinanceIncome, IncomingFetcher } from "./binance.server";
 import {
   ORDER_ID_RE,
@@ -358,6 +365,7 @@ const toGeneration = (g: GenerationRow): Generation => ({
   style: g.style ?? undefined,
   images: g.images ?? undefined,
   audioUrl: g.audioKey ? `/media/audio/${g.id}` : undefined,
+  fileUrls: g.files?.map((_, i) => `/media/file/${g.id}/${i}`),
   cost: g.cost,
   createdAt: g.createdAt,
 });
@@ -982,11 +990,12 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           style: null,
           images: null,
           audioKey: null,
+          files: null,
         },
       };
     }
     case "image": {
-      if (![1, 2, 4].includes(input.count) || text.length > 400) return null;
+      if (!isImageCount(input.count) || text.length > 400) return null;
       return {
         kind: "media",
         cost: mediaCost("image", input.count),
@@ -997,6 +1006,7 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           style: null,
           images: pick(input.count),
           audioKey: null,
+          files: null,
         },
       };
     }
@@ -1018,6 +1028,7 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           style: String(input.styleIndex),
           images: pick(1),
           audioKey: null,
+          files: null,
         },
       };
     }
@@ -1076,28 +1087,99 @@ async function chargeAndRecord(
   });
 }
 
-/** Üretimi siler; ses dosyası varsa depodan da kaldırılır. */
+/** Üretimi siler; ses, görsel ya da video dosyası varsa depodan da kaldırılır. */
 export async function removeGeneration(
   db: Db,
   userId: string,
   id: string,
-  storage?: AudioStorage,
+  storage?: FileStorage,
 ): Promise<void> {
   const row = await db
-    .select({ audioKey: generations.audioKey })
+    .select({ audioKey: generations.audioKey, files: generations.files })
     .from(generations)
     .where(and(eq(generations.id, id), eq(generations.userId, userId)))
     .get();
   if (!row) return;
   await db.delete(generations).where(and(eq(generations.id, id), eq(generations.userId, userId)));
-  if (row.audioKey && storage) await storage.remove(row.audioKey);
+  if (!storage) return;
+  const keys = [...(row.audioKey ? [row.audioKey] : []), ...(row.files ?? [])];
+  await Promise.all(keys.map((k) => storage.remove(k)));
+}
+
+const isImageCount = (n: number) => (IMAGE_COUNTS as readonly number[]).includes(n);
+
+// ---------------------------------------------------------------- gerçek görsel üretimi (fal.ai)
+
+export interface ImageDeps {
+  images: ImageProvider;
+  storage: FileStorage;
+}
+
+/**
+ * Görsel üretir, dosyaları depoya yazar ve krediyi teslim edilen görsel sayısı
+ * kadar düşer. Sağlayıcı hata verir ya da içeriği reddederse kredi düşülmez.
+ */
+export async function generateImages(
+  db: Db,
+  deps: ImageDeps,
+  userId: string,
+  input: { text: string; count: number },
+  now: Date,
+): Promise<Result<{ generation: Generation }, ActionErrorCode> | RateLimited> {
+  const text = input.text.trim();
+  if (!text || text.length > 400 || !isImageCount(input.count)) {
+    return { ok: false, error: "invalidInput" };
+  }
+  const grants = (await db.select().from(creditGrants).where(eq(creditGrants.userId, userId))).map(
+    toGrant,
+  );
+  if (balance(grants, "media", now) < mediaCost("image", input.count)) {
+    return { ok: false, error: "insufficient" };
+  }
+
+  const key = `image:user:${userId}`;
+  const stop = await blocked(db, [[key, LIMITS.imagePerUser]], now);
+  if (stop) return stop;
+  await recordAttempt(db, key, now);
+
+  let images: GeneratedImage[];
+  try {
+    images = await deps.images.generate({ prompt: text, count: input.count });
+  } catch (err) {
+    if (err instanceof ContentRejected) return { ok: false, error: "contentRejected" };
+    console.error("[görsel] üretim başarısız:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "providerFailed" };
+  }
+
+  const id = randomUUID();
+  const files = images.map((img, i) => `${userId}/${id}-${i}.${extensionOf(img.contentType)}`);
+  await Promise.all(files.map((k, i) => deps.storage.put(k, images[i]!.data)));
+  const cost = mediaCost("image", files.length);
+  const row: GenerationRow = {
+    id,
+    userId,
+    type: "image",
+    text,
+    voiceId: null,
+    style: null,
+    images: null,
+    audioKey: null,
+    files,
+    cost,
+    createdAt: now.toISOString(),
+  };
+  if (!(await chargeAndRecord(db, userId, "media", cost, row, now))) {
+    await Promise.all(files.map((k) => deps.storage.remove(k)));
+    return { ok: false, error: "insufficient" };
+  }
+  return { ok: true, generation: toGeneration(row) };
 }
 
 // ---------------------------------------------------------------- gerçek seslendirme (ElevenLabs)
 
 export interface SpeechDeps {
   tts: TtsProvider;
-  storage: AudioStorage;
+  storage: FileStorage;
   /** Herkese açık hazır sesler (kullanıcı klonları ayıklanmış). */
   catalog: () => Promise<ProviderVoice[]>;
 }
@@ -1185,6 +1267,7 @@ export async function generateSpeech(
     style: null,
     images: null,
     audioKey,
+    files: null,
     cost,
     createdAt: now.toISOString(),
   };
@@ -1453,7 +1536,7 @@ export async function deleteAccount(
   input: { confirmEmail: string; password?: string | undefined },
   ip: string | null,
   now: Date,
-  cleanup: { tts: TtsProvider | null; storage: AudioStorage | null } = { tts: null, storage: null },
+  cleanup: { tts: TtsProvider | null; storage: FileStorage | null } = { tts: null, storage: null },
 ): Promise<Result<object, "confirmMismatch" | "invalidCredentials"> | RateLimited> {
   const row = await authRow(db, userId);
   if (!row) return { ok: false, error: "invalidCredentials" };

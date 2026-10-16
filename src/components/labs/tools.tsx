@@ -638,7 +638,12 @@ export function MediaStudio({ type }: { type: MediaType }) {
   const [count, setCount] = useState(isVideo ? 1 : 2);
   const [style, setStyle] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<"insufficient" | "empty" | "failed" | null>(null);
+  const [error, setError] = useState<
+    "insufficient" | "empty" | "failed" | "providerFailed" | "contentRejected" | null
+  >(null);
+  const config = useStudioConfig();
+  // Video henüz bir servise bağlı değil; görsel FAL_KEY varsa gerçektir.
+  const live = !isVideo && config.data?.image === "live";
 
   const now = clock();
   const hasPass = balance(data.grants, "media", now) > 0;
@@ -657,7 +662,14 @@ export function MediaStudio({ type }: { type: MediaType }) {
       isVideo ? { type: "video", text, styleIndex: style } : { type: "image", text, count },
     );
     setBusy(false);
-    if (!res.ok) setError(res.error === "insufficient" ? "insufficient" : "failed");
+    if (res.ok) return;
+    setError(
+      res.error === "insufficient" ||
+        res.error === "providerFailed" ||
+        res.error === "contentRejected"
+        ? res.error
+        : "failed",
+    );
   };
 
   /** Video stili sunucuda sıra numarasıyla saklanır; ad seçili dile göre gösterilir. */
@@ -724,9 +736,13 @@ export function MediaStudio({ type }: { type: MediaType }) {
               {t.auth.errors.required}
             </p>
           )}
-          {error === "failed" && (
+          {(error === "failed" || error === "providerFailed" || error === "contentRejected") && (
             <p role="alert" className="text-sm text-destructive">
-              {t.labs.failed}
+              {error === "providerFailed"
+                ? t.labs.imageFailed
+                : error === "contentRejected"
+                  ? t.labs.contentRejected
+                  : t.labs.failed}
             </p>
           )}
           <div className="flex flex-wrap items-center gap-4">
@@ -742,7 +758,7 @@ export function MediaStudio({ type }: { type: MediaType }) {
             </button>
             <span className="text-sm text-muted-foreground">{t.labs.cost(f.num(cost))}</span>
           </div>
-          <p className="text-xs text-muted-foreground">{t.labs.demoResult}</p>
+          {!live && <p className="text-xs text-muted-foreground">{t.labs.demoResult}</p>}
         </form>
       </Panel>
 
@@ -788,26 +804,45 @@ export function MediaStudio({ type }: { type: MediaType }) {
                 <div
                   className={`grid gap-3 ${isVideo ? "sm:grid-cols-2" : "grid-cols-2 md:grid-cols-4"}`}
                 >
-                  {(g.images ?? [0]).map((idx, i) => (
-                    <div
-                      key={i}
-                      className={`group relative overflow-hidden rounded-xl ${isVideo ? "aspect-video" : "aspect-square"}`}
-                    >
+                  {g.fileUrls?.map((url, i) => (
+                    <div key={url} className="group relative overflow-hidden rounded-xl">
                       <img
-                        src={gens[idx]}
+                        src={url}
                         alt={g.text}
                         loading="lazy"
-                        className="h-full w-full object-cover transition duration-700 group-hover:scale-110 animate-in fade-in zoom-in-95"
+                        className="aspect-square h-full w-full object-cover animate-in fade-in zoom-in-95"
                       />
-                      {isVideo && (
-                        <span className="absolute inset-0 grid place-items-center bg-background/20">
-                          <span className="grid h-14 w-14 place-items-center rounded-full bg-gradient-brand text-primary-foreground shadow-glow">
-                            <Play className="h-6 w-6" />
-                          </span>
-                        </span>
-                      )}
+                      <a
+                        href={`${url}?download=1`}
+                        download
+                        aria-label={`${t.labs.downloadImage} ${i + 1}`}
+                        className="absolute bottom-2 right-2 grid h-11 w-11 place-items-center rounded-full bg-background/80 text-foreground opacity-90 transition hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Download className="h-4 w-4" aria-hidden />
+                      </a>
                     </div>
                   ))}
+                  {!g.fileUrls &&
+                    (g.images ?? [0]).map((idx, i) => (
+                      <div
+                        key={i}
+                        className={`group relative overflow-hidden rounded-xl ${isVideo ? "aspect-video" : "aspect-square"}`}
+                      >
+                        <img
+                          src={gens[idx]}
+                          alt={g.text}
+                          loading="lazy"
+                          className="h-full w-full object-cover transition duration-700 group-hover:scale-110 animate-in fade-in zoom-in-95"
+                        />
+                        {isVideo && (
+                          <span className="absolute inset-0 grid place-items-center bg-background/20">
+                            <span className="grid h-14 w-14 place-items-center rounded-full bg-gradient-brand text-primary-foreground shadow-glow">
+                              <Play className="h-6 w-6" />
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                    ))}
                 </div>
               </li>
             ))}

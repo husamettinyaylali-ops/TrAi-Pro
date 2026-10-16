@@ -21,6 +21,8 @@ export const LIMITS = {
   verifyResendPerUser: { max: 3, windowMs: 60 * MINUTE },
   /** Aynı kullanıcı dakikada en fazla 20 seslendirme (ücretli servise yığılmayı önler). */
   ttsPerUser: { max: 20, windowMs: MINUTE },
+  /** Aynı kullanıcı 10 dakikada en fazla 30 görsel üretim isteği (ücretli servise yığılmayı önler). */
+  imagePerUser: { max: 30, windowMs: 10 * MINUTE },
   /** Aynı kullanıcı saatte en fazla 5 ses klonlama denemesi. */
   clonePerUser: { max: 5, windowMs: 60 * MINUTE },
   /** Aynı kullanıcı saatte en fazla 20 ödeme doğrulama denemesi (zincir/servis sorgusu). */

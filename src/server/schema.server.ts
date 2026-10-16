@@ -109,6 +109,8 @@ export const generations = sqliteTable(
     images: text("images", { mode: "json" }).$type<number[]>(),
     /** Gerçek seslendirmede ses dosyasının depodaki anahtarı; demo üretimde boş. */
     audioKey: text("audio_key"),
+    /** Gerçek görsel/video üretiminde dosyaların depodaki anahtarları; demo üretimde boş. */
+    files: text("files", { mode: "json" }).$type<string[]>(),
     cost: integer("cost").notNull(),
     createdAt: text("created_at").notNull(),
   },

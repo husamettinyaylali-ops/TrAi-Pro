@@ -24,11 +24,12 @@ import {
   searchUsers,
   userDetail,
 } from "@/server/admin.server";
-import { audioStorage } from "@/server/audio-storage.server";
+import { fileStorage } from "@/server/file-storage.server";
 import { binanceConfig, sharedIncoming } from "@/server/binance.server";
 import { checkUsdtTransfer, rpcClient, usdtConfig } from "@/server/bsc.server";
 import { getDb } from "@/server/db.server";
 import { getMailer } from "@/server/email.server";
+import { imageProvider } from "@/server/image.server";
 import { paypalConfig, sharedPaypal } from "@/server/paypal.server";
 import { env, isProduction } from "@/server/env.server";
 import * as svc from "@/server/services.server";
@@ -302,7 +303,7 @@ function speechDeps(): svc.SpeechDeps | null {
   if (!tts) return null;
   return {
     tts,
-    storage: audioStorage(),
+    storage: fileStorage(),
     catalog: async () =>
       publicVoices(
         await cachedVoices(tts),
@@ -313,20 +314,27 @@ function speechDeps(): svc.SpeechDeps | null {
 }
 
 /** Stüdyonun kipi ve hazır ses listesi. Liste alınamazsa canlı kipte boş döner. */
+function imageDeps(): svc.ImageDeps | null {
+  const images = imageProvider();
+  return images ? { images, storage: fileStorage() } : null;
+}
+
 export const getStudioConfig = createServerFn({ method: "GET" }).handler(
   async (): Promise<StudioConfig> => {
+    const image = imageDeps() ? ("live" as const) : ("demo" as const);
     const deps = speechDeps();
-    if (!deps) return { tts: "demo", cloning: false, voices: [] };
+    if (!deps) return { tts: "demo", cloning: false, image, voices: [] };
     try {
       const voices = await deps.catalog();
       return {
         tts: "live",
         cloning: true,
+        image,
         voices: voices.map(({ id, name, gender }) => ({ id, name, gender })),
       };
     } catch (err) {
       console.error("[ses] ses listesi alınamadı:", err instanceof Error ? err.message : err);
-      return { tts: "live", cloning: true, voices: [] };
+      return { tts: "live", cloning: true, image, voices: [] };
     }
   },
 );
@@ -346,6 +354,15 @@ export const generate = createServerFn({ method: "POST" })
         return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
       }
     }
+    if (data.type === "image") {
+      // Servis bağlıyken örnek görsele düşülmez (sahte çıktıya kredi düşmesin).
+      const deps = imageDeps();
+      if (deps) {
+        const res = await svc.generateImages(db, deps, user.id, data, clock());
+        if (!res.ok) return res;
+        return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
+      }
+    }
     const res = await svc.generateContent(db, user.id, data, clock());
     if (!res.ok) return res;
     return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
@@ -356,7 +373,7 @@ export const deleteGeneration = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const user = await currentUser();
     if (!user) return { ok: false as const, error: "unauthorized" as const };
-    await svc.removeGeneration(await getDb(), user.id, data.id, audioStorage());
+    await svc.removeGeneration(await getDb(), user.id, data.id, fileStorage());
     return { ok: true as const, session: await payloadFor(user) };
   });
 
@@ -481,7 +498,7 @@ export const deleteAccount = createServerFn({ method: "POST" })
     if (!user) return unauthorized;
     const res = await svc.deleteAccount(await getDb(), user.id, data, clientIp(), clock(), {
       tts: ttsProvider(),
-      storage: audioStorage(),
+      storage: fileStorage(),
     });
     if (!res.ok) return res;
     deleteCookie(SESSION_COOKIE, { path: "/" });

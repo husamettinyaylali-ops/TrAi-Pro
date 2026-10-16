@@ -16,9 +16,8 @@ const tr = {
   theme: { toLight: "Açık temaya geç", toDark: "Koyu temaya geç" },
   demoNotes: {
     payment: "Demo modu: henüz gerçek bir ödeme yöntemi bağlı değil; demo bakiye gerçek değildir.",
-    studio: "Demo modu: ses, görsel ve video sonuçları önizleme amaçlıdır.",
-    media:
-      "Görsel ve video üretimi henüz önizleme: sonuçlar örnek görsellerdir. Gerçek üretim yakında.",
+    studio: (parts: string) => `Demo modu: ${parts} sonuçları önizleme amaçlıdır.`,
+    parts: { tts: "ses", image: "görsel", video: "video" },
   },
   loading: "Yükleniyor…",
 
@@ -137,6 +136,10 @@ const tr = {
     buy: "Kredi Al",
     insufficient: "Bu işlem için yeterli kredin yok.",
     providerFailed: "Ses servisi şu an yanıt vermiyor; kredin düşülmedi. Biraz sonra tekrar dene.",
+    imageFailed: "Görsel servisi şu an yanıt vermiyor; kredin düşülmedi. Biraz sonra tekrar dene.",
+    contentRejected:
+      "Bu istek içerik kurallarına takıldı; kredin düşülmedi. Farklı bir açıklama dene.",
+    downloadImage: "Görseli indir",
     failed: "İşlem tamamlanamadı. Tekrar dene.",
     seePackages: "Paketleri gör",
     cost: (n: string) => `${n} kredi harcanır`,
@@ -579,9 +582,8 @@ const en: Dict = {
   theme: { toLight: "Switch to light theme", toDark: "Switch to dark theme" },
   demoNotes: {
     payment: "Demo mode: no real payment method is connected yet; the demo balance isn't real.",
-    studio: "Demo mode: voice, image and video results are previews.",
-    media:
-      "Image and video generation is still a preview: results are sample images. Real generation is coming soon.",
+    studio: (parts) => `Demo mode: ${parts} results are previews.`,
+    parts: { tts: "voice", image: "image", video: "video" },
   },
   loading: "Loading…",
 
@@ -700,6 +702,10 @@ const en: Dict = {
     buy: "Buy Credits",
     insufficient: "You don't have enough credits for this.",
     providerFailed: "The voice service isn't responding; no credits were used. Try again shortly.",
+    imageFailed: "The image service isn't responding; no credits were used. Try again shortly.",
+    contentRejected:
+      "This request was blocked by the content rules; no credits were used. Try a different description.",
+    downloadImage: "Download image",
     failed: "Couldn't complete that. Try again.",
     seePackages: "See packs",
     cost: (n) => `Costs ${n} credits`,

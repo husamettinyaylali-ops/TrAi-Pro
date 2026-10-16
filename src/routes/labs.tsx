@@ -21,10 +21,18 @@ export const Route = createFileRoute("/labs")({
 const icons = { tts: Mic, clone: Upload, image: ImageIcon, video: Film };
 
 function Labs() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { tab = "tts" } = Route.useSearch();
   const navigate = useNavigate({ from: "/labs" });
   const studio = useStudioConfig();
+  // Video henüz bir servise bağlı değil; ses ve görsel anahtar varsa gerçektir.
+  const demoParts = studio.data
+    ? [
+        ...(studio.data.tts === "demo" ? [t.demoNotes.parts.tts] : []),
+        ...(studio.data.image === "demo" ? [t.demoNotes.parts.image] : []),
+        t.demoNotes.parts.video,
+      ]
+    : [];
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-12 sm:px-6">
@@ -62,8 +70,12 @@ function Labs() {
         {tab === "image" && <MediaStudio key="image" type="image" />}
         {tab === "video" && <MediaStudio key="video" type="video" />}
       </div>
-      {studio.data && (
-        <DemoNote text={studio.data.tts === "live" ? t.demoNotes.media : t.demoNotes.studio} />
+      {demoParts.length > 0 && (
+        <DemoNote
+          text={t.demoNotes.studio(
+            new Intl.ListFormat(locale, { type: "conjunction" }).format(demoParts),
+          )}
+        />
       )}
     </div>
   );

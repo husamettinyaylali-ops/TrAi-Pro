@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { balance } from "@/lib/credits";
-import { localAudioStorage, type AudioStorage } from "@/server/audio-storage.server";
+import { localFileStorage, type FileStorage } from "@/server/file-storage.server";
 import { openDb, type Db } from "@/server/db.server";
 import { serveAudio } from "@/server/media.server";
 import {
@@ -35,7 +35,7 @@ const now = new Date("2026-10-15T09:00:00Z");
 const dir = mkdtempSync(join(tmpdir(), "trai-voice-"));
 let db: Db;
 let audioRoot: string;
-let storage: AudioStorage;
+let storage: FileStorage;
 
 const catalog: ProviderVoice[] = [
   { id: "hazir-1", name: "Ayla", gender: "female", category: "premade" },
@@ -80,7 +80,7 @@ const audioFile = (bytes = 1024): CloneFile => ({
 beforeEach(async () => {
   db = await openDb(`file:${join(dir, `${randomUUID()}.db`).replace(/\\/g, "/")}`);
   audioRoot = join(dir, `audio-${randomUUID()}`);
-  storage = localAudioStorage(audioRoot);
+  storage = localFileStorage(audioRoot);
 });
 
 afterEach(() => db.$client.close());

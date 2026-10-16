@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 
 import { clock } from "@/lib/clock";
 
-import { audioStorage, type AudioStorage } from "./audio-storage.server";
+import { fileStorage, type FileStorage } from "./file-storage.server";
 import { parseCookies } from "./cookies.server";
 import { getDb, type Db } from "./db.server";
 import { generations } from "./schema.server";
@@ -11,19 +11,33 @@ import { SESSION_COOKIE } from "./session.server";
 
 export interface MediaDeps {
   db?: Db;
-  storage?: AudioStorage;
+  storage?: FileStorage;
   now?: Date;
 }
 
+const CONTENT_TYPES: Record<string, string> = {
+  mp3: "audio/mpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  mp4: "video/mp4",
+};
+
+type KeyOf = (row: {
+  audioKey: string | null;
+  files: string[] | null;
+}) => string | null | undefined;
+
 /**
- * GET /media/audio/:id — üretilen sesi yalnız sahibine sunar. Başkasının
- * üretimi için de "bulunamadı" döner; kaydın varlığı ele verilmez.
- * `?download=1` ile dosya olarak indirilir.
+ * Üretimin dosyasını yalnız sahibine sunar. Başkasının üretimi için de
+ * "bulunamadı" döner; kaydın varlığı ele verilmez. `?download=1` ile dosya
+ * olarak indirilir.
  */
-export async function serveAudio(
+async function serveOwned(
   request: Request,
   id: string,
-  deps: MediaDeps = {},
+  keyOf: KeyOf,
+  deps: MediaDeps,
 ): Promise<Response> {
   const token = parseCookies(request.headers.get("cookie"))[SESSION_COOKIE];
   const db = deps.db ?? (await getDb());
@@ -32,25 +46,38 @@ export async function serveAudio(
   if (!user) return new Response("Oturum gerekli", { status: 401 });
 
   const row = await db
-    .select({ audioKey: generations.audioKey })
+    .select({ audioKey: generations.audioKey, files: generations.files })
     .from(generations)
     .where(and(eq(generations.id, id), eq(generations.userId, user.id)))
     .get();
-  if (!row?.audioKey) return new Response("Bulunamadı", { status: 404 });
+  const key = row ? keyOf(row) : null;
+  if (!key) return new Response("Bulunamadı", { status: 404 });
 
-  const data = await (deps.storage ?? audioStorage()).read(row.audioKey);
+  const data = await (deps.storage ?? fileStorage()).read(key);
   if (!data) return new Response("Bulunamadı", { status: 404 });
 
+  const ext = key.slice(key.lastIndexOf(".") + 1);
   const download = new URL(request.url).searchParams.has("download");
   return new Response(new Uint8Array(data), {
     headers: {
-      "content-type": "audio/mpeg",
+      "content-type": CONTENT_TYPES[ext] ?? "application/octet-stream",
       "content-length": String(data.byteLength),
       "cache-control": "private, max-age=3600",
       "x-content-type-options": "nosniff",
       "content-disposition": download
-        ? `attachment; filename="trai-pro-${id.slice(0, 8)}.mp3"`
+        ? `attachment; filename="trai-pro-${id.slice(0, 8)}.${ext}"`
         : "inline",
     },
   });
+}
+
+/** GET /media/audio/:id — üretilen ses. */
+export function serveAudio(request: Request, id: string, deps: MediaDeps = {}) {
+  return serveOwned(request, id, (r) => r.audioKey, deps);
+}
+
+/** GET /media/file/:id/:index — üretilen görsel ya da video dosyası. */
+export function serveFile(request: Request, id: string, index: string, deps: MediaDeps = {}) {
+  const i = /^\d{1,2}$/.test(index) ? Number(index) : -1;
+  return serveOwned(request, id, (r) => (i >= 0 ? r.files?.[i] : null), deps);
 }

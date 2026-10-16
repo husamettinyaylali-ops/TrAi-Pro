@@ -57,6 +57,13 @@
       "when": 1792100198332,
       "tag": "0007_yonetim_kaydi",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792130626265,
+      "tag": "0008_uretim_dosyalari",
+      "breakpoints": true
     }
   ]
 }

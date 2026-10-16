@@ -66,6 +66,8 @@ export interface Generation {
   images?: number[] | undefined;
   /** Gerçek seslendirmenin dinleme adresi (yalnız sahibine sunulur); demo üretimde yok. */
   audioUrl?: string | undefined;
+  /** Gerçek görsel/video dosyalarının adresleri (yalnız sahibine sunulur); demo üretimde yok. */
+  fileUrls?: string[] | undefined;
   cost: number;
   createdAt: string;
 }
@@ -84,6 +86,8 @@ export interface StudioConfig {
   tts: "live" | "demo";
   /** Gerçek ses klonlama açık mı. */
   cloning: boolean;
+  /** "live": görsel üretim servisi bağlı; "demo": örnek görseller. */
+  image: "live" | "demo";
   /** Hazır sesler (live kipte sağlayıcıdan). */
   voices: { id: string; name: string; gender: "female" | "male" | null }[];
 }
@@ -140,7 +144,9 @@ export type ActionErrorCode =
   /** Ses servisi yanıt vermedi ya da hata döndü; kredi düşülmez. */
   | "providerFailed"
   /** USD bakiye paket fiyatını karşılamıyor. */
-  | "insufficientBalance";
+  | "insufficientBalance"
+  /** İstek ya da çıktı sağlayıcının güvenlik filtresine takıldı; kredi düşülmez. */
+  | "contentRejected";
 
 export type TopUpErrorCode =
   | "unauthorized"

@@ -29,6 +29,7 @@ import { Route as AuthGoogleRouteImport } from './routes/auth/google'
 import { Route as WebhooksPaypalRouteImport } from './routes/webhooks/paypal'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as MediaAudioIdRouteImport } from './routes/media/audio/$id'
+import { Route as MediaFileIdIndexRouteImport } from './routes/media/file/$id/$index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -130,6 +131,11 @@ const MediaAudioIdRoute = MediaAudioIdRouteImport.update({
   path: '/media/audio/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MediaFileIdIndexRoute = MediaFileIdIndexRouteImport.update({
+  id: '/media/file/$id/$index',
+  path: '/media/file/$id/$index',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/webhooks/paypal': typeof WebhooksPaypalRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
+  '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/webhooks/paypal': typeof WebhooksPaypalRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
+  '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -197,6 +205,7 @@ export interface FileRoutesById {
   '/webhooks/paypal': typeof WebhooksPaypalRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
+  '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -221,6 +230,7 @@ export interface FileRouteTypes {
     | '/webhooks/paypal'
     | '/auth/google/callback'
     | '/media/audio/$id'
+    | '/media/file/$id/$index'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -243,6 +253,7 @@ export interface FileRouteTypes {
     | '/webhooks/paypal'
     | '/auth/google/callback'
     | '/media/audio/$id'
+    | '/media/file/$id/$index'
   id:
     | '__root__'
     | '/'
@@ -265,6 +276,7 @@ export interface FileRouteTypes {
     | '/webhooks/paypal'
     | '/auth/google/callback'
     | '/media/audio/$id'
+    | '/media/file/$id/$index'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -287,6 +299,7 @@ export interface RootRouteChildren {
   AuthGoogleRoute: typeof AuthGoogleRouteWithChildren
   WebhooksPaypalRoute: typeof WebhooksPaypalRoute
   MediaAudioIdRoute: typeof MediaAudioIdRoute
+  MediaFileIdIndexRoute: typeof MediaFileIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -431,6 +444,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MediaAudioIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/media/file/$id/$index': {
+      id: '/media/file/$id/$index'
+      path: '/media/file/$id/$index'
+      fullPath: '/media/file/$id/$index'
+      preLoaderRoute: typeof MediaFileIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -466,6 +486,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthGoogleRoute: AuthGoogleRouteWithChildren,
   WebhooksPaypalRoute: WebhooksPaypalRoute,
   MediaAudioIdRoute: MediaAudioIdRoute,
+  MediaFileIdIndexRoute: MediaFileIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
