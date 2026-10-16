@@ -29,7 +29,7 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 - Ödeme: her yöntem kendi anahtarları `.env`'e yazılınca açılır (aşağıdaki kurulumlar). Hiçbiri açık değilse geliştirmede yalnız demo bakiye vardır ve ödeme sayfası bunu belirtir.
 - Seslendirme ve ses klonlama: `ELEVENLABS_API_KEY` varsa gerçek; yoksa seslendirme tarayıcının konuşma sentezini kullanır, klonda yalnız ad kaydedilir.
 - Görsel: `FAL_KEY` varsa gerçek (fal.ai); yoksa örnek görseller.
-- Video: henüz bir servise bağlı değil; sonuçlar örnek görsellerdir. Stüdyo, hangi kısımların demo olduğunu belirtir.
+- Video: `FAL_KEY` varsa gerçek (fal.ai, Kling); yoksa örnek görseller. Stüdyo, hangi kısımların demo olduğunu belirtir.
 
 ## Geliştirme
 
@@ -73,6 +73,17 @@ Binance geçmişi ödeme notunu döndürmediği için eşleşme yalnız benzersi
 4. (Önerilir) **Webhooks** bölümünde `https://<alan-adınız>/webhooks/paypal` adresine `PAYMENT.CAPTURE.COMPLETED` olayını ekleyin ve verilen kimliği `PAYPAL_WEBHOOK_ID` olarak yazın. İncelemeye düşüp sonradan tamamlanan ödemeler böylece kendiliğinden bakiyeye yazılır. Webhook imzası PayPal'ın doğrulama API'siyle denetlenir.
 
 Sandbox'ta deneme için **Sandbox accounts**'taki kişisel test hesabıyla ya da PayPal'ın test kartlarıyla ödeyin.
+
+## Video üretimi (fal.ai, Kling)
+
+Görselle aynı `FAL_KEY` kullanılır; model varsayılan olarak Kling 1.6 standart (metinden 5 saniyelik, 16:9 video) ve `FAL_VIDEO_MODEL` ile değiştirilebilir. Bir video **15 kredi**dir (`src/lib/credits.ts`).
+
+- Video birkaç dakika sürdüğü için iş fal.ai kuyruğuna gönderilir ve kredi o anda düşülür (bekleme sırasında başka harcamada kullanılmasın). Hangi paketten kaç kredi düşüldüğü kayda yazılır.
+- Stüdyo sayfası açıkken bekleyen videolar 8 saniyede bir kontrol edilir. Yayında (`PUBLIC_URL` varken) fal.ai iş bitince `/webhooks/fal` adresine de haber verir; kullanıcı sayfadan ayrılsa da video tamamlanır. Webhook gövdesine güvenilmez: yalnız hangi işin kontrol edileceğini söyler, sonuç kendi anahtarımızla fal.ai'den okunur.
+- İş başarısız olursa ya da 1 saati aşarsa (iş iptal edilir) kredi düşüldüğü paketlere bir kez iade edilir.
+- Biten video `data/media/<kullanıcı>/` altında saklanır ve `/media/file/:id/0` adresinden yalnız sahibine sunulur (oynatma ve indirme).
+- Bir kullanıcı aynı anda en fazla 3 video hazırlatabilir ve saatte en fazla 10 video isteği gönderebilir.
+- **Maliyet:** Kling 1.6 standart fal.ai'de 5 saniyelik video başına yaklaşık 0,25 $'dır; 15 kredi Video & Görsel paketlerinde yaklaşık 0,40–0,45 $ eder. Güncel fiyatı fal.ai'den kontrol edin; model değişirse kredi maliyetini de gözden geçirin.
 
 ## Bakiyeye yazılan tutar
 
