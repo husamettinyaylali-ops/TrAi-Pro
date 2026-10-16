@@ -143,6 +143,21 @@ describe("bakiye yükleme talebi", () => {
     expect(await topUpAt(b, later(66), 0.5)).toMatchObject({ intent: { payAmount: "10.50" } });
   });
 
+  it("kullanıcı saatte en fazla 20 talep açar (benzersiz tutar yuvaları doldurulamaz)", async () => {
+    const id = await newUser();
+    for (let i = 0; i < 20; i++) {
+      expect(
+        (await createTopUp(db, id, { method: "binance_pay", amountCents: 1_000 }, now)).ok,
+      ).toBe(true);
+    }
+    expect(
+      await createTopUp(db, id, { method: "binance_pay", amountCents: 1_000 }, now),
+    ).toMatchObject({ ok: false, error: "tooManyAttempts" });
+    expect(
+      (await createTopUp(db, id, { method: "binance_pay", amountCents: 1_000 }, later(61))).ok,
+    ).toBe(true);
+  });
+
   it("yeni talep aynı yöntemdeki eski bekleyen talebi geçersiz kılar; süre 1 saat", async () => {
     const id = await newUser();
     const old = await createTopUp(db, id, { method: "usdt_bep20", amountCents: 1_000 }, now);

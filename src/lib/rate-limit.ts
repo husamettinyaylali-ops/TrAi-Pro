@@ -29,6 +29,11 @@ export const LIMITS = {
   apiPerKey: { max: 120, windowMs: MINUTE },
   /** Aynı kullanıcı saatte en fazla 5 ses klonlama denemesi. */
   clonePerUser: { max: 5, windowMs: 60 * MINUTE },
+  /**
+   * Aynı kullanıcı saatte en fazla 20 bakiye yükleme talebi: kripto yöntemlerinde her tutar
+   * için sınırlı benzersiz kuruş var; talep yağdırarak doldurulmasın.
+   */
+  topUpPerUser: { max: 20, windowMs: 60 * MINUTE },
   /** Aynı kullanıcı saatte en fazla 20 ödeme doğrulama denemesi (zincir/servis sorgusu). */
   claimPerUser: { max: 20, windowMs: 60 * MINUTE },
   /**

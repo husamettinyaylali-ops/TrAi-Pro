@@ -73,7 +73,7 @@ interface Store {
   topUp: (
     method: TopUpMethod,
     amountCents: number,
-  ) => Promise<Outcome<{ intent: TopUpIntent }, TopUpErrorCode>>;
+  ) => Promise<Outcome<{ intent: TopUpIntent }, TopUpErrorCode> | RateLimited>;
   generate: (
     input: GenerateInput,
   ) => Promise<Outcome<{ generation: Generation }, ActionErrorCode> | RateLimited>;

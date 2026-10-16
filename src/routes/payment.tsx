@@ -117,7 +117,12 @@ function TopUpPanel({ amount, setAmount }: { amount: string; setAmount: (v: stri
     if (!res.ok) {
       return setNote({
         ok: false,
-        text: res.error === "methodDisabled" ? t.payment.disabled : t.payment.failed,
+        text:
+          res.error === "tooManyAttempts"
+            ? t.auth.errors.tooManyAttempts(res.retryAfterMinutes)
+            : res.error === "methodDisabled"
+              ? t.payment.disabled
+              : t.payment.failed,
       });
     }
     if (res.intent.status === "completed") {

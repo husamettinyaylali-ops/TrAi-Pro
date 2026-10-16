@@ -509,11 +509,15 @@ export async function createTopUp(
   input: { method: TopUpMethod; amountCents: number; lang?: Lang | undefined },
   now: Date,
   rand: () => number = Math.random,
-): Promise<Result<{ intent: TopUpIntent }, "invalidInput" | "busy">> {
+): Promise<Result<{ intent: TopUpIntent }, "invalidInput" | "busy"> | RateLimited> {
   const cents = input.amountCents;
   if (!Number.isInteger(cents) || cents < MIN_TOPUP_CENTS || cents > MAX_TOPUP_CENTS) {
     return { ok: false, error: "invalidInput" };
   }
+  const key = `topup:user:${userId}`;
+  const stop = await blocked(db, [[key, LIMITS.topUpPerUser]], now);
+  if (stop) return stop;
+  await recordAttempt(db, key, now);
   return db.transaction(async (tx) => {
     await expireIntents(tx, now);
     await tx
@@ -654,7 +658,7 @@ export async function demoTopUp(
   userId: string,
   amountCents: number,
   now: Date,
-): Promise<Result<{ intent: TopUpIntent }, "invalidInput" | "busy">> {
+): Promise<Result<{ intent: TopUpIntent }, "invalidInput" | "busy"> | RateLimited> {
   const created = await createTopUp(db, userId, { method: "demo", amountCents }, now);
   if (!created.ok) return created;
   const done = await completeTopUp(db, created.intent.id, `demo-${created.intent.id}`, now);
