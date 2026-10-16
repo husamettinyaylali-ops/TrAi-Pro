@@ -229,6 +229,74 @@ export type AdminErrorCode =
   /** Bu sağlayıcı işlem kimliği başka bir talepte kullanılmış. */
   | "duplicateRef";
 
+/** Kurulum kontrolündeki bir servis ya da ayar grubu. */
+export type SetupId =
+  "site" | "email" | "tts" | "fal" | "google" | "usdt" | "binance" | "paypal" | "backup";
+
+/** ready: çalışır; missing: gerekli anahtar eksik; warning: çalışır ama dikkat; optional: kullanılmıyor. */
+export type SetupState = "ready" | "missing" | "warning" | "optional";
+
+export type SetupWarning =
+  | "demoPaymentsOn"
+  | "invalidAddress"
+  | "invalidBinanceId"
+  | "paypalSandbox"
+  | "paypalWebhookMissing"
+  | "backupMissing"
+  | "noPaymentMethod";
+
+/** Gizli olmayan bilgi (adres kısaltılmış); gizli anahtarların değeri hiç dönmez. */
+export interface SetupInfo {
+  key:
+    | "publicUrl"
+    | "domain"
+    | "from"
+    | "smtpHost"
+    | "model"
+    | "imageModel"
+    | "videoModel"
+    | "callback"
+    | "address"
+    | "rpc"
+    | "binanceId"
+    | "mode"
+    | "webhook"
+    | "admins"
+    | "backupDir"
+    | "retention";
+  value: string;
+}
+
+export interface SetupItem {
+  id: SetupId;
+  state: SetupState;
+  /** Eksik ortam değişkenlerinin adları (değerler asla). */
+  missing: string[];
+  warnings: SetupWarning[];
+  info: SetupInfo[];
+  testable: boolean;
+}
+
+export type SetupTestCode =
+  | "voices"
+  | "keyAccepted"
+  | "keyRejected"
+  | "sent"
+  | "outbox"
+  | "blockNumber"
+  | "historyOk"
+  | "tokenOk"
+  | "notConfigured"
+  | "httpError"
+  | "network";
+
+export interface SetupTestResult {
+  ok: boolean;
+  code: SetupTestCode;
+  /** Sayı, durum kodu ya da kısaltılmış adres; gizli bilgi içermez. */
+  value?: string | undefined;
+}
+
 export interface AdminOverview {
   users: number;
   deletedUsers: number;

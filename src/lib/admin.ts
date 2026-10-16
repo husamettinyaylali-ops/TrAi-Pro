@@ -2,6 +2,8 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 
 import * as api from "@/api/functions";
 
+import type { SetupId } from "./types";
+
 const ADMIN_KEY = ["admin"] as const;
 
 /** Özet ve son yönetici işlemleri. */
@@ -61,6 +63,26 @@ export function useCompleteIntent() {
       const res = await api.adminCompleteIntent({ data: input });
       if (res.ok) await qc.invalidateQueries({ queryKey: ADMIN_KEY });
       return res;
+    } catch {
+      return { ok: false as const, error: "network" as const };
+    }
+  };
+}
+
+/** Kurulum kontrolü: servislerin durumu (anahtar değerleri sunucudan hiç gelmez). */
+export function useAdminSetup() {
+  return useQuery({
+    queryKey: [...ADMIN_KEY, "setup"],
+    queryFn: () => api.adminSetup(),
+    staleTime: 0,
+  });
+}
+
+/** Bir servise bağlantı testi; ağ hatası sonuca çevrilir. */
+export function useTestSetup() {
+  return async (id: SetupId) => {
+    try {
+      return await api.adminTestSetup({ data: { id } });
     } catch {
       return { ok: false as const, error: "network" as const };
     }

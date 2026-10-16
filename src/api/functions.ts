@@ -9,6 +9,7 @@ import {
 import { z } from "zod";
 
 import { resolveAppUrl } from "@/lib/app-url";
+import { LIMITS } from "@/lib/rate-limit";
 import { clock } from "@/lib/clock";
 import type { Lang } from "@/lib/i18n";
 import type { Account, PaymentConfig, SessionPayload, StudioConfig } from "@/lib/types";
@@ -38,6 +39,7 @@ import { getMailer } from "@/server/email.server";
 import { paypalConfig, sharedPaypal } from "@/server/paypal.server";
 import { env, isProduction } from "@/server/env.server";
 import * as projectSvc from "@/server/projects.server";
+import { setupStatus, testIntegration } from "@/server/setup-check.server";
 import * as svc from "@/server/services.server";
 import { SESSION_COOKIE } from "@/server/session.server";
 import { ttsProvider } from "@/server/tts.server";
@@ -677,6 +679,49 @@ export const resetPassword = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------- yönetim paneli
+
+/** Kurulum kontrolü: hangi servisler yapılandırıldı (anahtar değerleri dönmez). */
+export const adminSetup = createServerFn({ method: "POST" }).handler(async () => {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+  return {
+    ok: true as const,
+    production: isProduction(),
+    items: setupStatus(new URL(getRequest().url).origin),
+  };
+});
+
+/** Bir servise bağlantı testi; e-posta testi yöneticinin kendi adresine gider. */
+export const adminTestSetup = createServerFn({ method: "POST" })
+  .validator(
+    parse(
+      z.object({
+        id: z.enum([
+          "site",
+          "email",
+          "tts",
+          "fal",
+          "google",
+          "usdt",
+          "binance",
+          "paypal",
+          "backup",
+        ]),
+      }),
+    ),
+  )
+  .handler(async ({ data }) => {
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth;
+    const db = await getDb();
+    const now = clock();
+    const key = `setup:test:${auth.user.id}`;
+    const limited = await svc.blocked(db, [[key, LIMITS.setupTestPerAdmin]], now);
+    if (limited) return limited;
+    await svc.recordAttempt(db, key, now);
+    const result = await testIntegration(data.id, { adminEmail: auth.user.email, now });
+    return { ok: true as const, result };
+  });
 
 /** Özet ve son yönetici işlemleri. */
 export const adminDashboard = createServerFn({ method: "GET" }).handler(async () => {

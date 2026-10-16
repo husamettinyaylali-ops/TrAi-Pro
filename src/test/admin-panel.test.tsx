@@ -52,6 +52,14 @@ const detail: AdminUserDetail = {
 };
 vi.mock("@/lib/admin", () => ({
   useAdminDashboard: () => ({ isPending: false, data: dashboardData }),
+  // Kurulum kontrolü ayrı testte (setup-check); burada boş liste yeter.
+  useAdminSetup: () => ({
+    isPending: false,
+    isFetching: false,
+    data: { ok: true, production: false, items: [] },
+    refetch: vi.fn(),
+  }),
+  useTestSetup: () => vi.fn(),
   useAdminSearch: () => ({
     isPending: false,
     isError: false,

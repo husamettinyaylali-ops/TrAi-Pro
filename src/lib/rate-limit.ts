@@ -43,6 +43,8 @@ export const LIMITS = {
   binanceCheckPerUser: { max: 150, windowMs: 60 * MINUTE },
   /** Aynı kullanıcı saatte en fazla 20 PayPal siparişi açar. */
   paypalOrderPerUser: { max: 20, windowMs: 60 * MINUTE },
+  /** Kurulum kontrolündeki bağlantı testleri dış servislere gider; yönetici başına 10 dakikada 30. */
+  setupTestPerAdmin: { max: 30, windowMs: 10 * MINUTE },
   /** Proje ZIP'i tüm dosyaları okur; kullanıcı başına saatte 20 arşiv. */
   projectZipPerUser: { max: 20, windowMs: 60 * MINUTE },
 } as const satisfies Record<string, Limit>;

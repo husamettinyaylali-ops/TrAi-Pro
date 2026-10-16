@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { AlertCircle, CheckCircle2, Loader2, Search, ShieldAlert } from "lucide-react";
 
+import { SetupCheck } from "@/components/admin/setup-check";
 import { RequireAuth } from "@/components/site/require-auth";
 import { PageHead, SiteShell, btnOutline, btnPrimary, field } from "@/components/site/shell";
 import {
@@ -652,6 +653,7 @@ export function AdminPanel() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 pb-24 sm:px-6">
       <Stats />
+      <SetupCheck />
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <UserSearch selected={selected} onSelect={setSelected} />
         <UserPanel key={selected ?? "none"} userId={selected} />
