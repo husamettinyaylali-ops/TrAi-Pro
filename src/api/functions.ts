@@ -321,7 +321,7 @@ function imageDeps(): svc.ImageDeps | null {
 }
 
 /** Yayında (PUBLIC_URL varken) fal.ai iş bitince /webhooks/fal'a haber verir. */
-export function videoDeps(): svc.VideoDeps | null {
+function videoDeps(): svc.VideoDeps | null {
   const video = videoProvider();
   if (!video) return null;
   const base = env("PUBLIC_URL");
