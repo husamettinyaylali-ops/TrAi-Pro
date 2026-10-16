@@ -13,6 +13,9 @@ export default defineConfig({
   // bölmek döngüsel yükleme sırası yüzünden SSR'da "__commonJSMin is not a function"
   // hatası veriyordu. (Seçenek sarmalayıcının tiplerinde yok ama Nitro'ya olduğu gibi iletilir.)
   nitro: { preset: "node-server", inlineDynamicImports: true } as { preset: string },
+  // Çalışma verisi (veritabanı, e-posta kutusu, medya, yedek) kaynak değildir. İzlenirse
+  // geliştirmede data/outbox'a yazılan her e-posta (.html) açık sayfayı yeniden yükler.
+  vite: { server: { watch: { ignored: ["**/data/**"] } } },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
