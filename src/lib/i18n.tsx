@@ -154,6 +154,8 @@ const tr = {
     cost: (n: string) => `${n} kredi harcanır`,
     creditsShort: "kr",
     history: "Geçmiş",
+    historyError: "Geçmiş yüklenemedi.",
+    loadMore: "Daha eski üretimleri göster",
     delete: "Sil",
     demoResult: "Demo önizleme: gerçek üretim için bir yapay zeka API'si bağlanmalı.",
     tts: {
@@ -824,6 +826,8 @@ const en: Dict = {
     cost: (n) => `Costs ${n} credits`,
     creditsShort: "cr",
     history: "History",
+    historyError: "Couldn't load your history.",
+    loadMore: "Show older generations",
     delete: "Delete",
     demoResult: "Demo preview: connect an AI API for real generation.",
     tts: {

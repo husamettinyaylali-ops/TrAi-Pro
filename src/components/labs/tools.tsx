@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 import { Waveform } from "@/components/landing/fx";
-import { btnPrimary, field } from "@/components/site/shell";
+import { btnOutline, btnPrimary, field } from "@/components/site/shell";
 import {
   MAX_CLONES,
   MAX_TTS_CHARS,
@@ -33,7 +33,7 @@ import {
 import { useFormat, useI18n } from "@/lib/i18n";
 import { gens } from "@/lib/samples";
 import { clock } from "@/lib/clock";
-import { useApp, type Generation } from "@/lib/store";
+import { useApp, useHistory, type Generation, type History } from "@/lib/store";
 import { useStudioConfig } from "@/lib/studio-config";
 import { canSpeak, speak, stockVoices, stopSpeaking, type Voice } from "@/lib/voices";
 
@@ -44,6 +44,62 @@ export const Panel = ({
   children: ReactNode;
   className?: string;
 }) => <div className={`glass glow-border rounded-3xl p-6 ${className}`}>{children}</div>;
+
+/** Geçmiş listesinin yükleniyor, hata ve boş durumları; altta daha eski üretimler. */
+function HistoryView({
+  history,
+  empty,
+  children,
+}: {
+  history: History;
+  empty: ReactNode;
+  children: ReactNode;
+}) {
+  const { t } = useI18n();
+  if (history.loading) {
+    return (
+      <div role="status" aria-label={t.loading} className="space-y-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="shimmer h-16 rounded-2xl" />
+        ))}
+      </div>
+    );
+  }
+  if (history.error && history.items.length === 0) {
+    return (
+      <div role="alert" className="flex flex-col items-center gap-3 py-10 text-center text-sm">
+        <p className="text-destructive">{t.labs.historyError}</p>
+        <button type="button" onClick={history.retry} className={btnOutline}>
+          {t.rootPages.retry}
+        </button>
+      </div>
+    );
+  }
+  if (history.items.length === 0) return <>{empty}</>;
+  return (
+    <>
+      {children}
+      {(history.hasMore || history.error) && (
+        <div className="mt-4 flex flex-col items-center gap-2">
+          {history.error && (
+            <p role="alert" className="text-sm text-destructive">
+              {t.labs.historyError}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={history.loadMore}
+            disabled={history.loadingMore}
+            className={`${btnOutline} disabled:opacity-60`}
+          >
+            {history.loadingMore && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+            {t.labs.loadMore}
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
 
 function Insufficient() {
   const { t } = useI18n();
@@ -157,7 +213,7 @@ function useActionError() {
 export function TextToSpeech() {
   const { t } = useI18n();
   const f = useFormat();
-  const { generate, deleteGeneration, data } = useApp();
+  const { generate, deleteGeneration } = useApp();
   const { voices, live, loading } = useVoices();
   const actionError = useActionError();
   const [text, setText] = useState(t.labs.tts.sample);
@@ -185,7 +241,7 @@ export function TextToSpeech() {
 
   const cost = ttsCost(text);
   const voiceOf = (id?: string) => voices.find((v) => v.id === id);
-  const history = data.generations.filter((g) => g.type === "tts");
+  const history = useHistory("tts");
   const serviceDown = live && !loading && voices.length === 0;
 
   /** Demo üretimi tarayıcının konuşma sentezi ile önizler. */
@@ -307,11 +363,14 @@ export function TextToSpeech() {
 
       <Panel>
         <h3 className="mb-4 text-lg font-semibold">{t.labs.history}</h3>
-        {history.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">{t.labs.tts.empty}</p>
-        ) : (
+        <HistoryView
+          history={history}
+          empty={
+            <p className="py-10 text-center text-sm text-muted-foreground">{t.labs.tts.empty}</p>
+          }
+        >
           <ul className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
-            {history.map((g) => (
+            {history.items.map((g) => (
               <li key={g.id} className="rounded-2xl bg-muted/50 p-3">
                 <div className="flex items-center gap-3">
                   {!g.audioUrl && (
@@ -370,7 +429,7 @@ export function TextToSpeech() {
               </li>
             ))}
           </ul>
-        )}
+        </HistoryView>
       </Panel>
     </div>
   );
@@ -651,10 +710,10 @@ export function MediaStudio({ type }: { type: MediaType }) {
   const now = clock();
   const hasPass = balance(data.grants, "media", now) > 0;
   const cost = mediaCost(type, count);
-  const history = data.generations.filter((g) => g.type === type);
+  const history = useHistory(type);
 
   // Hazırlanan videolar sayfa açıkken düzenli kontrol edilir (bitince ya da iade olunca güncellenir).
-  const pendingIds = history
+  const pendingIds = history.items
     .filter((g) => g.status === "pending")
     .map((g) => g.id)
     .join(",");
@@ -672,7 +731,11 @@ export function MediaStudio({ type }: { type: MediaType }) {
     return () => window.clearInterval(timer);
   }, [pendingIds]);
 
-  if (!hasPass && history.length === 0) return <Locked />;
+  // Paketi olmayan kullanıcı eski üretimlerini yine görür; hiç üretimi yoksa kilit ekranı.
+  if (!hasPass && history.loading) {
+    return <div role="status" aria-label={t.loading} className="shimmer h-64 rounded-3xl" />;
+  }
+  if (!hasPass && !history.error && history.items.length === 0) return <Locked />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -807,11 +870,16 @@ export function MediaStudio({ type }: { type: MediaType }) {
             ))}
           </div>
         )}
-        {history.length === 0 && !busy ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">{copy.empty}</p>
-        ) : (
+        <HistoryView
+          history={history}
+          empty={
+            busy ? null : (
+              <p className="py-10 text-center text-sm text-muted-foreground">{copy.empty}</p>
+            )
+          }
+        >
           <ul className="space-y-6">
-            {history.map((g) => (
+            {history.items.map((g) => (
               <li key={g.id}>
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <p className="min-w-0 truncate text-sm">
@@ -914,7 +982,7 @@ export function MediaStudio({ type }: { type: MediaType }) {
               </li>
             ))}
           </ul>
-        )}
+        </HistoryView>
       </Panel>
     </div>
   );

@@ -24,6 +24,7 @@ import {
   deleteSession,
   generateContent,
   getSessionUser,
+  listGenerations,
   loadUserData,
   markEmailVerified,
   purchasePackage,
@@ -189,7 +190,7 @@ describe("satın alma ve üretim", () => {
       ok: false,
       error: "insufficient",
     });
-    expect((await loadUserData(db, id)).generations).toHaveLength(0);
+    expect((await listGenerations(db, id, { type: "image" })).items).toHaveLength(0);
   });
 
   it("geçersiz girdiler reddedilir", async () => {
@@ -222,9 +223,51 @@ describe("satın alma ve üretim", () => {
     const res = await generateContent(db, a, { type: "tts", text: "selam", voiceId: "defne" }, now);
     if (!res.ok) throw new Error(res.error);
     await removeGeneration(db, b, res.generation.id);
-    expect((await loadUserData(db, a)).generations).toHaveLength(1);
+    expect((await listGenerations(db, a, { type: "tts" })).items).toHaveLength(1);
     await removeGeneration(db, a, res.generation.id);
-    expect((await loadUserData(db, a)).generations).toHaveLength(0);
+    expect((await listGenerations(db, a, { type: "tts" })).items).toHaveLength(0);
+  });
+
+  it("geçmiş sayfa sayfa gelir: yeniden eskiye, aynı andakiler atlanmadan, yalnız kendi ve o tür", async () => {
+    const a = await newUser("a@example.com");
+    const b = await newUser("b@example.com");
+    const at = (s: number) => new Date(now.getTime() + s * 1000);
+    // İkisi aynı saniyede: sayfa sınırında kimlikle sıralanmalı.
+    const times = [0, 1, 2, 2, 3];
+    const ids: string[] = [];
+    for (const [i, s] of times.entries()) {
+      const res = await generateContent(
+        db,
+        a,
+        { type: "tts", text: `metin ${i}`, voiceId: "defne" },
+        at(s),
+      );
+      if (!res.ok) throw new Error(res.error);
+      ids.push(res.generation.id);
+    }
+    await generateContent(db, b, { type: "tts", text: "başkası", voiceId: "defne" }, at(4));
+
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    let pages = 0;
+    do {
+      const page = await listGenerations(db, a, { type: "tts", cursor }, 2);
+      seen.push(...page.items.map((g) => g.id));
+      cursor = page.next ?? undefined;
+      pages++;
+    } while (cursor);
+    expect(pages).toBe(3);
+    expect(seen).toHaveLength(5);
+    expect(new Set(seen)).toEqual(new Set(ids));
+    // Yeniden eskiye: ilk öğe en son üretim, son öğe ilk üretim.
+    expect(seen[0]).toBe(ids[4]);
+    expect(seen[4]).toBe(ids[0]);
+
+    expect((await listGenerations(db, a, { type: "image" })).items).toHaveLength(0);
+    expect(await listGenerations(db, a, { type: "tts", cursor: "bozuk" })).toEqual({
+      items: [],
+      next: null,
+    });
   });
 });
 

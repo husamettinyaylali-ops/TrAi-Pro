@@ -85,6 +85,13 @@
       "when": 1792149698255,
       "tag": "0011_odeme_makbuzu",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792155656331,
+      "tag": "0012_gecmis_sayfalama",
+      "breakpoints": true
     }
   ]
 }

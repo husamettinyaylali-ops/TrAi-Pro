@@ -1,4 +1,10 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 import * as api from "@/api/functions";
@@ -13,6 +19,8 @@ import type {
   EmailErrorCode,
   GenerateInput,
   Generation,
+  GenerationPage,
+  GenerationType,
   Order,
   RateLimited,
   SessionPayload,
@@ -120,13 +128,43 @@ const SESSION_KEY = ["session"] as const;
 const emptyData: UserData = {
   grants: [],
   orders: [],
-  generations: [],
   clones: [],
   security: { hasPassword: false, googleLinked: false, emailVerified: false },
   wallet: { balanceCents: 0, entries: [], pending: [] },
 };
 
 const Ctx = createContext<Store | null>(null);
+
+// ---------------------------------------------------------------- stüdyo geçmişi
+
+const HISTORY = "generations";
+const historyKey = (userId: string, type: GenerationType) => [HISTORY, userId, type] as const;
+type HistoryData = InfiniteData<GenerationPage, string | undefined>;
+
+/** Önbellekteki geçmişte üretimi günceller; listede yoksa ve `prepend` ise en başa ekler. */
+function upsertHistory(qc: QueryClient, userId: string, g: Generation, prepend: boolean) {
+  qc.setQueryData<HistoryData>(historyKey(userId, g.type), (d) => {
+    if (!d) return d;
+    if (d.pages.some((p) => p.items.some((x) => x.id === g.id))) {
+      const pages = d.pages.map((p) => ({
+        ...p,
+        items: p.items.map((x) => (x.id === g.id ? g : x)),
+      }));
+      return { ...d, pages };
+    }
+    const [first, ...rest] = d.pages;
+    if (!prepend || !first) return d;
+    return { ...d, pages: [{ ...first, items: [g, ...first.items] }, ...rest] };
+  });
+}
+
+function dropFromHistory(qc: QueryClient, userId: string, id: string) {
+  qc.setQueriesData<HistoryData>({ queryKey: [HISTORY, userId] }, (d) =>
+    d
+      ? { ...d, pages: d.pages.map((p) => ({ ...p, items: p.items.filter((x) => x.id !== id) })) }
+      : d,
+  );
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
@@ -140,7 +178,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   const store = useMemo<Store>(() => {
-    const put = (next: SessionPayload | null) => qc.setQueryData(SESSION_KEY, next);
+    const userId = session.data?.user.id;
+    const put = (next: SessionPayload | null) => {
+      qc.setQueryData(SESSION_KEY, next);
+      if (!next) qc.removeQueries({ queryKey: [HISTORY] });
+    };
 
     /** Sunucu çağrısını sarar: oturum düştüyse önbelleği temizler, ağ hatasını sonuca çevirir. */
     async function call<R extends { ok: boolean; error?: string; session?: SessionPayload }>(
@@ -174,12 +216,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       claimBinance: () => call(() => api.claimBinance()),
       startPaypal: (intentId) => call(() => api.startPaypal({ data: { intentId } })),
       capturePaypal: (orderId) => call(() => api.capturePaypal({ data: { orderId } })),
-      generate: (input) => call(() => api.generate({ data: input })),
+      generate: async (input) => {
+        const res = await call(() => api.generate({ data: input }));
+        if (res.ok && userId) upsertHistory(qc, userId, res.generation, true);
+        return res;
+      },
       checkVideo: async (id) => {
-        await call(() => api.checkVideo({ data: { id } }));
+        const res = await call(() => api.checkVideo({ data: { id } }));
+        if (res.ok && userId) upsertHistory(qc, userId, res.generation, false);
       },
       deleteGeneration: async (id) => {
-        await call(() => api.deleteGeneration({ data: { id } }));
+        const res = await call(() => api.deleteGeneration({ data: { id } }));
+        if (res.ok && userId) dropFromHistory(qc, userId, id);
       },
       addClone: (name) => call(() => api.addClone({ data: { name } })),
       uploadClone: (form) => call(() => api.uploadClone({ data: form })),
@@ -209,4 +257,51 @@ export function useApp() {
   const c = useContext(Ctx);
   if (!c) throw new Error("useApp outside AppProvider");
   return c;
+}
+
+export interface History {
+  items: Generation[];
+  /** İlk sayfa yükleniyor. */
+  loading: boolean;
+  error: boolean;
+  retry: () => void;
+  hasMore: boolean;
+  loadingMore: boolean;
+  loadMore: () => void;
+}
+
+/**
+ * Stüdyo sekmesinin geçmişi: ilk sayfa sekme açılınca, sonrakiler "daha
+ * fazla" ile gelir. Üretme, silme ve video kontrolü önbelleği günceller.
+ */
+export function useHistory(type: GenerationType): History {
+  const qc = useQueryClient();
+  const { user } = useApp();
+  const q = useInfiniteQuery({
+    queryKey: historyKey(user?.id ?? "", type),
+    queryFn: async ({ pageParam }): Promise<GenerationPage> => {
+      const res = await api.listGenerations({ data: { type, cursor: pageParam } });
+      if (!res.ok) {
+        // Oturum düşmüş: oturum yeniden sorulur, giriş yoksa geçmiş kapanır.
+        void qc.invalidateQueries({ queryKey: SESSION_KEY });
+        throw new Error(res.error);
+      }
+      return { items: res.items, next: res.next };
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next ?? undefined,
+    enabled: Boolean(user),
+    staleTime: 30_000,
+  });
+  const pages = q.data?.pages;
+  const items = useMemo(() => pages?.flatMap((p) => p.items) ?? [], [pages]);
+  return {
+    items,
+    loading: Boolean(user) && q.isPending,
+    error: q.isError,
+    retry: () => void q.refetch(),
+    hasMore: q.hasNextPage,
+    loadingMore: q.isFetchingNextPage,
+    loadMore: () => void q.fetchNextPage(),
+  };
 }

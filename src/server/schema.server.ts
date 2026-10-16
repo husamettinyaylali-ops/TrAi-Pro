@@ -128,7 +128,12 @@ export const generations = sqliteTable(
     cost: integer("cost").notNull(),
     createdAt: text("created_at").notNull(),
   },
-  (t) => [index("generations_user_idx").on(t.userId), index("generations_status_idx").on(t.status)],
+  (t) => [
+    index("generations_user_idx").on(t.userId),
+    index("generations_status_idx").on(t.status),
+    // Stüdyo geçmişi sayfası: kullanıcı + tür, yeniden eskiye.
+    index("generations_history_idx").on(t.userId, t.type, t.createdAt, t.id),
+  ],
 );
 
 export const voiceClones = sqliteTable(

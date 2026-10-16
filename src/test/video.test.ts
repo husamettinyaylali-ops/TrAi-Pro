@@ -12,6 +12,7 @@ import { handleFalWebhook } from "@/server/fal-webhook.server";
 import { localFileStorage, type FileStorage } from "@/server/file-storage.server";
 import {
   demoTopUp,
+  listGenerations,
   loadUserData,
   markEmailVerified,
   purchasePackage,
@@ -196,7 +197,7 @@ describe("gerçek video üretimi", () => {
 
     const gid = res.generation.id;
     expect((await refreshVideo(db, depsOf(video), id, gid, later(60_000))).ok).toBe(true);
-    expect((await loadUserData(db, id, now)).generations[0]?.status).toBe("pending");
+    expect((await listGenerations(db, id, { type: "video" })).items[0]?.status).toBe("pending");
 
     video.set({ state: "done", video: MP4 });
     const done = await refreshVideo(db, depsOf(video), id, gid, later(120_000));
@@ -313,7 +314,7 @@ describe("gerçek video üretimi", () => {
     expect(
       (await handleFalWebhook(post({ request_id: "req-00000001", status: "OK" }), deps)).status,
     ).toBe(200);
-    expect((await loadUserData(db, id, now)).generations[0]?.fileUrls).toHaveLength(1);
+    expect((await listGenerations(db, id, { type: "video" })).items[0]?.fileUrls).toHaveLength(1);
     expect(
       (await handleFalWebhook(post({ request_id: "req-00000001" }), { ...deps, video: null }))
         .status,

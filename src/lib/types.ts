@@ -74,6 +74,12 @@ export interface Generation {
   createdAt: string;
 }
 
+/** Stüdyo geçmişinin bir sayfası; `next` sonraki (daha eski) sayfanın imleci. */
+export interface GenerationPage {
+  items: Generation[];
+  next: string | null;
+}
+
 export interface ClonedVoice {
   id: string;
   name: string;
@@ -99,7 +105,6 @@ export interface StudioConfig {
 export interface UserData {
   grants: Grant[];
   orders: Order[];
-  generations: Generation[];
   clones: ClonedVoice[];
   security: { hasPassword: boolean; googleLinked: boolean; emailVerified: boolean };
   wallet: { balanceCents: number; entries: WalletEntry[]; pending: TopUpIntent[] };

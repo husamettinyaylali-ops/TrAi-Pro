@@ -12,6 +12,7 @@ import {
   lt,
   lte,
   ne,
+  or,
   sql,
   sum,
 } from "drizzle-orm";
@@ -50,6 +51,8 @@ import type {
   GenerateInput,
   GoogleErrorCode,
   Generation,
+  GenerationPage,
+  GenerationType,
   Order,
   RateLimited,
   TokenErrorCode,
@@ -395,18 +398,13 @@ const toGeneration = (g: GenerationRow): Generation => ({
 });
 
 export async function loadUserData(db: Db, userId: string, now: Date = clock()): Promise<UserData> {
-  const [grantRows, orderRows, genRows, cloneRows, auth, google, wallet] = await Promise.all([
+  const [grantRows, orderRows, cloneRows, auth, google, wallet] = await Promise.all([
     db
       .select()
       .from(creditGrants)
       .where(eq(creditGrants.userId, userId))
       .orderBy(asc(creditGrants.grantedAt)),
     db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt)),
-    db
-      .select()
-      .from(generations)
-      .where(eq(generations.userId, userId))
-      .orderBy(desc(generations.createdAt)),
     db
       .select({
         id: voiceClones.id,
@@ -432,7 +430,6 @@ export async function loadUserData(db: Db, userId: string, now: Date = clock()):
   return {
     grants: grantRows.map(toGrant),
     orders: orderRows.map(toOrder),
-    generations: genRows.map(toGeneration),
     clones: cloneRows.map(({ providerVoiceId, ...c }) => ({
       ...c,
       live: Boolean(providerVoiceId),
@@ -1145,6 +1142,47 @@ export async function getGeneration(
     .where(and(eq(generations.id, id), eq(generations.userId, userId)))
     .get();
   return row ? toGeneration(row) : null;
+}
+
+/** Stüdyo geçmişinin sayfa boyutu. */
+export const HISTORY_PAGE_SIZE = 20;
+/** Geçmiş imleci: sayfanın son üretiminin zamanı ve kimliği ("<ISO zaman>|<kimlik>"). */
+export const HISTORY_CURSOR_RE = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z\|[\w-]{1,80}$/;
+
+/**
+ * Kullanıcının bir türdeki üretimleri, yeniden eskiye sayfa sayfa. Oturum
+ * yanıtı geçmişi taşımaz; stüdyo bu sayfaları ayrıca ister. Aynı anda oluşan
+ * üretimler kimliğe göre sıralanır, böylece sayfa sınırında kayıt atlanmaz.
+ */
+export async function listGenerations(
+  db: Db,
+  userId: string,
+  input: { type: GenerationType; cursor?: string | undefined },
+  limit = HISTORY_PAGE_SIZE,
+): Promise<GenerationPage> {
+  const where = [eq(generations.userId, userId), eq(generations.type, input.type)];
+  if (input.cursor !== undefined) {
+    if (!HISTORY_CURSOR_RE.test(input.cursor)) return { items: [], next: null };
+    const [at, id] = input.cursor.split("|") as [string, string];
+    where.push(
+      or(
+        lt(generations.createdAt, at),
+        and(eq(generations.createdAt, at), lt(generations.id, id)),
+      )!,
+    );
+  }
+  const rows = await db
+    .select()
+    .from(generations)
+    .where(and(...where))
+    .orderBy(desc(generations.createdAt), desc(generations.id))
+    .limit(limit + 1);
+  const page = rows.slice(0, limit);
+  const last = page[page.length - 1];
+  return {
+    items: page.map(toGeneration),
+    next: rows.length > limit && last ? `${last.createdAt}|${last.id}` : null,
+  };
 }
 
 /** Üretimi siler; ses, görsel ya da video dosyası varsa depodan da kaldırılır. */

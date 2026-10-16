@@ -397,6 +397,22 @@ export const deleteGeneration = createServerFn({ method: "POST" })
     return { ok: true as const, session: await payloadFor(user) };
   });
 
+/** Stüdyo geçmişi: bir türdeki üretimler, yeniden eskiye sayfa sayfa (oturum yanıtında yok). */
+export const listGenerations = createServerFn({ method: "POST" })
+  .validator(
+    parse(
+      z.object({
+        type: z.enum(["tts", "image", "video"]),
+        cursor: z.string().max(120).regex(svc.HISTORY_CURSOR_RE).optional(),
+      }),
+    ),
+  )
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    return { ok: true as const, ...(await svc.listGenerations(await getDb(), user.id, data)) };
+  });
+
 /** Demo klon (yalnız ad). Servis bağlıyken kullanılmaz; gerçek klon uploadClone ile. */
 export const addClone = createServerFn({ method: "POST" })
   .validator(parse(z.object({ name: z.string().max(80) })))

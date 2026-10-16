@@ -16,6 +16,7 @@ import {
   deleteAccount,
   deleteVoiceClone,
   generateSpeech,
+  listGenerations,
   loadUserData,
   markEmailVerified,
   registerUser,
@@ -218,7 +219,7 @@ describe("gerçek seslendirme", () => {
     });
     const data = await loadUserData(db, id);
     expect(balance(data.grants, "voice", now)).toBe(5_000);
-    expect(data.generations).toHaveLength(0);
+    expect((await listGenerations(db, id, { type: "tts" })).items).toHaveLength(0);
     expect(existsSync(join(audioRoot, id))).toBe(false);
   });
 
