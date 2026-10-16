@@ -336,11 +336,10 @@ function Footer() {
                   {t.nav.pricing}
                 </Link>
               </li>
-              <li className="flex items-center gap-2 text-muted-foreground">
-                {t.footer.apiDocs}
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase">
-                  {t.soon}
-                </span>
+              <li>
+                <Link to="/api-docs" className={linkCls}>
+                  {t.footer.apiDocs}
+                </Link>
               </li>
             </ul>
           </div>

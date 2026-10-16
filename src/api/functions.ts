@@ -27,6 +27,11 @@ import {
 import { fileStorage } from "@/server/file-storage.server";
 import { binanceConfig, sharedIncoming } from "@/server/binance.server";
 import { checkUsdtTransfer, rpcClient, usdtConfig } from "@/server/bsc.server";
+import {
+  createApiKey as createUserApiKey,
+  listApiKeys as listUserApiKeys,
+  revokeApiKey as revokeUserApiKey,
+} from "@/server/api-keys.server";
 import { getDb } from "@/server/db.server";
 import { imageDeps, speechDeps, videoDeps } from "@/server/deps.server";
 import { getMailer } from "@/server/email.server";
@@ -625,4 +630,29 @@ export const adminCompleteIntent = createServerFn({ method: "POST" })
     const auth = await requireAdmin();
     if (!auth.ok) return auth;
     return completeIntentManually(await getDb(), auth.user.id, data, clock());
+  });
+
+// ---------------------------------------------------------------- geliştirici API anahtarları
+
+export const listApiKeys = createServerFn({ method: "GET" }).handler(async () => {
+  const user = await currentUser();
+  if (!user) return { ok: false as const, error: "unauthorized" as const };
+  return { ok: true as const, keys: await listUserApiKeys(await getDb(), user.id) };
+});
+
+/** Yeni anahtar; düz anahtar yalnız bu yanıtta döner. */
+export const createApiKey = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ name: z.string().max(80) })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    return createUserApiKey(await getDb(), user.id, data.name, clock());
+  });
+
+export const revokeApiKey = createServerFn({ method: "POST" })
+  .validator(parse(z.object({ id: z.string().max(64) })))
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    return revokeUserApiKey(await getDb(), user.id, data.id, clock());
   });

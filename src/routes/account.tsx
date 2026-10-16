@@ -1,9 +1,12 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent, type ReactNode } from "react";
 import {
   AlertCircle,
   AlertTriangle,
+  BookOpen,
+  Check,
   CheckCircle2,
+  Copy,
   KeyRound,
   Loader2,
   LogOut,
@@ -15,6 +18,7 @@ import { RequireAuth } from "@/components/site/require-auth";
 import { VerifyBanner } from "@/components/site/verify-banner";
 import { PageHead, SiteShell, btnOutline, btnPrimary, field } from "@/components/site/shell";
 import { isGoogleError } from "@/lib/google-errors";
+import { useApiKeyActions, useApiKeys } from "@/lib/api-keys";
 import { useFormat, useI18n } from "@/lib/i18n";
 import { useApp } from "@/lib/store";
 
@@ -284,6 +288,151 @@ function PasswordSection() {
   );
 }
 
+function ApiKeysSection() {
+  const { t } = useI18n();
+  const f = useFormat();
+  const { data } = useApp();
+  const a = t.accountPage;
+  const verified = data.security.emailVerified;
+  const keys = useApiKeys(verified);
+  const { create, revoke } = useApiKeyActions();
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<Note>(null);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const errorText = (e: string) => (a.apiKeyErrors as Record<string, string>)[e] ?? t.labs.failed;
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setNote(null);
+    const res = await create(name);
+    setBusy(false);
+    if (!res.ok) return setNote({ kind: "error", text: errorText(res.error) });
+    setFresh(res.key);
+    setCopied(false);
+    setName("");
+  };
+
+  const copy = async () => {
+    if (!fresh) return;
+    try {
+      await navigator.clipboard.writeText(fresh);
+      setCopied(true);
+    } catch {
+      // Pano izni yoksa anahtar elle seçilebilir.
+    }
+  };
+
+  // İptal geri alınamaz: ilk tıklama onay ister, ikincisi iptal eder.
+  const onRevoke = async (id: string) => {
+    if (confirming !== id) return setConfirming(id);
+    setConfirming(null);
+    const res = await revoke(id);
+    setNote(
+      res.ok
+        ? { kind: "ok", text: a.apiKeyRevoked }
+        : { kind: "error", text: errorText(res.error) },
+    );
+  };
+
+  const list = keys.data?.ok ? keys.data.keys : [];
+
+  return (
+    <Section id="api-keys" title={a.apiKeys} sub={a.apiKeysSub}>
+      <Link
+        to="/api-docs"
+        className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-cyan hover:underline"
+      >
+        <BookOpen className="h-4 w-4" aria-hidden />
+        {a.apiKeyDocs}
+      </Link>
+      {!verified ? (
+        <Message note={{ kind: "error", text: a.apiKeyErrors.unverified }} />
+      ) : (
+        <>
+          {fresh && (
+            <div
+              className="space-y-3 rounded-2xl border border-cyan/40 bg-cyan/10 p-4"
+              role="status"
+            >
+              <p className="text-sm">{a.apiKeyCreated}</p>
+              <code className="block break-all rounded-xl bg-background/70 px-3 py-2 font-mono text-sm">
+                {fresh}
+              </code>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={copy} className={btnPrimary}>
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copied ? a.apiKeyCopied : a.apiKeyCopy}
+                </button>
+                <button type="button" onClick={() => setFresh(null)} className={btnOutline}>
+                  {a.apiKeyDone}
+                </button>
+              </div>
+            </div>
+          )}
+          <Message note={note} />
+          {keys.isPending ? (
+            <div className="shimmer h-16 rounded-2xl" aria-busy="true" aria-label={t.loading} />
+          ) : list.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{a.apiKeysEmpty}</p>
+          ) : (
+            <ul className="divide-y divide-border rounded-2xl border border-border">
+              {list.map((k) => (
+                <li key={k.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                  <div className="min-w-0">
+                    <p className="font-medium">{k.name}</p>
+                    <p className="font-mono text-xs text-muted-foreground">{k.prefix}…</p>
+                    <p className="text-xs text-muted-foreground">
+                      {a.apiKeyCreatedAt(f.date(k.createdAt))} ·{" "}
+                      {k.lastUsedAt
+                        ? a.apiKeyLastUsed(f.dateTime(k.lastUsedAt))
+                        : a.apiKeyNeverUsed}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void onRevoke(k.id)}
+                    onBlur={() => confirming === k.id && setConfirming(null)}
+                    className="inline-flex min-h-11 items-center rounded-full border border-destructive/60 px-4 text-sm font-semibold text-destructive transition hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+                  >
+                    {confirming === k.id ? a.apiKeyRevokeConfirm : a.apiKeyRevoke}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="api-key-name" className={label}>
+                {a.apiKeyName}
+              </label>
+              <input
+                id="api-key-name"
+                className={field}
+                maxLength={40}
+                placeholder={a.apiKeyNamePlaceholder}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <button type="submit" disabled={busy || !name.trim()} className={btnOutline}>
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <KeyRound className="h-4 w-4" />
+              )}
+              {a.apiKeyCreate}
+            </button>
+          </form>
+        </>
+      )}
+    </Section>
+  );
+}
+
 function SessionsSection() {
   const { t } = useI18n();
   const { signOutOthers } = useApp();
@@ -417,6 +566,7 @@ function Account() {
       <ProfileSection />
       <MethodsSection initial={initial} />
       <PasswordSection />
+      <ApiKeysSection />
       <SessionsSection />
       <DangerSection />
     </div>

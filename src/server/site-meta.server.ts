@@ -35,6 +35,7 @@ export const PUBLIC_PATHS = [
   "/privacy-policy",
   "/refund-policy",
   "/acceptable-use-policy",
+  "/api-docs",
 ] as const;
 
 /** Kişisel ya da işlem sayfaları taranmaz. */
