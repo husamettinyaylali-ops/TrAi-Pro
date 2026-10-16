@@ -20,4 +20,13 @@ if (typeof window !== "undefined") {
       dispatchEvent: () => {},
     }),
   });
+
+  // Radix menüleri (açılır menü) jsdom'da olmayan bu API'leri kullanır.
+  window.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+  Element.prototype.scrollIntoView ??= () => {};
+  Element.prototype.hasPointerCapture ??= () => false;
 }

@@ -22,6 +22,8 @@ import type {
   GenerationPage,
   GenerationType,
   Order,
+  Project,
+  ProjectErrorCode,
   RateLimited,
   SessionPayload,
   TokenErrorCode,
@@ -88,6 +90,26 @@ interface Store {
   deleteGeneration: (id: string) => Promise<void>;
   /** Hazırlanan videonun durumunu yeniler. */
   checkVideo: (id: string) => Promise<void>;
+  /** Üretime ad verir; boş ad adı kaldırır. */
+  renameGeneration: (
+    id: string,
+    title: string,
+  ) => Promise<Outcome<{ generation: Generation }, ProjectErrorCode>>;
+  /** Üretimi projeye taşır ya da projeden çıkarır (null). */
+  moveGeneration: (
+    id: string,
+    projectId: string | null,
+  ) => Promise<Outcome<{ generation: Generation }, ProjectErrorCode>>;
+  createProject: (input: {
+    name: string;
+    notes?: string | undefined;
+  }) => Promise<Outcome<{ project: Project }, ProjectErrorCode>>;
+  updateProject: (
+    id: string,
+    changes: { name?: string | undefined; notes?: string | undefined },
+  ) => Promise<Outcome<{ project: Project }, ProjectErrorCode>>;
+  /** Projeyi siler; üretimleri projesiz kalır. */
+  deleteProject: (id: string) => Promise<Outcome<object, ProjectErrorCode>>;
   /** Demo klon (yalnız ad). */
   addClone: (name: string) => Promise<Outcome<object, ActionErrorCode>>;
   /** Gerçek klon: FormData içinde name, consent ("true") ve file. */
@@ -138,24 +160,39 @@ const Ctx = createContext<Store | null>(null);
 // ---------------------------------------------------------------- stüdyo geçmişi
 
 const HISTORY = "generations";
-const historyKey = (userId: string, type: GenerationType) => [HISTORY, userId, type] as const;
+const PROJECTS = "projects";
+/** Geçmiş anahtarı: kullanıcı, tür ve proje süzgeci ("all" = süzgeçsiz). */
+const historyKey = (userId: string, type?: GenerationType, projectId?: string) =>
+  [HISTORY, userId, type ?? "all", projectId ?? "all"] as const;
 type HistoryData = InfiniteData<GenerationPage, string | undefined>;
 
-/** Önbellekteki geçmişte üretimi günceller; listede yoksa ve `prepend` ise en başa ekler. */
+/** Üretim bu geçmiş listesine girer mi (tür ve proje süzgeci). */
+const belongs = (key: readonly unknown[], g: Generation) =>
+  (key[2] === "all" || key[2] === g.type) && (key[3] === "all" || key[3] === g.projectId);
+
+/**
+ * Üretimi önbellekteki geçmişlerde günceller: artık ait olmadığı listeden
+ * çıkar (ör. başka projeye taşındı); `prepend` ise ait olduğu listelerin başına eklenir.
+ */
 function upsertHistory(qc: QueryClient, userId: string, g: Generation, prepend: boolean) {
-  qc.setQueryData<HistoryData>(historyKey(userId, g.type), (d) => {
-    if (!d) return d;
-    if (d.pages.some((p) => p.items.some((x) => x.id === g.id))) {
-      const pages = d.pages.map((p) => ({
+  for (const [key, d] of qc.getQueriesData<HistoryData>({ queryKey: [HISTORY, userId] })) {
+    if (!d) continue;
+    const fits = belongs(key, g);
+    const present = d.pages.some((p) => p.items.some((x) => x.id === g.id));
+    let pages = d.pages;
+    if (present) {
+      pages = d.pages.map((p) => ({
         ...p,
-        items: p.items.map((x) => (x.id === g.id ? g : x)),
+        items: fits
+          ? p.items.map((x) => (x.id === g.id ? g : x))
+          : p.items.filter((x) => x.id !== g.id),
       }));
-      return { ...d, pages };
+    } else if (prepend && fits && d.pages[0]) {
+      const [first, ...rest] = d.pages;
+      pages = [{ ...first, items: [g, ...first.items] }, ...rest];
     }
-    const [first, ...rest] = d.pages;
-    if (!prepend || !first) return d;
-    return { ...d, pages: [{ ...first, items: [g, ...first.items] }, ...rest] };
-  });
+    if (pages !== d.pages) qc.setQueryData<HistoryData>(key, { ...d, pages });
+  }
 }
 
 function dropFromHistory(qc: QueryClient, userId: string, id: string) {
@@ -181,7 +218,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const userId = session.data?.user.id;
     const put = (next: SessionPayload | null) => {
       qc.setQueryData(SESSION_KEY, next);
-      if (!next) qc.removeQueries({ queryKey: [HISTORY] });
+      if (!next) {
+        qc.removeQueries({ queryKey: [HISTORY] });
+        qc.removeQueries({ queryKey: [PROJECTS] });
+      }
     };
 
     /** Sunucu çağrısını sarar: oturum düştüyse önbelleği temizler, ağ hatasını sonuca çevirir. */
@@ -218,7 +258,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       capturePaypal: (orderId) => call(() => api.capturePaypal({ data: { orderId } })),
       generate: async (input) => {
         const res = await call(() => api.generate({ data: input }));
-        if (res.ok && userId) upsertHistory(qc, userId, res.generation, true);
+        if (res.ok && userId) {
+          upsertHistory(qc, userId, res.generation, true);
+          if (res.generation.projectId) void qc.invalidateQueries({ queryKey: [PROJECTS] });
+        }
         return res;
       },
       checkVideo: async (id) => {
@@ -227,7 +270,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       deleteGeneration: async (id) => {
         const res = await call(() => api.deleteGeneration({ data: { id } }));
-        if (res.ok && userId) dropFromHistory(qc, userId, id);
+        if (res.ok && userId) {
+          dropFromHistory(qc, userId, id);
+          void qc.invalidateQueries({ queryKey: [PROJECTS] });
+        }
+      },
+      renameGeneration: async (id, title) => {
+        const res = await call(() => api.renameGeneration({ data: { id, title } }));
+        if (res.ok && userId) upsertHistory(qc, userId, res.generation, false);
+        return res;
+      },
+      moveGeneration: async (id, projectId) => {
+        const res = await call(() => api.moveGeneration({ data: { id, projectId } }));
+        if (res.ok && userId) {
+          // Eski listeden hemen çıkar; hedef listenin sırası sunucudan yeniden gelir.
+          upsertHistory(qc, userId, res.generation, false);
+          void qc.invalidateQueries({ queryKey: [HISTORY, userId] });
+          void qc.invalidateQueries({ queryKey: [PROJECTS] });
+        }
+        return res;
+      },
+      createProject: async (input) => {
+        const res = await call(() => api.createProject({ data: input }));
+        if (res.ok) {
+          // Yeni proje hemen seçilebilsin diye listeye eklenir; ardından sunucudan yenilenir.
+          qc.setQueryData<Project[]>([PROJECTS, userId ?? ""], (list) =>
+            list ? [res.project, ...list] : list,
+          );
+          void qc.invalidateQueries({ queryKey: [PROJECTS] });
+        }
+        return res;
+      },
+      updateProject: async (id, changes) => {
+        const res = await call(() => api.updateProject({ data: { id, ...changes } }));
+        if (res.ok) void qc.invalidateQueries({ queryKey: [PROJECTS] });
+        return res;
+      },
+      deleteProject: async (id) => {
+        const res = await call(() => api.deleteProject({ data: { id } }));
+        if (res.ok) {
+          void qc.invalidateQueries({ queryKey: [PROJECTS] });
+          void qc.invalidateQueries({ queryKey: [HISTORY] });
+        }
+        return res;
       },
       addClone: (name) => call(() => api.addClone({ data: { name } })),
       uploadClone: (form) => call(() => api.uploadClone({ data: form })),
@@ -271,16 +356,17 @@ export interface History {
 }
 
 /**
- * Stüdyo sekmesinin geçmişi: ilk sayfa sekme açılınca, sonrakiler "daha
- * fazla" ile gelir. Üretme, silme ve video kontrolü önbelleği günceller.
+ * Stüdyo sekmesinin ya da projenin geçmişi: ilk sayfa açılınca, sonrakiler
+ * "daha fazla" ile gelir. Tür ve proje verilmezse süzgeç yoktur. Üretme,
+ * silme, taşıma, adlandırma ve video kontrolü önbelleği günceller.
  */
-export function useHistory(type: GenerationType): History {
+export function useHistory(type?: GenerationType, projectId?: string): History {
   const qc = useQueryClient();
   const { user } = useApp();
   const q = useInfiniteQuery({
-    queryKey: historyKey(user?.id ?? "", type),
+    queryKey: historyKey(user?.id ?? "", type, projectId),
     queryFn: async ({ pageParam }): Promise<GenerationPage> => {
-      const res = await api.listGenerations({ data: { type, cursor: pageParam } });
+      const res = await api.listGenerations({ data: { type, projectId, cursor: pageParam } });
       if (!res.ok) {
         // Oturum düşmüş: oturum yeniden sorulur, giriş yoksa geçmiş kapanır.
         void qc.invalidateQueries({ queryKey: SESSION_KEY });
@@ -304,4 +390,19 @@ export function useHistory(type: GenerationType): History {
     loadingMore: q.isFetchingNextPage,
     loadMore: () => void q.fetchNextPage(),
   };
+}
+
+/** Kullanıcının projeleri (son etkinliğe göre); proje işlemleri bu listeyi yeniler. */
+export function useProjects() {
+  const { user } = useApp();
+  return useQuery({
+    queryKey: [PROJECTS, user?.id ?? ""],
+    queryFn: async (): Promise<Project[]> => {
+      const res = await api.listProjects();
+      if (!res.ok) throw new Error(res.error);
+      return res.projects;
+    },
+    enabled: Boolean(user),
+    staleTime: 30_000,
+  });
 }

@@ -11,6 +11,20 @@ const generate = vi.fn();
 const checkVideo = vi.fn(async () => {});
 const retry = vi.fn();
 const loadMore = vi.fn();
+const renameGeneration = vi.fn(async () => ({ ok: true }));
+const moveGeneration = vi.fn(async () => ({ ok: true }));
+/** useHistory'ye verilen tür ve proje süzgeci. */
+const historyArgs: [string | undefined, string | undefined][] = [];
+const projects = [
+  {
+    id: "p1",
+    name: "Bölüm 12",
+    notes: "",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    counts: { tts: 0, image: 1, video: 0 },
+  },
+];
 let generations: Generation[] = [];
 /** Geçmiş kancasının durumu (yükleniyor, hata, daha fazla) testte ayarlanır. */
 let historyState: Partial<History> = {};
@@ -36,17 +50,23 @@ vi.mock("@/lib/store", () => ({
     generate,
     checkVideo,
     deleteGeneration: vi.fn(),
+    renameGeneration,
+    moveGeneration,
   }),
-  useHistory: (type: string): History => ({
-    items: generations.filter((g) => g.type === type),
-    loading: false,
-    error: false,
-    retry,
-    hasMore: false,
-    loadingMore: false,
-    loadMore,
-    ...historyState,
-  }),
+  useHistory: (type?: string, projectId?: string): History => {
+    historyArgs.push([type, projectId]);
+    return {
+      items: generations.filter((g) => g.type === type),
+      loading: false,
+      error: false,
+      retry,
+      hasMore: false,
+      loadingMore: false,
+      loadMore,
+      ...historyState,
+    };
+  },
+  useProjects: () => ({ data: projects }),
 }));
 let imageMode: "live" | "demo" = "live";
 vi.mock("@/lib/studio-config", () => ({
@@ -110,6 +130,93 @@ describe("görsel stüdyosu", () => {
     generate.mockResolvedValueOnce({ ok: false, error: "providerFailed" });
     fireEvent.click(screen.getByRole("button", { name: /Görsel Üret|Üret/ }));
     expect(await screen.findByText(/Üretim servisi şu an yanıt vermiyor/)).toBeInTheDocument();
+  });
+
+  describe("projeler ve düzeltme", () => {
+    const titled: Generation = {
+      id: "gen-2",
+      type: "image",
+      text: "mavi kuş",
+      title: "Kapak",
+      projectId: "p1",
+      fileUrls: [
+        "/media/file/gen-2/0",
+        "/media/file/gen-2/1",
+        "/media/file/gen-2/2",
+        "/media/file/gen-2/3",
+      ],
+      cost: 4,
+      createdAt: new Date().toISOString(),
+    };
+    const openMenu = () =>
+      fireEvent.keyDown(screen.getByRole("button", { name: "Diğer işlemler" }), { key: "Enter" });
+
+    it("projede çalışırken geçmiş o projeyi ister, üretim projeye kaydedilir", async () => {
+      historyArgs.length = 0;
+      generate.mockResolvedValueOnce({ ok: true, generation: { ...titled, id: "gen-3" } });
+      render(
+        <I18nProvider>
+          <MediaStudio type="image" projectId="p1" />
+        </I18nProvider>,
+      );
+      expect(historyArgs).toContainEqual(["image", "p1"]);
+      fireEvent.click(screen.getByRole("button", { name: /Görsel Üret/ }));
+      await waitFor(() =>
+        expect(generate).toHaveBeenCalledWith(
+          expect.objectContaining({ type: "image", projectId: "p1" }),
+        ),
+      );
+    });
+
+    it("düzenle: istem ve adet forma gelir; yeni sürüm eski kaydın projesinde ve adıyla üretilir", async () => {
+      generations = [titled];
+      generate.mockResolvedValueOnce({ ok: true, generation: { ...titled, id: "gen-4" } });
+      renderStudio();
+      // Süzgeçsiz geçmişte kaydın projesi görünür; ad verildiği için metin altta soluk.
+      expect(screen.getByText("Bölüm 12")).toBeInTheDocument();
+      expect(screen.getByText("Kapak")).toBeInTheDocument();
+
+      openMenu();
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Düzenle ve yeniden üret" }));
+      expect(screen.getByLabelText("İstem")).toHaveValue("mavi kuş");
+      expect(screen.getByLabelText("Adet")).toHaveValue("4");
+      expect(screen.getByText("“Kapak” düzenleniyor.")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /Görsel Üret/ }));
+      await waitFor(() =>
+        expect(generate).toHaveBeenCalledWith({
+          type: "image",
+          text: "mavi kuş",
+          count: 4,
+          projectId: "p1",
+          title: "Kapak",
+        }),
+      );
+      await waitFor(() => expect(screen.queryByText("“Kapak” düzenleniyor.")).toBeNull());
+    });
+
+    it("yeniden adlandır: ad alanı açılır, Enter ile bir kez kaydedilir", async () => {
+      renameGeneration.mockClear();
+      generations = [titled];
+      renderStudio();
+      openMenu();
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Yeniden adlandır" }));
+      const input = screen.getByRole("textbox", { name: "Yeni ad" });
+      expect(input).toHaveValue("Kapak");
+      fireEvent.change(input, { target: { value: "Final kapak" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      fireEvent.blur(input);
+      await waitFor(() => expect(renameGeneration).toHaveBeenCalledWith("gen-2", "Final kapak"));
+      expect(renameGeneration).toHaveBeenCalledOnce();
+    });
+
+    it("demo üretimde indirme kapalı ve nedeni yazılı", () => {
+      generations = [{ ...titled, fileUrls: undefined, images: [0, 1] }];
+      renderStudio();
+      expect(
+        screen.getByRole("button", { name: "İndirilecek dosya yok: demo üretimde dosya oluşmaz" }),
+      ).toBeDisabled();
+    });
   });
 
   describe("geçmiş durumları", () => {

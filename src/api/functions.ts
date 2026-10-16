@@ -461,17 +461,6 @@ export const listProjects = createServerFn({ method: "POST" }).handler(async () 
   return { ok: true as const, projects: await projectSvc.listProjects(await getDb(), user.id) };
 });
 
-export const getProject = createServerFn({ method: "POST" })
-  .validator(parse(z.object({ id })))
-  .handler(async ({ data }) => {
-    const user = await currentUser();
-    if (!user) return { ok: false as const, error: "unauthorized" as const };
-    const project = await projectSvc.getProject(await getDb(), user.id, data.id);
-    return project
-      ? { ok: true as const, project }
-      : { ok: false as const, error: "notFound" as const };
-  });
-
 export const createProject = createServerFn({ method: "POST" })
   .validator(parse(z.object(projectFields)))
   .handler(async ({ data }) => {

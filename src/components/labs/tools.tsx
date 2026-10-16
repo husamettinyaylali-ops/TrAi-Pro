@@ -18,9 +18,17 @@ import {
   X,
 } from "lucide-react";
 
+import {
+  EditBanner,
+  GenerationMenu,
+  GenerationTitle,
+  NoDownload,
+  ProjectTag,
+} from "@/components/labs/generation-ui";
 import { Waveform } from "@/components/landing/fx";
 import { btnOutline, btnPrimary, field } from "@/components/site/shell";
 import {
+  IMAGE_COUNTS,
   MAX_CLONES,
   MAX_TTS_CHARS,
   balance,
@@ -210,10 +218,17 @@ function useActionError() {
   };
 }
 
-export function TextToSpeech() {
+/** Satırın altında gösterilen işlem hatası (yeniden adlandırma, taşıma). */
+type RowError = { id: string; text: string } | null;
+
+/**
+ * Seslendirme. `projectId` seçiliyse yeni üretimler o projeye kaydedilir ve
+ * geçmiş yalnız o projeyi gösterir.
+ */
+export function TextToSpeech({ projectId }: { projectId?: string | undefined } = {}) {
   const { t } = useI18n();
   const f = useFormat();
-  const { generate, deleteGeneration } = useApp();
+  const { generate } = useApp();
   const { voices, live, loading } = useVoices();
   const actionError = useActionError();
   const [text, setText] = useState(t.labs.tts.sample);
@@ -225,6 +240,11 @@ export function TextToSpeech() {
   const [playing, setPlaying] = useState<string | null>(null);
   const [speechOk, setSpeechOk] = useState(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [editing, setEditing] = useState<Generation | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<RowError>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const textRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     setSpeechOk(canSpeak());
@@ -241,8 +261,22 @@ export function TextToSpeech() {
 
   const cost = ttsCost(text);
   const voiceOf = (id?: string) => voices.find((v) => v.id === id);
-  const history = useHistory("tts");
+  const history = useHistory("tts", projectId);
   const serviceDown = live && !loading && voices.length === 0;
+
+  /** Düzeltme: kaydın metni ve sesi forma gelir; üretince yeni sürüm kaydedilir. */
+  const startEdit = (g: Generation) => {
+    setText(g.text);
+    if (g.voiceId && voices.some((v) => v.id === g.voiceId)) setVoiceId(g.voiceId);
+    setEditing(g);
+    setError(null);
+  };
+  // Düzeltme başlayınca form görünür olur ve metne odaklanılır (menü kapandıktan sonra).
+  useEffect(() => {
+    if (!editing) return;
+    formRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    textRef.current?.focus({ preventScroll: true });
+  }, [editing]);
 
   /** Demo üretimi tarayıcının konuşma sentezi ile önizler. */
   const preview = (g: Generation) => {
@@ -261,7 +295,14 @@ export function TextToSpeech() {
     if (cost === 0) return setError({ kind: "text", text: t.labs.tts.emptyText });
     setError(null);
     setBusy(true);
-    const res = await generate({ type: "tts", text: text.trim(), voiceId });
+    const res = await generate({
+      type: "tts",
+      text: text.trim(),
+      voiceId,
+      // Düzeltilen sürüm eski kaydın projesinde ve adıyla kalır.
+      projectId: editing ? editing.projectId : projectId,
+      title: editing?.title,
+    });
     setBusy(false);
     if (!res.ok) {
       return setError(
@@ -270,6 +311,7 @@ export function TextToSpeech() {
           : { kind: "text", text: actionError(res) },
       );
     }
+    setEditing(null);
     if (res.generation.audioUrl) {
       audioRef.current?.pause();
       audioRef.current = new Audio(res.generation.audioUrl);
@@ -295,12 +337,14 @@ export function TextToSpeech() {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <Panel>
-        <form onSubmit={submit} className="space-y-4">
+        <form ref={formRef} onSubmit={submit} className="scroll-mt-24 space-y-4">
+          {editing && <EditBanner g={editing} onCancel={() => setEditing(null)} />}
           <div>
             <label htmlFor="tts-text" className="mb-1.5 block text-sm font-medium">
               {t.labs.tts.text}
             </label>
             <textarea
+              ref={textRef}
               id="tts-text"
               rows={8}
               maxLength={MAX_TTS_CHARS}
@@ -387,13 +431,19 @@ export function TextToSpeech() {
                     </button>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{g.text}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <GenerationTitle
+                      g={g}
+                      renaming={renaming === g.id}
+                      onDone={() => setRenaming(null)}
+                      onError={(text) => setRowError({ id: g.id, text })}
+                    />
+                    <p className="truncate text-xs text-muted-foreground">
                       {voiceOf(g.voiceId)?.name ?? t.labs.tts.unknownVoice} ·{" "}
                       {f.dateTime(g.createdAt)} · {f.num(g.cost)} {t.labs.creditsShort}
                     </p>
+                    {!projectId && <ProjectTag id={g.projectId} />}
                   </div>
-                  {g.audioUrl && (
+                  {g.audioUrl ? (
                     <a
                       href={`${g.audioUrl}?download=1`}
                       aria-label={t.labs.tts.download}
@@ -402,15 +452,24 @@ export function TextToSpeech() {
                     >
                       <Download className="h-4 w-4" />
                     </a>
+                  ) : (
+                    <NoDownload />
                   )}
-                  <button
-                    onClick={() => deleteGeneration(g.id)}
-                    aria-label={t.labs.delete}
-                    className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <GenerationMenu
+                    g={g}
+                    onEdit={() => startEdit(g)}
+                    onRename={() => {
+                      setRowError(null);
+                      setRenaming(g.id);
+                    }}
+                    onError={(text) => setRowError({ id: g.id, text })}
+                  />
                 </div>
+                {rowError?.id === g.id && (
+                  <p role="alert" className="mt-2 text-sm text-destructive">
+                    {rowError.text}
+                  </p>
+                )}
                 {g.audioUrl ? (
                   <audio
                     controls
@@ -690,16 +749,34 @@ function Locked() {
 /** Hazırlanan videoların kontrol aralığı. */
 const VIDEO_POLL_MS = 8_000;
 
-export function MediaStudio({ type }: { type: MediaType }) {
+/** Görsel ya da video stüdyosu; `projectId` seçiliyse üretimler o projeye kaydedilir. */
+export function MediaStudio({
+  type,
+  projectId,
+}: {
+  type: MediaType;
+  projectId?: string | undefined;
+}) {
   const { t } = useI18n();
   const f = useFormat();
-  const { data, generate, deleteGeneration, checkVideo } = useApp();
+  const { data, generate, checkVideo } = useApp();
   const isVideo = type === "video";
   const copy = isVideo ? t.labs.video : t.labs.image;
   const [prompt, setPrompt] = useState(copy.placeholder);
   const [count, setCount] = useState(isVideo ? 1 : 2);
   const [style, setStyle] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<Generation | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<RowError>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const promptRef = useRef<HTMLInputElement | null>(null);
+  // Düzeltme başlayınca form görünür olur ve isteme odaklanılır (menü kapandıktan sonra).
+  useEffect(() => {
+    if (!editing) return;
+    formRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    promptRef.current?.focus({ preventScroll: true });
+  }, [editing]);
   const [error, setError] = useState<
     "insufficient" | "empty" | "failed" | "providerFailed" | "contentRejected" | "limit" | null
   >(null);
@@ -710,7 +787,7 @@ export function MediaStudio({ type }: { type: MediaType }) {
   const now = clock();
   const hasPass = balance(data.grants, "media", now) > 0;
   const cost = mediaCost(type, count);
-  const history = useHistory(type);
+  const history = useHistory(type, projectId);
 
   // Hazırlanan videolar sayfa açıkken düzenli kontrol edilir (bitince ya da iade olunca güncellenir).
   const pendingIds = history.items
@@ -737,17 +814,33 @@ export function MediaStudio({ type }: { type: MediaType }) {
   }
   if (!hasPass && !history.error && history.items.length === 0) return <Locked />;
 
+  /** Düzeltme: istem, adet ya da stil forma gelir; üretince yeni sürüm kaydedilir. */
+  const startEdit = (g: Generation) => {
+    setPrompt(g.text);
+    if (isVideo) setStyle(Number(g.style ?? 0) || 0);
+    else {
+      const n = g.fileUrls?.length ?? g.images?.length;
+      if (n && (IMAGE_COUNTS as readonly number[]).includes(n)) setCount(n);
+    }
+    setEditing(g);
+    setError(null);
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return setError("empty");
     setError(null);
     setBusy(true);
     const text = prompt.trim();
+    // Düzeltilen sürüm eski kaydın projesinde ve adıyla kalır.
+    const meta = { projectId: editing ? editing.projectId : projectId, title: editing?.title };
     const res = await generate(
-      isVideo ? { type: "video", text, styleIndex: style } : { type: "image", text, count },
+      isVideo
+        ? { type: "video", text, styleIndex: style, ...meta }
+        : { type: "image", text, count, ...meta },
     );
     setBusy(false);
-    if (res.ok) return;
+    if (res.ok) return setEditing(null);
     setError(
       res.error === "insufficient" ||
         res.error === "providerFailed" ||
@@ -764,13 +857,15 @@ export function MediaStudio({ type }: { type: MediaType }) {
   return (
     <div className="space-y-6">
       <Panel>
-        <form onSubmit={submit} className="space-y-4">
+        <form ref={formRef} onSubmit={submit} className="scroll-mt-24 space-y-4">
+          {editing && <EditBanner g={editing} onCancel={() => setEditing(null)} />}
           <div className="grid gap-4 md:grid-cols-[1fr_auto]">
             <div>
               <label htmlFor={`${type}-prompt`} className="mb-1.5 block text-sm font-medium">
                 {copy.prompt}
               </label>
               <input
+                ref={promptRef}
                 id={`${type}-prompt`}
                 className={field}
                 value={prompt}
@@ -881,25 +976,36 @@ export function MediaStudio({ type }: { type: MediaType }) {
           <ul className="space-y-6">
             {history.items.map((g) => (
               <li key={g.id}>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="min-w-0 truncate text-sm">
-                    <span className="font-medium">{g.text}</span>
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · {styleName(g.style) ? `${styleName(g.style)} · ` : ""}
+                <div className="mb-2 flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <GenerationTitle
+                      g={g}
+                      renaming={renaming === g.id}
+                      onDone={() => setRenaming(null)}
+                      onError={(text) => setRowError({ id: g.id, text })}
+                    />
+                    <p className="truncate text-xs text-muted-foreground">
+                      {styleName(g.style) ? `${styleName(g.style)} · ` : ""}
                       {f.dateTime(g.createdAt)} · {f.num(g.cost)} {t.labs.creditsShort}
-                    </span>
-                  </p>
-                  {g.status !== "pending" && (
-                    <button
-                      onClick={() => deleteGeneration(g.id)}
-                      aria-label={t.labs.delete}
-                      className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+                    </p>
+                    {!projectId && <ProjectTag id={g.projectId} />}
+                  </div>
+                  {!g.fileUrls?.length && !g.status && <NoDownload />}
+                  <GenerationMenu
+                    g={g}
+                    onEdit={() => startEdit(g)}
+                    onRename={() => {
+                      setRowError(null);
+                      setRenaming(g.id);
+                    }}
+                    onError={(text) => setRowError({ id: g.id, text })}
+                  />
                 </div>
+                {rowError?.id === g.id && (
+                  <p role="alert" className="mb-2 text-sm text-destructive">
+                    {rowError.text}
+                  </p>
+                )}
                 <div
                   className={`grid gap-3 ${isVideo ? "sm:grid-cols-2" : "grid-cols-2 md:grid-cols-4"}`}
                 >
