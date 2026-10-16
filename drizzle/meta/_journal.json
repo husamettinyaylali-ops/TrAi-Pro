@@ -78,6 +78,13 @@
       "when": 1792137610574,
       "tag": "0010_api_anahtarlari",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1792149698255,
+      "tag": "0011_odeme_makbuzu",
+      "breakpoints": true
     }
   ]
 }

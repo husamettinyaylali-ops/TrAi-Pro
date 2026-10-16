@@ -33,7 +33,7 @@ import {
   revokeApiKey as revokeUserApiKey,
 } from "@/server/api-keys.server";
 import { getDb } from "@/server/db.server";
-import { imageDeps, speechDeps, videoDeps } from "@/server/deps.server";
+import { imageDeps, receiptContext, speechDeps, videoDeps } from "@/server/deps.server";
 import { getMailer } from "@/server/email.server";
 import { paypalConfig, sharedPaypal } from "@/server/paypal.server";
 import { env, isProduction } from "@/server/env.server";
@@ -158,6 +158,12 @@ export const signOut = createServerFn({ method: "POST" }).handler(async () => {
   return { ok: true as const };
 });
 
+/** Tamamlanan bakiye yüklemesinin makbuzu (her ödeme için bir kez; hata ödemeyi etkilemez). */
+async function sendReceipt(intentId: string) {
+  const ctx = receiptContext(getRequest().url);
+  if (ctx) await svc.sendTopUpReceipt(await getDb(), ctx, intentId, clock());
+}
+
 /** Demo ödemeler üretimde yalnız DEMO_PAYMENTS=on ise açıktır. */
 const demoPaymentsEnabled = () => !isProduction() || env("DEMO_PAYMENTS") === "on";
 
@@ -195,6 +201,7 @@ export const topUp = createServerFn({ method: "POST" })
       z.object({
         method: z.enum(["usdt_bep20", "binance_pay", "paypal", "demo"]),
         amountCents: z.number().int(),
+        lang: langSchema,
       }),
     ),
   )
@@ -238,6 +245,7 @@ export const claimUsdt = createServerFn({ method: "POST" })
       clock(),
     );
     if (!res.ok) return res;
+    await sendReceipt(res.intent.id);
     return { ok: true as const, intent: res.intent, session: await payloadFor(user) };
   });
 
@@ -252,6 +260,7 @@ export const claimBinance = createServerFn({ method: "POST" }).handler(async () 
   if (!cfg) return { ok: false as const, error: "methodDisabled" as const };
   const res = await svc.claimBinanceTopUp(await getDb(), user.id, sharedIncoming(cfg), clock());
   if (!res.ok) return res;
+  await sendReceipt(res.intent.id);
   return { ok: true as const, intent: res.intent, session: await payloadFor(user) };
 });
 
@@ -282,17 +291,22 @@ export const capturePaypal = createServerFn({ method: "POST" })
       clock(),
     );
     if (!res.ok) return res;
+    await sendReceipt(res.intent.id);
     return { ok: true as const, intent: res.intent, session: await payloadFor(user) };
   });
 
 /** Paketi USD bakiyeden alır. */
 export const purchase = createServerFn({ method: "POST" })
-  .validator(parse(z.object({ packageId: z.string().max(40) })))
+  .validator(parse(z.object({ packageId: z.string().max(40), lang: langSchema })))
   .handler(async ({ data }) => {
     const user = await currentUser();
     if (!user) return { ok: false as const, error: "unauthorized" as const };
-    const res = await svc.purchasePackage(await getDb(), user.id, data, clock());
+    const db = await getDb();
+    const res = await svc.purchasePackage(db, user.id, data, clock());
     if (!res.ok) return res;
+    const ctx = receiptContext(getRequest().url);
+    if (ctx)
+      await svc.sendPurchaseReceipt(db, { ...ctx, lang: data.lang ?? "tr" }, user.id, res.order);
     return { ok: true as const, order: res.order, session: await payloadFor(user) };
   });
 
@@ -629,7 +643,9 @@ export const adminCompleteIntent = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const auth = await requireAdmin();
     if (!auth.ok) return auth;
-    return completeIntentManually(await getDb(), auth.user.id, data, clock());
+    const res = await completeIntentManually(await getDb(), auth.user.id, data, clock());
+    if (res.ok) await sendReceipt(res.intent.id);
+    return res;
   });
 
 // ---------------------------------------------------------------- geliştirici API anahtarları

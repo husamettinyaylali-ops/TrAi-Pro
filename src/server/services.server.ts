@@ -87,6 +87,8 @@ import type { Db } from "./db.server";
 import type { EmailMessage, Mailer } from "./email.server";
 import {
   passwordChangedTemplate,
+  purchaseReceiptTemplate,
+  topUpReceiptTemplate,
   resetPasswordTemplate,
   verifyEmailTemplate,
 } from "./email-templates.server";
@@ -504,7 +506,7 @@ async function expireIntents(conn: Conn, now: Date) {
 export async function createTopUp(
   db: Db,
   userId: string,
-  input: { method: TopUpMethod; amountCents: number },
+  input: { method: TopUpMethod; amountCents: number; lang?: Lang | undefined },
   now: Date,
   rand: () => number = Math.random,
 ): Promise<Result<{ intent: TopUpIntent }, "invalidInput" | "busy">> {
@@ -567,6 +569,8 @@ export async function createTopUp(
       createdAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + TOPUP_TTL_MS).toISOString(),
       completedAt: null,
+      lang: input.lang ?? null,
+      receiptSentAt: null,
     };
     await tx.insert(paymentIntents).values(row);
     return { ok: true, intent: toIntent(row) } as const;
@@ -2062,5 +2066,93 @@ export async function sendPasswordChangedNotice(
   await deliver(ctx, {
     to: user.email,
     ...passwordChangedTemplate(ctx.lang, user.name, now, resetUrl),
+  });
+}
+
+// ---------------------------------------------------------------- ödeme makbuzları
+
+/** Makbuz e-postası için gönderici ve bağlantı kökü (dil, ödeme talebinden gelir). */
+export interface ReceiptContext {
+  mailer: Mailer;
+  appUrl: string;
+}
+
+/**
+ * Tamamlanan bakiye yüklemesinin makbuzu. Ödeme hangi yoldan tamamlanırsa
+ * tamamlansın (kullanıcı doğrulaması, webhook, yönetici) her ödeme için bir kez
+ * gider: gönderim koşullu güncellemeyle işaretlenir. Demo yüklemeye ve silinmiş
+ * hesaba gönderilmez. Gönderim hatası ödemeyi etkilemez, loglanır.
+ */
+export async function sendTopUpReceipt(
+  db: Db,
+  ctx: ReceiptContext,
+  intentId: string,
+  now: Date,
+): Promise<boolean> {
+  const claim = await db
+    .update(paymentIntents)
+    .set({ receiptSentAt: now.toISOString() })
+    .where(
+      and(
+        eq(paymentIntents.id, intentId),
+        eq(paymentIntents.status, "completed"),
+        ne(paymentIntents.method, "demo"),
+        isNull(paymentIntents.receiptSentAt),
+      ),
+    );
+  if (claim.rowsAffected === 0) return false;
+  const row = await db
+    .select({
+      intent: paymentIntents,
+      name: users.name,
+      email: users.email,
+      deletedAt: users.deletedAt,
+    })
+    .from(paymentIntents)
+    .innerJoin(users, eq(users.id, paymentIntents.userId))
+    .where(eq(paymentIntents.id, intentId))
+    .get();
+  if (!row || row.deletedAt) return false;
+  const lang: Lang = row.intent.lang ?? "tr";
+  return deliver(
+    { ...ctx, lang },
+    {
+      to: row.email,
+      ...topUpReceiptTemplate(lang, row.name, {
+        method: row.intent.method,
+        creditCents: creditCentsFor(row.intent),
+        balanceCents: await walletBalance(db, row.intent.userId),
+        reference: row.intent.id,
+        when: now,
+        historyUrl: `${ctx.appUrl}/payment-history`,
+      }),
+    },
+  );
+}
+
+/** Bakiyeden alınan paketin makbuzu. */
+export async function sendPurchaseReceipt(
+  db: Db,
+  ctx: ReceiptContext & { lang: Lang },
+  userId: string,
+  order: Order,
+): Promise<boolean> {
+  const user = await db
+    .select({ name: users.name, email: users.email, deletedAt: users.deletedAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+  if (!user || user.deletedAt) return false;
+  return deliver(ctx, {
+    to: user.email,
+    ...purchaseReceiptTemplate(ctx.lang, user.name, {
+      kind: order.kind,
+      credits: order.credits,
+      days: order.days,
+      priceCents: Math.round(order.amountUsd * 100),
+      balanceCents: await walletBalance(db, userId),
+      expiresAt: new Date(order.expiresAt),
+      studioUrl: `${ctx.appUrl}/labs`,
+    }),
   });
 }

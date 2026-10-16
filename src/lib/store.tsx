@@ -3,7 +3,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 import * as api from "@/api/functions";
 
-import type { Lang } from "./i18n";
+import { useI18n, type Lang } from "./i18n";
 import type {
   Account,
   AccountErrorCode,
@@ -130,6 +130,8 @@ const Ctx = createContext<Store | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
+  // Makbuz e-postaları kullanıcının o anki dilinde gider.
+  const { lang } = useI18n();
   const session = useQuery({
     queryKey: SESSION_KEY,
     queryFn: () => api.getSession(),
@@ -165,8 +167,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await call(() => api.signOut());
         put(null);
       },
-      purchase: (packageId) => call(() => api.purchase({ data: { packageId } })),
-      topUp: (method, amountCents) => call(() => api.topUp({ data: { method, amountCents } })),
+      purchase: (packageId) => call(() => api.purchase({ data: { packageId, lang } })),
+      topUp: (method, amountCents) =>
+        call(() => api.topUp({ data: { method, amountCents, lang } })),
       claimUsdt: (txHash) => call(() => api.claimUsdt({ data: { txHash } })),
       claimBinance: () => call(() => api.claimBinance()),
       startPaypal: (intentId) => call(() => api.startPaypal({ data: { intentId } })),
@@ -197,7 +200,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return res;
       },
     };
-  }, [qc, session.isPending, session.data]);
+  }, [qc, session.isPending, session.data, lang]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

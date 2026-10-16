@@ -8,7 +8,8 @@ import {
   type PaypalClient,
   type PaypalConfig,
 } from "./paypal.server";
-import { creditPaypalCapture } from "./services.server";
+import { receiptContext } from "./deps.server";
+import { creditPaypalCapture, sendTopUpReceipt, type ReceiptContext } from "./services.server";
 
 const MAX_BODY = 64 * 1024;
 
@@ -27,11 +28,19 @@ export interface WebhookDeps {
   client: Pick<PaypalClient, "verifyWebhook"> | null;
   db: () => Promise<Db>;
   now: () => Date;
+  /** Makbuz e-postası bağlamı (isteğin adresinden); yoksa makbuz gönderilmez. */
+  receipts?: (requestUrl: string) => ReceiptContext | null;
 }
 
 function defaultDeps(): WebhookDeps {
   const config = paypalConfig();
-  return { config, client: config && sharedPaypal(config), db: getDb, now: clock };
+  return {
+    config,
+    client: config && sharedPaypal(config),
+    db: getDb,
+    now: clock,
+    receipts: receiptContext,
+  };
 }
 
 const text = (body: string, status: number) => new Response(body, { status });
@@ -78,12 +87,18 @@ export async function handlePaypalWebhook(
   if (event.event_type !== "PAYMENT.CAPTURE.COMPLETED" || !r?.id || !r.status || !r.custom_id) {
     return text("OK", 200);
   }
+  const db = await deps.db();
   const res = await creditPaypalCapture(
-    await deps.db(),
+    db,
     r.custom_id,
     { id: r.id, status: r.status, amount: money(r.amount) },
     deps.now(),
   );
-  if (!res.ok) console.warn(`[ödeme] PayPal tahsilatı ${r.custom_id} yazılamadı: ${res.error}`);
+  if (!res.ok) {
+    console.warn(`[ödeme] PayPal tahsilatı ${r.custom_id} yazılamadı: ${res.error}`);
+  } else {
+    const ctx = deps.receipts?.(request.url);
+    if (ctx) await sendTopUpReceipt(db, ctx, res.intent.id, deps.now());
+  }
   return text("OK", 200);
 }

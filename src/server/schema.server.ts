@@ -222,6 +222,10 @@ export const paymentIntents = sqliteTable(
     createdAt: text("created_at").notNull(),
     expiresAt: text("expires_at").notNull(),
     completedAt: text("completed_at"),
+    /** Kullanıcının talep anındaki dili; makbuz e-postası bu dilde gider. */
+    lang: text("lang", { enum: ["tr", "en"] }),
+    /** Makbuz e-postası gönderildiyse zamanı (her ödeme için bir kez). */
+    receiptSentAt: text("receipt_sent_at"),
   },
   (t) => [
     index("payment_intents_user_idx").on(t.userId),

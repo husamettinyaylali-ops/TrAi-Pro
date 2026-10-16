@@ -1,10 +1,14 @@
+import { resolveAppUrl } from "@/lib/app-url";
+
 import { getDb } from "./db.server";
-import { env } from "./env.server";
+import { getMailer } from "./email.server";
+import { env, isProduction } from "./env.server";
 import { fileStorage } from "./file-storage.server";
 import { imageProvider } from "./image.server";
 import {
   clonedProviderIds,
   type ImageDeps,
+  type ReceiptContext,
   type SpeechDeps,
   type VideoDeps,
 } from "./services.server";
@@ -49,4 +53,10 @@ export function videoDeps(): VideoDeps | null {
     storage: fileStorage(),
     webhookUrl: base ? `${base.replace(/\/$/, "")}/webhooks/fal` : null,
   };
+}
+
+/** Makbuz e-postası bağlamı; yayında PUBLIC_URL yoksa bağlantı kurulamaz ve null döner. */
+export function receiptContext(requestUrl: string): ReceiptContext | null {
+  const appUrl = resolveAppUrl(env("PUBLIC_URL"), requestUrl, isProduction());
+  return appUrl ? { mailer: getMailer(), appUrl } : null;
 }

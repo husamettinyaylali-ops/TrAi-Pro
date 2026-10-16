@@ -1,5 +1,7 @@
 import type { Lang } from "@/lib/i18n";
+import type { CreditKind } from "@/lib/credits";
 import { signupBonus } from "@/lib/packages";
+import type { TopUpMethod } from "@/lib/types";
 
 import type { EmailMessage } from "./email.server";
 
@@ -114,5 +116,117 @@ export function passwordChangedTemplate(
     subject: "TrAi Pro: your password was changed",
     text: `${lines.join("\n\n")}\n${resetUrl}`,
     html: html("Your password was changed", lines, { url: resetUrl, label: "Reset my password" }),
+  };
+}
+
+const usd = (lang: Lang, cents: number) =>
+  new Intl.NumberFormat(locale(lang), { style: "currency", currency: "USD" }).format(cents / 100);
+const dateTime = (lang: Lang, d: Date) =>
+  new Intl.DateTimeFormat(locale(lang), {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone: "Europe/Istanbul",
+  }).format(d);
+
+const METHOD_NAMES: Record<Lang, Record<TopUpMethod, string>> = {
+  tr: {
+    usdt_bep20: "USDT (BEP20)",
+    binance_pay: "Binance Pay",
+    paypal: "PayPal / Kart",
+    demo: "Demo",
+  },
+  en: {
+    usdt_bep20: "USDT (BEP20)",
+    binance_pay: "Binance Pay",
+    paypal: "PayPal / Card",
+    demo: "Demo",
+  },
+};
+
+/** Bakiye yükleme makbuzu: yöntem, yazılan tutar, güncel bakiye ve işlem numarası. */
+export function topUpReceiptTemplate(
+  lang: Lang,
+  name: string,
+  r: {
+    method: TopUpMethod;
+    creditCents: number;
+    balanceCents: number;
+    reference: string;
+    when: Date;
+    historyUrl: string;
+  },
+): Template {
+  const amount = usd(lang, r.creditCents);
+  const balance = usd(lang, r.balanceCents);
+  const ref = r.reference.slice(0, 8).toUpperCase();
+  const method = METHOD_NAMES[lang][r.method];
+  if (lang === "tr") {
+    const lines = [
+      `Merhaba ${name},`,
+      `${method} ile yaptığın ödeme doğrulandı ve bakiyene ${amount} eklendi.`,
+      `Güncel bakiye: ${balance}`,
+      `İşlem numarası: ${ref} · ${dateTime(lang, r.when)}`,
+    ];
+    return {
+      subject: `TrAi Pro: bakiyene ${amount} yüklendi`,
+      text: `${lines.join("\n\n")}\n\n${r.historyUrl}`,
+      html: html("Bakiye yüklendi", lines, { url: r.historyUrl, label: "Ödeme geçmişini gör" }),
+    };
+  }
+  const lines = [
+    `Hi ${name},`,
+    `Your ${method} payment was verified and ${amount} was added to your balance.`,
+    `Current balance: ${balance}`,
+    `Transaction number: ${ref} · ${dateTime(lang, r.when)}`,
+  ];
+  return {
+    subject: `TrAi Pro: ${amount} added to your balance`,
+    text: `${lines.join("\n\n")}\n\n${r.historyUrl}`,
+    html: html("Balance topped up", lines, { url: r.historyUrl, label: "View payment history" }),
+  };
+}
+
+/** Paket alım makbuzu: paket, kredi, son kullanma, ödenen tutar ve kalan bakiye. */
+export function purchaseReceiptTemplate(
+  lang: Lang,
+  name: string,
+  r: {
+    kind: CreditKind;
+    credits: number;
+    days: number;
+    priceCents: number;
+    balanceCents: number;
+    expiresAt: Date;
+    studioUrl: string;
+  },
+): Template {
+  const n = new Intl.NumberFormat(locale(lang)).format(r.credits);
+  const expires = dateTime(lang, r.expiresAt);
+  if (lang === "tr") {
+    const pack = r.kind === "voice" ? `Ses AI · ${n} kredi` : `Video & Görsel AI · ${r.days} gün`;
+    const lines = [
+      `Merhaba ${name},`,
+      `${pack} paketin hazır: ${n} kredi hesabına eklendi. Son kullanma: ${expires}.`,
+      `Ödenen: ${usd(lang, r.priceCents)} (bakiyeden) · Kalan bakiye: ${usd(lang, r.balanceCents)}`,
+    ];
+    return {
+      subject: `TrAi Pro: ${pack} paketin hazır`,
+      text: `${lines.join("\n\n")}\n\n${r.studioUrl}`,
+      html: html("Paketin hazır", lines, { url: r.studioUrl, label: "Stüdyoya git" }),
+    };
+  }
+  const pack =
+    r.kind === "voice"
+      ? `Voice AI · ${n} credits`
+      : `Video & Image AI · ${r.days} ${r.days === 1 ? "day" : "days"}`;
+  const lines = [
+    `Hi ${name},`,
+    `Your ${pack} pack is ready: ${n} credits were added to your account. Expires: ${expires}.`,
+    `Paid: ${usd(lang, r.priceCents)} (from balance) · Remaining balance: ${usd(lang, r.balanceCents)}`,
+  ];
+  return {
+    subject: `TrAi Pro: your ${pack} pack is ready`,
+    text: `${lines.join("\n\n")}\n\n${r.studioUrl}`,
+    html: html("Your pack is ready", lines, { url: r.studioUrl, label: "Open Studio" }),
   };
 }
