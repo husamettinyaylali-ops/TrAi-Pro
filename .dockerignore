@@ -1,0 +1,12 @@
+# Gizli değerler imaja girmez; yayında docker compose env_file ile verilir.
+.env
+.env.*
+!.env.example
+data
+node_modules
+.output
+dist
+.git
+.tanstack
+.claude
+*.log

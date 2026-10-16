@@ -1,0 +1,36 @@
+# Yayın: VPS'te `docker compose up -d --build`.
+# .env dosyası (proje kökünde) hem uygulamanın ortam değişkenlerini hem DOMAIN'i taşır.
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: file:/data/trai-pro.db
+      MEDIA_DIR: /data/media
+      BACKUP_DIR: /data/backups
+      TRUST_PROXY: "on"
+    volumes:
+      - trai-data:/data
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN .env içinde tanımlı olmalı}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  trai-data:
+  caddy-data:
+  caddy-config:

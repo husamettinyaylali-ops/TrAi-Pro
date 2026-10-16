@@ -14,6 +14,7 @@ import { Route as AcceptableUsePolicyRouteImport } from './routes/acceptable-use
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as HealthRouteImport } from './routes/health'
 import { Route as LabsRouteImport } from './routes/labs'
 import { Route as PaymentRouteImport } from './routes/payment'
 import { Route as PaymentHistoryRouteImport } from './routes/payment-history'
@@ -55,6 +56,11 @@ const AdminRoute = AdminRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HealthRoute = HealthRouteImport.update({
+  id: '/health',
+  path: '/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LabsRoute = LabsRouteImport.update({
@@ -149,6 +155,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/health': typeof HealthRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
   '/payment-history': typeof PaymentHistoryRoute
@@ -173,6 +180,7 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/health': typeof HealthRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
   '/payment-history': typeof PaymentHistoryRoute
@@ -198,6 +206,7 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/health': typeof HealthRoute
   '/labs': typeof LabsRoute
   '/payment': typeof PaymentRoute
   '/payment-history': typeof PaymentHistoryRoute
@@ -224,6 +233,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/forgot-password'
+    | '/health'
     | '/labs'
     | '/payment'
     | '/payment-history'
@@ -248,6 +258,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/forgot-password'
+    | '/health'
     | '/labs'
     | '/payment'
     | '/payment-history'
@@ -272,6 +283,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/forgot-password'
+    | '/health'
     | '/labs'
     | '/payment'
     | '/payment-history'
@@ -297,6 +309,7 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  HealthRoute: typeof HealthRoute
   LabsRoute: typeof LabsRoute
   PaymentRoute: typeof PaymentRoute
   PaymentHistoryRoute: typeof PaymentHistoryRoute
@@ -350,6 +363,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/labs': {
@@ -492,6 +512,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   AdminRoute: AdminRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  HealthRoute: HealthRoute,
   LabsRoute: LabsRoute,
   PaymentRoute: PaymentRoute,
   PaymentHistoryRoute: PaymentHistoryRoute,

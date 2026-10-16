@@ -7,6 +7,12 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  // Yayın hedefi VPS / Node sunucusu: `npm run build` → `node .output/server/index.mjs`.
+  // (Lovable'ın varsayılanı Cloudflare'dir; yerel SQLite ve dosya deposu orada çalışmaz.)
+  // inlineDynamicImports: sunucu tek dosyada paketlenir. Bağımlılıkları _libs parçalarına
+  // bölmek döngüsel yükleme sırası yüzünden SSR'da "__commonJSMin is not a function"
+  // hatası veriyordu. (Seçenek sarmalayıcının tiplerinde yok ama Nitro'ya olduğu gibi iletilir.)
+  nitro: { preset: "node-server", inlineDynamicImports: true } as { preset: string },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

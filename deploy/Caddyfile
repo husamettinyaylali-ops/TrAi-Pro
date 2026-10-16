@@ -1,0 +1,7 @@
+# Caddy, DOMAIN için Let's Encrypt sertifikasını kendisi alır ve yeniler.
+# İstemciden gelen X-Forwarded-For başlığına güvenmez, kendisi yazar
+# (uygulamada TRUST_PROXY=on güvenle kullanılır).
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000
+}
