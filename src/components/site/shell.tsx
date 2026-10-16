@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   Coins,
   CreditCard,
@@ -42,12 +42,20 @@ export const field =
 
 export const THEME_KEY = "traipro:theme";
 
+/** Tema <html> sınıfından okunur; tüm düğme kopyaları (başlık, mobil menü) aynı durumu görür. */
+const isLight = () => document.documentElement.classList.contains("light");
+function subscribeTheme(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  return () => observer.disconnect();
+}
+
 export function ThemeToggle() {
   const { t } = useI18n();
-  const [light, setLight] = useState(false);
-  useEffect(() => setLight(document.documentElement.classList.contains("light")), []);
+  // Sunucuda koyu tema varsayılır; açık tema ilk boyamadan önce betikle uygulanır.
+  const light = useSyncExternalStore(subscribeTheme, isLight, () => false);
   const toggle = () => {
-    const next = !light;
+    const next = !isLight();
     const root = document.documentElement;
     root.classList.toggle("light", next);
     root.classList.toggle("dark", !next);
@@ -56,7 +64,6 @@ export function ThemeToggle() {
     } catch {
       /* yoksay */
     }
-    setLight(next);
   };
   return (
     <button

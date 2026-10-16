@@ -20,6 +20,15 @@ const tr = {
     parts: { tts: "ses", image: "görsel", video: "video" },
   },
   loading: "Yükleniyor…",
+  rootPages: {
+    notFoundTitle: "Sayfa bulunamadı",
+    notFoundSub: "Aradığın sayfa yok ya da taşınmış olabilir.",
+    home: "Ana sayfaya dön",
+    errorTitle: "Sayfa yüklenemedi",
+    errorSub:
+      "Bizim tarafımızda bir sorun oluştu. Sayfayı yenilemeyi deneyebilir ya da ana sayfaya dönebilirsin.",
+    retry: "Tekrar dene",
+  },
 
   hero: {
     badge: "Yeni: Ses Klonlama v3 yayında",
@@ -680,6 +689,15 @@ const en: Dict = {
     parts: { tts: "voice", image: "image", video: "video" },
   },
   loading: "Loading…",
+  rootPages: {
+    notFoundTitle: "Page not found",
+    notFoundSub: "The page you're looking for doesn't exist or has moved.",
+    home: "Back to home",
+    errorTitle: "Couldn't load the page",
+    errorSub:
+      "Something went wrong on our side. Try reloading the page or go back to the home page.",
+    retry: "Try again",
+  },
 
   hero: {
     badge: "New: Voice Cloning v3 is live",

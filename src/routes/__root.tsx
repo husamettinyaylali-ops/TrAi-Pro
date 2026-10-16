@@ -11,28 +11,37 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { I18nProvider } from "@/lib/i18n";
+import { I18nProvider, useI18n } from "@/lib/i18n";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppProvider } from "@/lib/store";
 
 // Tema, ilk boyamadan önce uygulanır; açık/koyu geçişinde yanıp sönme olmaz.
 const themeScript = `try{if(localStorage.getItem("traipro:theme")==="light"){var d=document.documentElement;d.classList.remove("dark");d.classList.add("light")}}catch(e){}`;
 
+// Kök hata ve 404 bileşenleri RootComponent'in sağlayıcılarının dışında çizilebilir;
+// metinler için kendi dil sağlayıcılarını alırlar (dil tarayıcıdaki tercihten okunur).
 function NotFoundComponent() {
+  return (
+    <I18nProvider>
+      <NotFoundView />
+    </I18nProvider>
+  );
+}
+
+function NotFoundView() {
+  const { t } = useI18n();
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Sayfa bulunamadı</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Aradığın sayfa yok ya da taşınmış olabilir.
-        </p>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">{t.rootPages.notFoundTitle}</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{t.rootPages.notFoundSub}</p>
         <div className="mt-6">
           <Link
             to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Ana sayfaya dön
+            {t.rootPages.home}
           </Link>
         </div>
       </div>
@@ -48,28 +57,38 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   }, [error]);
 
   return (
+    <I18nProvider>
+      <ErrorView
+        onRetry={() => {
+          router.invalidate();
+          reset();
+        }}
+      />
+    </I18nProvider>
+  );
+}
+
+function ErrorView({ onRetry }: { onRetry: () => void }) {
+  const { t } = useI18n();
+  return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">Sayfa yüklenemedi</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Bizim tarafımızda bir sorun oluştu. Sayfayı yenilemeyi deneyebilir ya da ana sayfaya
-          dönebilirsin.
-        </p>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          {t.rootPages.errorTitle}
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t.rootPages.errorSub}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            onClick={onRetry}
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Tekrar dene
+            {t.rootPages.retry}
           </button>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="inline-flex min-h-11 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Ana sayfaya dön
+            {t.rootPages.home}
           </a>
         </div>
       </div>
