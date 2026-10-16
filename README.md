@@ -149,7 +149,34 @@ Akış: `/auth/google` → Google onay ekranı → `/auth/google/callback`. PKCE
 ## Veritabanı ve yayın
 
 - Şema: `src/server/schema.server.ts`. Değişiklikten sonra `npm run db:generate` ile migration üretilir ve `drizzle/` klasörüyle birlikte commit edilir. Migration'lar sunucu ilk veritabanı bağlantısında otomatik uygulanır.
-- Varsayılan derleme hedefi Cloudflare Workers'tır (`npm run build`). Workers'ta yerel SQLite dosyası çalışmaz; orada uzak bir libSQL veritabanı (ör. Turso, `DATABASE_URL` + `DATABASE_AUTH_TOKEN`) ve `@libsql/client/web` sürücüsü gerekir. Node sunucusunda (VPS) yerel dosya olduğu gibi çalışır. Postgres'e geçişte şema `drizzle-orm/pg-core` ile yeniden tanımlanır; servis katmanı büyük ölçüde aynı kalır.
+- Derleme hedefi Node sunucusudur (`vite.config.ts` → Nitro `node-server`): `npm run build` → `npm start` (`node .output/server/index.mjs`, port `PORT`, varsayılan 3000). Sunucu tek dosyada paketlenir; SQLite'ın yerel modülü `.output/server/node_modules` altına alınır, bu yüzden derleme hedef işletim sisteminde yapılmalıdır (Docker imajı bunu Linux'ta yapar). Migration'lar açılışta çalışma klasöründeki `drizzle/`'dan uygulanır.
+- Postgres'e geçişte şema `drizzle-orm/pg-core` ile yeniden tanımlanır; servis katmanı büyük ölçüde aynı kalır.
+
+## Yayın (VPS)
+
+Gereken: Docker ve Docker Compose kurulu bir Linux sunucu (2 GB RAM yeterli), sunucuya yönlendirilmiş bir alan adı (A kaydı), açık 80 ve 443 portları.
+
+1. Depoyu sunucuya klonlayın; `.env.example`'ı `.env` olarak kopyalayıp doldurun. Yayında en az şunlar gerekir:
+   - `DOMAIN` (ör. `trai.example.com`) ve `PUBLIC_URL=https://<DOMAIN>`: e-posta bağlantıları, webhook adresleri ve Google dönüş adresi bundan kurulur.
+   - SMTP (`SMTP_*`, `EMAIL_FROM`): doğrulama ve şifre sıfırlama e-postaları için.
+   - `ADMIN_EMAILS`, kullandığınız servislerin anahtarları (Google, ElevenLabs, fal.ai, ödeme yöntemleri).
+2. `docker compose up -d --build`. Caddy alan adı için HTTPS sertifikasını kendisi alır; uygulama yalnız Caddy üzerinden erişilebilir.
+3. Kontrol: `https://<DOMAIN>/health` → `{"status":"ok"}`; `docker compose logs -f app`.
+4. Dış servis panellerine yayın adreslerini yazın:
+   - Google OAuth yetkili yönlendirme URI'si: `https://<DOMAIN>/auth/google/callback`
+   - PayPal webhook: `https://<DOMAIN>/webhooks/paypal` (`PAYMENT.CAPTURE.COMPLETED`) → `PAYPAL_WEBHOOK_ID`
+   - fal.ai video webhook'u ayrıca ayar istemez; `PUBLIC_URL` varken her işle birlikte gönderilir (`/webhooks/fal`).
+
+**Veri ve yedek:** Veritabanı, üretilen dosyalar ve yedekler `trai-data` Docker biriminde (`/data`) durur; imaj yenilense de korunur. Uygulama her gün `VACUUM INTO` ile tutarlı bir veritabanı yedeği alır (`/data/backups`, son 7 gün). Yedekleri ve dosyaları sunucu dışına da kopyalayın, ör. her gece:
+
+```sh
+docker run --rm -v trai-pro_trai-data:/data -v "$PWD/yedek":/yedek alpine \
+  tar czf /yedek/trai-data-$(date +%F).tgz -C /data backups media
+```
+
+**Güncelleme:** `git pull && docker compose up -d --build`. Migration'lar açılışta uygulanır; tabloyu yeniden kuran bir migration varsa önce yedek alın.
+
+**Geri yükleme:** uygulamayı durdurun (`docker compose stop app`), yedeği birimde `/data/trai-pro.db` olarak kopyalayın, yeniden başlatın.
 
 ## Yapı
 

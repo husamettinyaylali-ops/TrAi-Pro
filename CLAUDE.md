@@ -38,7 +38,7 @@ Kredi tabanlı yapay zeka ses, video ve görsel platformu. Yapı ve kapsam için
 
 ## Çalışma biçimi
 
-- Değişiklikten sonra: `npx tsc --noEmit`, `npm test`, `npm run lint`.
+- Değişiklikten sonra: `npx tsc --noEmit`, `npm test`, `npm run lint` ve `npm run build`. Geliştirme sunucusu import korumasını yakalamaz; `src/api/functions.ts`'ten sunucu modülü kullanan bir yardımcıyı dışa aktarmak (`export`) istemci paketine sızdırır ve yalnız derlemede hata verir.
 - Ekranı tarayıcıda açık/koyu tema, TR/EN ve 375/768/1280 genişlikte kontrol et.
 - Conventional Commits, Türkçe özet: `feat(labs): …`, `fix(payment): …`.
 - Satır sonu LF'dir (`.gitattributes`); biçim `prettier` ile korunur.
