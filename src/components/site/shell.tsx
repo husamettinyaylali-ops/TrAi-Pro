@@ -432,9 +432,19 @@ function Footer() {
   );
 }
 
-export function SiteShell({ children }: { children: ReactNode }) {
+/**
+ * Sitenin kabuğu. `workspace` kipinde (stüdyo) sayfa ekran yüksekliğine
+ * sabitlenir, alt bilgi gösterilmez; kaydırma içerideki alanlarda olur.
+ */
+export function SiteShell({
+  children,
+  workspace = false,
+}: {
+  children: ReactNode;
+  workspace?: boolean;
+}) {
   return (
-    <div className="relative min-h-screen">
+    <div className={workspace ? "relative h-dvh overflow-hidden" : "relative min-h-screen"}>
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
         <div className="blob absolute -left-40 top-0 h-[500px] w-[500px] rounded-full bg-violet/30" />
         <div
@@ -447,12 +457,12 @@ export function SiteShell({ children }: { children: ReactNode }) {
         />
       </div>
       <CursorGlow />
-      <div className="relative z-10 flex min-h-screen flex-col">
+      <div className={`relative z-10 flex flex-col ${workspace ? "h-full" : "min-h-screen"}`}>
         <Header />
-        <main id="top" className="flex-1">
+        <main id="top" className={workspace ? "min-h-0 flex-1" : "flex-1"}>
           {children}
         </main>
-        <Footer />
+        {!workspace && <Footer />}
       </div>
     </div>
   );

@@ -39,6 +39,7 @@ Kredi tabanlı yapay zeka ses, video ve görsel platformu. Yapı ve kapsam için
 - **Yönlendirme** parametreleri `safeRedirect()` ile süzülür; dış adrese yönlendirme yapılmaz.
 - **Erişilebilirlik:** dokunma hedefi en az 44 px (`min-h-11`), görünür odak halkası, simge düğmelerde `aria-label`, durum yalnız renkle verilmez.
 - **Mobil:** 375 px genişlikte yatay taşma olmamalı. Grid'lerde mobil sütun `grid-cols-[minmax(0,1fr)]` olarak sınırlandırılır. Kullanıcı metni (geçmiş, istem) içeren masaüstü sütunları da `minmax(0,…)` ile yazılır (`lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]`); yalın `1fr` tek satıra kısaltılan uzun metinle sütunu sayfa dışına genişletir.
+- **Stüdyo** (`src/components/studio/`): sol proje çubuğu, akış (en yenisi altta), alttaki yazma kutusu. Sayfa `SiteShell workspace` ile ekran yüksekliğine sabittir; kaydırma akışta ve kenar çubuğunda olur. Yeni bir üretim türü ya da seçeneği eklenirse yazma kutusu (araç ve seçenek), kart gövdesi ve `regenerateInput` birlikte güncellenir.
 - **Gizli bilgiler** (API anahtarları, ödeme anahtarları) koda yazılmaz; `.env` (git'e girmez) ve sunucu tarafında kullanılır.
 
 ## Çalışma biçimi

@@ -9,7 +9,7 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 | `/`                                                                                | Hero, Ses AI kredi paketleri, Video & Görsel paketleri                        |
 | `/pricing`                                                                         | Paketler, kredi harcama tablosu, SSS                                          |
 | `/sign-in`, `/sign-up`                                                             | Giriş ve kayıt (`?redirect=` ile dönüş)                                       |
-| `/labs`                                                                            | Stüdyo: Metinden Ses, Ses Klonlama, Görsel, Video (`?tab=`, `?project=`)      |
+| `/labs`                                                                            | Stüdyo: solda projeler, akış, yazma kutusu (`?tab=`, `?project=`)             |
 | `/projects`, `/projects/:id`                                                       | Projeler: not, projedeki üretimler, tümünü ZIP olarak indirme                 |
 | `/payment`                                                                         | Paket ve ödeme yöntemi seçimi (`?package=`)                                   |
 | `/payment-history`                                                                 | Siparişler ve kalan krediler                                                  |
@@ -87,10 +87,11 @@ Görselle aynı `FAL_KEY` kullanılır; model varsayılan olarak Kling 1.6 stand
 - Bir kullanıcı aynı anda en fazla 3 video hazırlatabilir ve saatte en fazla 10 video isteği gönderebilir.
 - **Maliyet:** Kling 1.6 standart fal.ai'de 5 saniyelik video başına yaklaşık 0,25 $'dır; 15 kredi Video & Görsel paketlerinde yaklaşık 0,40–0,45 $ eder. Güncel fiyatı fal.ai'den kontrol edin; model değişirse kredi maliyetini de gözden geçirin.
 
-## Projeler ve üretimlerin düzeltilmesi
+## Stüdyo, projeler ve üretimlerin düzeltilmesi
 
-- **Proje:** kullanıcının çalışma alanı (ad, serbest not; kullanıcı başına en fazla 100). Stüdyonun üstündeki proje çubuğundan seçilir (`/labs?project=`): seçiliyken yeni üretimler o projeye kaydedilir ve geçmiş yalnız onu gösterir. Projesiz seçimde geçmiş tüm üretimleri, her kaydın projesiyle gösterir.
-- **Her üretimde** "Diğer işlemler" menüsü: _Düzenle ve yeniden üret_ (metin/istem, ses, adet ya da stil forma gelir; üretince yeni sürüm kaydedilir, eskisi silinmez ve kredi yeniden harcanır; yeni sürüm eski kaydın projesinde ve adıyla kalır), _Yeniden adlandır_, _Projeye taşı_, _Sil_. Gerçek üretimler indirilebilir; demo üretimde indirme düğmesi nedenini söyleyerek kapalıdır.
+- **Stüdyo düzeni** (`/labs`), yapay zeka uygulamalarındaki gibi: solda projeler (yeni proje, arama, "Tüm üretimler", krediler; dar ekranda soldan açılan çekmece), ortada seçili projenin akışı (sohbet gibi en yenisi altta, gün ayırıcılı, en üstte daha eski üretimler), altta sabit yazma kutusu (araç: Ses, Klon, Görsel, Video; araca göre ses, adet ya da stil; maliyet; Ctrl/Cmd + Enter gönderir). Araç `?tab=`, proje `?project=` ile adreste tutulur. Klon aracında ana alanda ses klonları yönetilir.
+- **Proje:** kullanıcının çalışma alanı (ad, serbest not; kullanıcı başına en fazla 100). Seçiliyken yeni üretimler o projeye kaydedilir ve akış yalnız onu gösterir; "Tüm üretimler" her kaydı projesiyle gösterir. Üst çubukta proje notu, tümünü indir (ZIP) ve projeyi aç vardır.
+- **Her üretim kartında** doğrudan: _İndir_ (demo üretimde nedenini söyleyerek kapalı), _Düzenle_ (metin/istem, ses, adet ya da stil yazma kutusuna gelir; üretince yeni sürüm kaydedilir, eskisi silinmez ve kredi yeniden harcanır; yeni sürüm eski kaydın projesinde ve adıyla kalır), _Yeniden üret_ (aynı ayarlarla, tek tıkla), _Metni kopyala_, _Taşı_; menüde _Yeniden adlandır_ ve _Sil_.
 - **Proje sayfası** (`/projects/:id`): ad ve not düzenleme, projedeki üretimler (türe göre süzülür; dinleme, önizleme, indirme, menü), stüdyoda açma ve silme. Proje silinince üretimler silinmez, projesiz kalır.
 - **Tümünü indir (ZIP)** (`/media/project/:id`, yalnız sahibine): gerçek dosyalar tür klasörlerinde (`ses/`, `gorsel/`, `video/`; `?lang=en` ile İngilizce), sonda proje notu, metinler ve dosya listesini içeren `icerik.txt`. Dosyalar sıkıştırılmadan akış olarak eklenir (medya zaten sıkıştırılmıştır; bellekte bir anda tek dosya durur); en fazla 300 üretim, 4 GB'a yaklaşınca kalan dosyalar atlanıp listede belirtilir. Kullanıcı başına saatte 20 arşiv.
 
