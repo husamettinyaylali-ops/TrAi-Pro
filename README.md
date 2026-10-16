@@ -28,7 +28,8 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 
 - Ödeme: her yöntem kendi anahtarları `.env`'e yazılınca açılır (aşağıdaki kurulumlar). Hiçbiri açık değilse geliştirmede yalnız demo bakiye vardır ve ödeme sayfası bunu belirtir.
 - Seslendirme ve ses klonlama: `ELEVENLABS_API_KEY` varsa gerçek; yoksa seslendirme tarayıcının konuşma sentezini kullanır, klonda yalnız ad kaydedilir.
-- Görsel ve video: yapay zeka API'si henüz bağlı değil; sonuçlar örnek görsellerdir ve stüdyo bunu belirtir.
+- Görsel: `FAL_KEY` varsa gerçek (fal.ai); yoksa örnek görseller.
+- Video: henüz bir servise bağlı değil; sonuçlar örnek görsellerdir. Stüdyo, hangi kısımların demo olduğunu belirtir.
 
 ## Geliştirme
 
@@ -95,11 +96,23 @@ Kripto yöntemlerde benzersizlik için eklenen kuruşlar kullanıcıda kalır: b
 
 Anahtar yokken Stüdyo demo kipinde çalışır: seslendirme tarayıcının konuşma sentezini kullanır. Anahtar varken:
 
-- Ses `eleven_multilingual_v2` ile üretilir, MP3 olarak `data/audio/<kullanıcı>/` altında saklanır ve `/media/audio/:id` adresinden yalnız sahibine sunulur (dinleme ve indirme).
+- Ses `eleven_multilingual_v2` ile üretilir, MP3 olarak `data/media/<kullanıcı>/` altında saklanır ve `/media/audio/:id` adresinden yalnız sahibine sunulur (dinleme ve indirme).
 - Kredi yalnız başarıda düşer; servis hata verirse kredi düşülmez. Bir kullanıcı dakikada en fazla 20 seslendirme yapabilir.
 - Ses klonu, kullanıcının yüklediği kayıtla (en fazla 10 MB) ElevenLabs'te açılır; izin onayı zamanıyla kaydedilir. Klon ya da hesap silinince ElevenLabs'teki ses ve kullanıcının ses dosyaları da silinir.
 - **Maliyet:** ElevenLabs karakter başına ücretlendirir; sitedeki kredi fiyatlarınız (`src/lib/packages.ts`) bu maliyeti karşılayacak şekilde ayarlanmalı.
-- Cloudflare gibi dosya sistemi olmayan bir ortamda `AudioStorage` arayüzü bir nesne deposuyla (ör. R2/S3) değiştirilmelidir (`src/server/audio-storage.server.ts`).
+- Cloudflare gibi dosya sistemi olmayan bir ortamda `FileStorage` arayüzü bir nesne deposuyla (ör. R2/S3) değiştirilmelidir (`src/server/file-storage.server.ts`).
+
+## Görsel üretimi (fal.ai) kurulumu
+
+1. [fal.ai](https://fal.ai)'de hesap açın, bakiye yükleyin ve **Keys** bölümünden bir API anahtarı oluşturun.
+2. `.env`'e `FAL_KEY` olarak yazın. Model varsayılan olarak `fal-ai/flux/schnell`'dir (hızlı ve ucuz); daha yüksek kalite için `FAL_IMAGE_MODEL`'e ör. `fal-ai/flux/dev` yazabilirsiniz.
+
+Anahtar yokken görsel stüdyosu demo kipinde örnek görseller gösterir. Anahtar varken:
+
+- Görseller 1024×1024 JPEG olarak üretilir, `data/media/<kullanıcı>/` altında saklanır ve `/media/file/:id/:sıra` adresinden yalnız sahibine sunulur (görüntüleme ve indirme).
+- Sağlayıcının güvenlik filtresi açıktır. Filtreye takılan görseller ayıklanır; kredi yalnız teslim edilen görsel kadar düşer. Hepsi takılırsa ya da servis hata verirse kredi düşülmez.
+- Bir kullanıcı 10 dakikada en fazla 30 görsel isteği gönderebilir.
+- **Maliyet:** fal.ai görsel başına (megapiksel başına) ücretlendirir; Flux schnell görsel başına birkaç sent mertebesindedir. Güncel fiyatı fal.ai'den kontrol edip Video & Görsel paket fiyatlarını (`src/lib/packages.ts`) buna göre ayarlayın.
 
 ## E-posta (SMTP) kurulumu
 
