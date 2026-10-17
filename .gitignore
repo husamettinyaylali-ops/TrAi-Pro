@@ -36,3 +36,6 @@ data/
 .env
 .env.*
 !.env.example
+
+# Sunucuda güncelleme öncesi veritabanı yedekleri (deploy/guncelle.sh)
+yedek/

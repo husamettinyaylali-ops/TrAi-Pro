@@ -10,3 +10,5 @@ dist
 .tanstack
 .claude
 *.log
+# Güncelleme öncesi veritabanı yedekleri (deploy/guncelle.sh) imaja girmez.
+yedek

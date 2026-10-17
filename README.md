@@ -197,6 +197,8 @@ Akış: `/auth/google` → Google onay ekranı → `/auth/google/callback`. PKCE
 
 ## Yayın (VPS)
 
+**Kısa yol:** adım adım rehber [deploy/YAYIN.md](deploy/YAYIN.md). Boş bir Ubuntu/Debian sunucuda `sudo bash deploy/kurulum.sh` Docker'ı, güvenlik duvarını ve `.env`'in temel ayarlarını kurup uygulamayı başlatır; güncelleme `sudo bash deploy/guncelle.sh` (önce veritabanını yedekler); yayındaki siteyi `node deploy/duman-testi.mjs https://ALANADI` dışarıdan dener. Aşağıdaki adımlar betiğin yaptıklarının elle yapılışıdır.
+
 Gereken: Docker ve Docker Compose kurulu bir Linux sunucu (2 GB RAM yeterli), sunucuya yönlendirilmiş bir alan adı (A kaydı), açık 80 ve 443 portları.
 
 1. Depoyu sunucuya klonlayın; `.env.example`'ı `.env` olarak kopyalayıp doldurun. Yayında en az şunlar gerekir:
