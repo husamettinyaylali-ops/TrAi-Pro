@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Download, FolderOpen, NotebookPen, PanelLeft } from "lucide-react";
+import { Combine, Download, FolderOpen, NotebookPen, PanelLeft } from "lucide-react";
 
 import { VoiceClone } from "@/components/labs/tools";
 import { VerifyBanner } from "@/components/site/verify-banner";
@@ -74,6 +74,17 @@ function TopBar({
           <Download className="h-4 w-4" aria-hidden />
           <span className="hidden sm:inline">{t.studio.downloadAll}</span>
         </a>
+      )}
+      {(!project || project.counts.tts > 1) && (
+        <Link
+          to="/editor/merge"
+          search={project ? { project: project.id } : {}}
+          aria-label={t.editor.merge.open}
+          className={ghost}
+        >
+          <Combine className="h-4 w-4" aria-hidden />
+          <span className="hidden xl:inline">{t.editor.merge.open}</span>
+        </Link>
       )}
       {project && (
         <Link

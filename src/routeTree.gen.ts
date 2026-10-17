@@ -31,6 +31,7 @@ import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AuthGoogleRouteImport } from './routes/auth/google'
 import { Route as EditorIdRouteImport } from './routes/editor/$id'
+import { Route as EditorMergeRouteImport } from './routes/editor/merge'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
 import { Route as ProjectsIdRouteImport } from './routes/projects/$id'
 import { Route as WebhooksFalRouteImport } from './routes/webhooks/fal'
@@ -152,6 +153,11 @@ const EditorIdRoute = EditorIdRouteImport.update({
   path: '/editor/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EditorMergeRoute = EditorMergeRouteImport.update({
+  id: '/editor/merge',
+  path: '/editor/merge',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
   id: '/projects/',
   path: '/projects/',
@@ -226,6 +232,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
   '/editor/$id': typeof EditorIdRoute
+  '/editor/merge': typeof EditorMergeRoute
   '/projects/$id': typeof ProjectsIdRoute
   '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
@@ -260,6 +267,7 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
   '/editor/$id': typeof EditorIdRoute
+  '/editor/merge': typeof EditorMergeRoute
   '/projects/$id': typeof ProjectsIdRoute
   '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
@@ -295,6 +303,7 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute
   '/auth/google': typeof AuthGoogleRouteWithChildren
   '/editor/$id': typeof EditorIdRoute
+  '/editor/merge': typeof EditorMergeRoute
   '/projects/$id': typeof ProjectsIdRoute
   '/webhooks/fal': typeof WebhooksFalRoute
   '/webhooks/paypal': typeof WebhooksPaypalRoute
@@ -331,6 +340,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/auth/google'
     | '/editor/$id'
+    | '/editor/merge'
     | '/projects/$id'
     | '/webhooks/fal'
     | '/webhooks/paypal'
@@ -365,6 +375,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/auth/google'
     | '/editor/$id'
+    | '/editor/merge'
     | '/projects/$id'
     | '/webhooks/fal'
     | '/webhooks/paypal'
@@ -399,6 +410,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/auth/google'
     | '/editor/$id'
+    | '/editor/merge'
     | '/projects/$id'
     | '/webhooks/fal'
     | '/webhooks/paypal'
@@ -434,6 +446,7 @@ export interface RootRouteChildren {
   VerifyEmailRoute: typeof VerifyEmailRoute
   AuthGoogleRoute: typeof AuthGoogleRouteWithChildren
   EditorIdRoute: typeof EditorIdRoute
+  EditorMergeRoute: typeof EditorMergeRoute
   ProjectsIdRoute: typeof ProjectsIdRoute
   WebhooksFalRoute: typeof WebhooksFalRoute
   WebhooksPaypalRoute: typeof WebhooksPaypalRoute
@@ -601,6 +614,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EditorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/editor/merge': {
+      id: '/editor/merge'
+      path: '/editor/merge'
+      fullPath: '/editor/merge'
+      preLoaderRoute: typeof EditorMergeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/': {
       id: '/projects/'
       path: '/projects'
@@ -709,6 +729,7 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyEmailRoute: VerifyEmailRoute,
   AuthGoogleRoute: AuthGoogleRouteWithChildren,
   EditorIdRoute: EditorIdRoute,
+  EditorMergeRoute: EditorMergeRoute,
   ProjectsIdRoute: ProjectsIdRoute,
   WebhooksFalRoute: WebhooksFalRoute,
   WebhooksPaypalRoute: WebhooksPaypalRoute,

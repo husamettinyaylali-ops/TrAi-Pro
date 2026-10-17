@@ -58,6 +58,12 @@ const MAX_PROMPT = 400;
 const chip =
   "inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-3 text-sm focus-within:ring-2 focus-within:ring-ring";
 
+/** Yazma kutusu içeriğine göre uzar (en çok 240 px). */
+function fitHeight(el: HTMLTextAreaElement) {
+  el.style.height = "auto";
+  el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+}
+
 /**
  * Stüdyonun alttaki yazma kutusu: araç seçimi, metin/istem, araca göre seçenek
  * (ses, adet, stil), maliyet ve gönder. Ctrl/Cmd + Enter gönderir. Düzeltmede
@@ -144,11 +150,22 @@ export function Composer({
 
   // Metin alanı içeriğe göre uzar (en fazla 15 satır kadar).
   useLayoutEffect(() => {
-    const el = textRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+    if (textRef.current) fitHeight(textRef.current);
   }, [text, tool]);
+  // Genişlik değişince (ilk yerleşim, kenar çubuğu, pencere) yükseklik yeniden ölçülür;
+  // yoksa dar ilk ölçümde boş kutu yüksek kalır.
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let width = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      fitHeight(el);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tool]);
 
   const media = tool === "image" || tool === "video";
   const hasPass = balance(data.grants, "media", clock()) > 0;

@@ -492,6 +492,24 @@ export const trimSpeech = createServerFn({ method: "POST" })
     return editor.trimSpeech(await getDb(), fileStorage(), user.id, data, clock());
   });
 
+/** Düzenleyici: sesleri sırayla tek MP3 ve altyazıda birleştirir; yeni kayıt, kredi harcanmaz. */
+export const mergeSpeech = createServerFn({ method: "POST" })
+  .validator(
+    parse(
+      z.object({
+        ids: z.array(id).min(2).max(editor.MERGE_MAX_CLIPS),
+        gapMs: z.number().int(),
+        projectId: id.optional(),
+        title: z.string().max(200).optional(),
+      }),
+    ),
+  )
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    return editor.mergeSpeech(await getDb(), fileStorage(), user.id, data, clock());
+  });
+
 /** Üretime ad verir; boş ad adı kaldırır. */
 export const renameGeneration = createServerFn({ method: "POST" })
   .validator(parse(z.object({ id, title: z.string().max(200) })))

@@ -131,6 +131,8 @@ export function useDayLabel() {
  * projede, aynı adla. Sesi bilinmeyen eski kayıt için null.
  */
 export function regenerateInput(g: Generation): GenerateInput | null {
+  // Birleştirilmiş ses tek bir metinden üretilmedi; yeniden üretilmez.
+  if (g.edit === "merge") return null;
   const meta = { projectId: g.projectId, title: g.title };
   if (g.type === "tts") {
     return g.voiceId

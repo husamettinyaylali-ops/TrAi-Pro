@@ -109,6 +109,13 @@ interface Store {
     endMs: number;
     cues?: SubtitleCue[] | undefined;
   }) => Promise<Outcome<{ generation: Generation }, EditErrorCode> | RateLimited>;
+  /** Düzenleyici: sesleri verilen sırayla birleştirir; yeni kayıt açılır, kredi harcanmaz. */
+  mergeSpeech: (input: {
+    ids: string[];
+    gapMs: number;
+    projectId?: string | undefined;
+    title?: string | undefined;
+  }) => Promise<Outcome<{ generation: Generation }, EditErrorCode> | RateLimited>;
   /** Üretimi projeye taşır ya da projeden çıkarır (null). */
   moveGeneration: (
     id: string,
@@ -297,6 +304,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       trimSpeech: async (input) => {
         const res = await call(() => api.trimSpeech({ data: input }));
+        if (res.ok && userId) {
+          upsertHistory(qc, userId, res.generation, true);
+          void qc.invalidateQueries({ queryKey: [PROJECTS] });
+        }
+        return res;
+      },
+      mergeSpeech: async (input) => {
+        const res = await call(() => api.mergeSpeech({ data: input }));
         if (res.ok && userId) {
           upsertHistory(qc, userId, res.generation, true);
           void qc.invalidateQueries({ queryKey: [PROJECTS] });

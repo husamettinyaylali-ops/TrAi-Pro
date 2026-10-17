@@ -12,19 +12,19 @@ import { balance } from "@/lib/credits";
 import { LIMITS } from "@/lib/rate-limit";
 import { cleanCues, encodeCues, parseCues, shiftCues } from "@/server/captions.server";
 import { openDb, type Db } from "@/server/db.server";
-import { MIN_TRIM_MS, trimSpeech } from "@/server/editor.server";
+import { MERGE_MAX_CLIPS, MIN_TRIM_MS, mergeSpeech, trimSpeech } from "@/server/editor.server";
 import { localFileStorage, type FileStorage } from "@/server/file-storage.server";
-import { createSession } from "@/server/services.server";
+import { serveSubtitle } from "@/server/media.server";
 import { readMp3, silenceLike, sliceMp3 } from "@/server/mp3.server";
 import { createProject } from "@/server/projects.server";
 import { generations } from "@/server/schema.server";
 import {
+  createSession,
   getGeneration,
   loadUserData,
   markEmailVerified,
   registerUser,
 } from "@/server/services.server";
-import { serveSubtitle } from "@/server/media.server";
 
 import { FRAME_BYTES, FRAME_SECONDS, mp3Frames } from "./speech-fixtures";
 
@@ -60,11 +60,14 @@ const CUES = [
   { start: 2100, end: 2550, text: "Son." },
 ];
 
-/** 100 çerçevelik (~2,6 sn) gerçek seslendirme kaydı; istenirse altyazılı ve projede. */
-async function speech(userId: string, opts: { captions?: boolean; projectId?: string } = {}) {
+/** 100 çerçevelik (~2,6 sn) gerçek seslendirme kaydı; istenirse altyazılı, projede, başka sesle. */
+async function speech(
+  userId: string,
+  opts: { captions?: boolean; projectId?: string; voiceId?: string; audio?: Uint8Array } = {},
+) {
   const id = randomUUID();
   const audioKey = `${userId}/${id}.mp3`;
-  await storage.put(audioKey, mp3Frames(100, { id3: true, info: true }));
+  await storage.put(audioKey, opts.audio ?? mp3Frames(100, { id3: true, info: true }));
   const captionsKey = opts.captions === false ? null : `${userId}/${id}-captions.json`;
   if (captionsKey) await storage.put(captionsKey, encodeCues(CUES));
   await db.insert(generations).values({
@@ -72,7 +75,7 @@ async function speech(userId: string, opts: { captions?: boolean; projectId?: st
     userId,
     type: "tts",
     text: "Merhaba. Bugün düzenleyiciyi deniyoruz. Son.",
-    voiceId: "hazir-1",
+    voiceId: opts.voiceId ?? "hazir-1",
     voiceSettings: { speed: 1.1, stability: 0.5, similarity: 0.75, style: 0 },
     audioKey,
     captionsKey,
@@ -303,5 +306,93 @@ describe("düzenleyiciye açılabilirlik", () => {
     expect(editorBlock({ ...base, type: "tts", status: "pending" })).toBe("pending");
     expect(editorBlock({ ...base, type: "tts", status: "failed" })).toBe("failed");
     expect(editorBlock({ ...base, type: "video", fileUrls: ["/v"] })).toBe("unsupported");
+  });
+});
+
+describe("sesleri birleştirme", () => {
+  it("verilen sırayla, araya sessizlikle tek dosya; altyazılar kayar, sonuç ücretsiz", async () => {
+    const user = await newUser();
+    const p = await createProject(db, user, { name: "Bölüm 2" }, now);
+    if (!p.ok) throw new Error(p.error);
+    const a = await speech(user);
+    const b = await speech(user, { captions: false });
+    const c = await speech(user);
+    const res = await mergeSpeech(
+      db,
+      storage,
+      user,
+      { ids: [c, a, b], gapMs: 500, projectId: p.project.id, title: "Tam bölüm" },
+      now,
+    );
+    if (!res.ok) throw new Error(res.error);
+    const g = res.generation;
+    expect(g).toMatchObject({
+      type: "tts",
+      cost: 0,
+      edit: "merge",
+      projectId: p.project.id,
+      title: "Tam bölüm",
+      voiceId: "hazir-1",
+    });
+    expect(g.sourceId).toBeUndefined();
+    expect(g.text.split("\n\n")).toHaveLength(3);
+
+    const gapFrames = Math.round(0.5 / FRAME_SECONDS);
+    const audio = (await storage.read(`${user}/${g.id}.mp3`))!;
+    expect(audio.byteLength).toBe((300 + 2 * gapFrames) * FRAME_BYTES);
+    expect(readMp3(audio)?.seconds).toBeCloseTo((300 + 2 * gapFrames) * FRAME_SECONDS, 6);
+
+    // Sıra c, a, b: c'nin altyazısı 0'dan, a'nınki bir ses ve bir boşluk sonra; b'nin altyazısı yok.
+    const cues = parseCues((await storage.read(`${user}/${g.id}-captions.json`))!)!;
+    const second = Math.round((100 + gapFrames) * FRAME_MS);
+    expect(cues.map((x) => x.start)).toEqual([0, 1000, 2100, second, second + 1000, second + 2100]);
+  });
+
+  it("sesler farklıysa ses alanı boş kalır; sessizlik verilmezse uç uca eklenir; proje verilmezse projesiz", async () => {
+    const user = await newUser();
+    const p = await createProject(db, user, { name: "Bölüm 3" }, now);
+    if (!p.ok) throw new Error(p.error);
+    const a = await speech(user, { projectId: p.project.id });
+    const b = await speech(user, { voiceId: "hazir-2", projectId: p.project.id });
+    const res = await mergeSpeech(db, storage, user, { ids: [a, b], gapMs: 0 }, now);
+    if (!res.ok) throw new Error(res.error);
+    expect(res.generation.voiceId).toBeUndefined();
+    expect(res.generation.projectId).toBeUndefined();
+    expect((await storage.read(`${user}/${res.generation.id}.mp3`))?.byteLength).toBe(
+      200 * FRAME_BYTES,
+    );
+  });
+
+  it("geçersiz istek, başkasının sesi ve farklı örnekleme hızı reddedilir", async () => {
+    const user = await newUser("sahip@example.com");
+    const other = await newUser("baska@example.com");
+    const a = await speech(user);
+    const b = await speech(user);
+    const foreign = await speech(other);
+    for (const input of [
+      { ids: [a], gapMs: 0 },
+      { ids: [a, a], gapMs: 0 },
+      { ids: [a, b], gapMs: 300 },
+      { ids: Array.from({ length: MERGE_MAX_CLIPS + 1 }, () => randomUUID()), gapMs: 0 },
+    ]) {
+      expect(await mergeSpeech(db, storage, user, input, now)).toEqual({
+        ok: false,
+        error: "invalidInput",
+      });
+    }
+    expect(await mergeSpeech(db, storage, user, { ids: [a, foreign], gapMs: 0 }, now)).toEqual({
+      ok: false,
+      error: "notFound",
+    });
+    // 48 kHz çerçeveler (384 bayt): 44,1 kHz sesle tek dosyada çözülemez.
+    const frame48 = new Uint8Array(384);
+    frame48.set([0xff, 0xfb, 0x94, 0x44]);
+    const audio48 = new Uint8Array(384 * 10);
+    for (let i = 0; i < 10; i++) audio48.set(frame48, i * 384);
+    const c = await speech(user, { audio: audio48 });
+    expect(await mergeSpeech(db, storage, user, { ids: [a, c], gapMs: 0 }, now)).toEqual({
+      ok: false,
+      error: "invalidInput",
+    });
   });
 });

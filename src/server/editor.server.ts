@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { LIMITS } from "@/lib/rate-limit";
 import type { Generation, RateLimited } from "@/lib/types";
@@ -8,7 +8,7 @@ import type { Generation, RateLimited } from "@/lib/types";
 import { cleanCues, encodeCues, parseCues, shiftCues, type Cue } from "./captions.server";
 import type { Db } from "./db.server";
 import type { FileStorage } from "./file-storage.server";
-import { sliceMp3 } from "./mp3.server";
+import { concatBytes, mp3SampleRate, readMp3, silenceLike, sliceMp3 } from "./mp3.server";
 import { generations } from "./schema.server";
 import {
   blocked,
@@ -121,6 +121,123 @@ export async function trimSpeech(
       cost: 0,
       editKind: "trim",
       sourceId: src.id,
+      createdAt: now.toISOString(),
+    },
+    now,
+  );
+  return { ok: true, generation };
+}
+
+/** Tek seferde birleştirilebilecek ses sayısı. */
+export const MERGE_MAX_CLIPS = 30;
+/** Sesler arasına konabilecek sessizlik (ms). */
+export const MERGE_GAPS = [0, 500, 1000, 2000] as const;
+/** Birleştirme bellekte yapılır; seslerin toplam boyutu bunu aşamaz. */
+export const MERGE_MAX_BYTES = 150 * 1024 * 1024;
+
+/**
+ * Seçilen sesleri verilen sırayla tek MP3'te, istenirse araya sessizlik
+ * koyarak birleştirir (yeniden kodlamadan). Altyazılar her sesin birleşik
+ * dosyadaki başlangıcına kaydırılır. Sonuç ücretsiz yeni kayıttır; proje
+ * verilmezse projesiz açılır. Kaynak sesler değişmez.
+ */
+export async function mergeSpeech(
+  db: Db,
+  storage: FileStorage,
+  userId: string,
+  input: {
+    ids: string[];
+    gapMs: number;
+    projectId?: string | undefined;
+    title?: string | undefined;
+  },
+  now: Date,
+): Promise<EditResult> {
+  const { ids, gapMs } = input;
+  if (
+    ids.length < 2 ||
+    ids.length > MERGE_MAX_CLIPS ||
+    new Set(ids).size !== ids.length ||
+    !(MERGE_GAPS as readonly number[]).includes(gapMs)
+  ) {
+    return { ok: false, error: "invalidInput" };
+  }
+  const rows = await db
+    .select()
+    .from(generations)
+    .where(and(eq(generations.userId, userId), inArray(generations.id, ids)));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const clips = ids.map((id) => byId.get(id));
+  if (clips.some((c) => !c || c.type !== "tts" || !c.audioKey || c.status)) {
+    return { ok: false, error: "notFound" };
+  }
+  const stop = await limited(db, userId, now);
+  if (stop) return stop;
+
+  const files: Uint8Array[] = [];
+  let size = 0;
+  for (const c of clips) {
+    const data = await storage.read(c!.audioKey!);
+    if (!data) return { ok: false, error: "notFound" };
+    size += data.byteLength;
+    if (size > MERGE_MAX_BYTES) return { ok: false, error: "invalidInput" };
+    files.push(data);
+  }
+  // Farklı örnekleme hızındaki çerçeveler tek dosyada çözülemez.
+  const rate = mp3SampleRate(files[0]!);
+  const parts = files.map((f) => (mp3SampleRate(f) === rate ? readMp3(f) : null));
+  if (!rate || parts.some((p) => !p)) return { ok: false, error: "invalidInput" };
+  const gap = gapMs > 0 ? silenceLike(files[0]!, gapMs / 1000) : null;
+
+  const chunks: Uint8Array[] = [];
+  const cues: Cue[] = [];
+  let offset = 0;
+  for (const [i, clip] of clips.entries()) {
+    if (i > 0 && gap) {
+      chunks.push(gap.data);
+      offset += gap.seconds;
+    }
+    const raw = clip!.captionsKey ? await storage.read(clip!.captionsKey) : null;
+    const at = Math.round(offset * 1000);
+    for (const c of (raw && parseCues(raw)) || []) {
+      cues.push({ start: c.start + at, end: c.end + at, text: c.text });
+    }
+    chunks.push(parts[i]!.data);
+    offset += parts[i]!.seconds;
+  }
+
+  const id = randomUUID();
+  const audioKey = `${userId}/${id}.mp3`;
+  await storage.put(audioKey, concatBytes(chunks));
+  const captionsKey = cues.length ? `${userId}/${id}-captions.json` : null;
+  if (captionsKey) await storage.put(captionsKey, encodeCues(cues));
+
+  const first = clips[0]!;
+  const same = <T>(pick: (c: GenerationRow) => T) =>
+    clips.every((c) => JSON.stringify(pick(c!)) === JSON.stringify(pick(first)));
+  const generation = await recordVersion(
+    db,
+    userId,
+    {
+      id,
+      userId,
+      type: "tts",
+      text: clips.map((c) => c!.text).join("\n\n"),
+      voiceId: same((c) => c.voiceId) ? first.voiceId : null,
+      style: null,
+      images: null,
+      audioKey,
+      files: null,
+      status: null,
+      job: null,
+      charges: null,
+      projectId: input.projectId ?? null,
+      title: input.title ?? null,
+      voiceSettings: same((c) => c.voiceSettings) ? first.voiceSettings : null,
+      captionsKey,
+      editKind: "merge",
+      sourceId: null,
+      cost: 0,
       createdAt: now.toISOString(),
     },
     now,

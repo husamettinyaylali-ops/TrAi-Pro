@@ -1,6 +1,16 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { ArrowLeft, Download, Film, ImageIcon, Loader2, Mic, Trash2, Wand2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Combine,
+  Download,
+  Film,
+  ImageIcon,
+  Loader2,
+  Mic,
+  Trash2,
+  Wand2,
+} from "lucide-react";
 
 import { GenerationMenu, GenerationTitle, NoDownload } from "@/components/labs/generation-ui";
 import { HistoryView, Panel } from "@/components/labs/tools";
@@ -122,6 +132,12 @@ function ProjectActions({ project }: { project: Project }) {
           <Wand2 className="h-4 w-4" aria-hidden />
           {t.projects.openStudio}
         </Link>
+        {project.counts.tts > 1 && (
+          <Link to="/editor/merge" search={{ project: project.id }} className={btnOutline}>
+            <Combine className="h-4 w-4" aria-hidden />
+            {t.editor.merge.open}
+          </Link>
+        )}
         {total > 0 && (
           // Tam sayfa bağlantı: ZIP sunucu rotasından akış olarak iner.
           <a href={`/media/project/${project.id}?lang=${lang}`} download className={btnOutline}>
