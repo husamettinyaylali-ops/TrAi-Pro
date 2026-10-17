@@ -160,6 +160,13 @@ export const generations = sqliteTable(
     voiceSettings: text("voice_settings", { mode: "json" }).$type<VoiceSettings>(),
     /** Seslendirmenin altyazısı (zamanlı satırlar, JSON) depodaki anahtarı; yoksa boş. */
     captionsKey: text("captions_key"),
+    /**
+     * Düzenleyicide oluşturulan sürüm: kırpılmış ses, birleştirilmiş ses ya da
+     * düzenlenmiş görsel. Kredi harcanmaz (cost 0); kaynak kayıt değişmez.
+     */
+    editKind: text("edit_kind", { enum: ["trim", "merge", "image"] }),
+    /** Düzenlenen kaynak üretim (birleştirmede boş). Kaynak silinse de bu kayıt kalır. */
+    sourceId: text("source_id"),
   },
   (t) => [
     index("generations_user_idx").on(t.userId),

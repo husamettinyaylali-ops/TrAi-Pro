@@ -63,8 +63,16 @@ export interface Mp3Audio {
   seconds: number;
 }
 
-/** Ses çerçevelerini ve süresini döner; MP3 okunamazsa null. */
-export function readMp3(bytes: Uint8Array): Mp3Audio | null {
+interface Scan {
+  /** Ses çerçevelerinin dosyadaki konumu, uzunluğu ve başlangıç zamanı (sn). */
+  frames: { at: number; length: number; time: number }[];
+  seconds: number;
+  sampleRate: number;
+  /** İlk ses çerçevesinin başlığı (sessiz çerçeve üretmek için). */
+  header: Uint8Array;
+}
+
+function scanMp3(bytes: Uint8Array): Scan | null {
   let i = id3Size(bytes);
   const first = frameAt(bytes, i);
   if (!first) return null;
@@ -72,13 +80,84 @@ export function readMp3(bytes: Uint8Array): Mp3Audio | null {
   if (tagAt(bytes, tag, "Xing") || tagAt(bytes, tag, "Info") || tagAt(bytes, i + 36, "VBRI")) {
     i += first.length;
   }
-  const start = i;
+  const frames: Scan["frames"] = [];
   let seconds = 0;
   for (let f = frameAt(bytes, i); f && i + f.length <= bytes.length; f = frameAt(bytes, i)) {
+    frames.push({ at: i, length: f.length, time: seconds });
     seconds += f.samples / f.sampleRate;
     i += f.length;
   }
-  return i > start ? { data: bytes.subarray(start, i), seconds } : null;
+  if (!frames.length) return null;
+  const at = frames[0]!.at;
+  return {
+    frames,
+    seconds,
+    sampleRate: frameAt(bytes, at)!.sampleRate,
+    header: bytes.slice(at, at + 4),
+  };
+}
+
+/** Ses çerçevelerini ve süresini döner; MP3 okunamazsa null. */
+export function readMp3(bytes: Uint8Array): Mp3Audio | null {
+  const scan = scanMp3(bytes);
+  if (!scan) return null;
+  const last = scan.frames.at(-1)!;
+  return { data: bytes.subarray(scan.frames[0]!.at, last.at + last.length), seconds: scan.seconds };
+}
+
+/** Kesimden sonra ses dosyasının biçimi; birleştirilecek dosyalar aynı örnekleme hızında olmalı. */
+export const mp3SampleRate = (bytes: Uint8Array) => scanMp3(bytes)?.sampleRate ?? null;
+
+/**
+ * [from, to) aralığına (sn) değen çerçeveler, yeniden kodlamadan (kayıpsız).
+ * Kesim çerçeve sınırına (MP3'te ~26 ms) yuvarlanır; `offset` kesimin
+ * gerçek başlangıcı, `total` dosyanın tüm süresidir. Aralıkta çerçeve yoksa
+ * ya da dosya okunamazsa null.
+ */
+export function sliceMp3(
+  bytes: Uint8Array,
+  from: number,
+  to: number,
+): (Mp3Audio & { offset: number; total: number }) | null {
+  const scan = scanMp3(bytes);
+  if (!scan) return null;
+  // Çerçeve zamanları toplanarak bulunur; tam sınırdaki kayan nokta farkı çerçeve eklemesin.
+  const eps = 1e-6;
+  const picked = scan.frames.filter(
+    (f, k) => f.time < to - eps && (scan.frames[k + 1]?.time ?? scan.seconds) > from + eps,
+  );
+  if (!picked.length) return null;
+  const first = picked[0]!;
+  const last = picked.at(-1)!;
+  const end = scan.frames[scan.frames.indexOf(last) + 1]?.time ?? scan.seconds;
+  return {
+    data: bytes.subarray(first.at, last.at + last.length),
+    seconds: end - first.time,
+    offset: first.time,
+    total: scan.seconds,
+  };
+}
+
+/**
+ * Verilen dosyanın biçiminde (aynı başlık, dolgusuz) sessiz çerçeveler: yan
+ * bilgi ve ses verisi sıfır olan Layer III çerçevesi sessizlik olarak çözülür.
+ * Süre çerçeve sınırına yuvarlanır.
+ */
+export function silenceLike(bytes: Uint8Array, seconds: number): Mp3Audio | null {
+  const scan = scanMp3(bytes);
+  if (!scan) return null;
+  const header = scan.header.slice();
+  // CRC yok (sıfır CRC geçersiz olurdu) ve dolgu yok: her çerçeve aynı uzunlukta.
+  header[1] = header[1]! | 0x01;
+  header[2] = header[2]! & ~0x02;
+  const frame = frameAt(header, 0)!;
+  const count = Math.max(0, Math.round((seconds * frame.sampleRate) / frame.samples));
+  const one = new Uint8Array(frame.length);
+  one.set(header);
+  return {
+    data: concatBytes(Array.from({ length: count }, () => one)),
+    seconds: (count * frame.samples) / frame.sampleRate,
+  };
 }
 
 export function concatBytes(parts: Uint8Array[]): Uint8Array {

@@ -134,7 +134,7 @@ const DAY = 86_400_000;
 const SAMPLE_IMAGE_COUNT = 4;
 
 /** Üretimin projesi ve adı (düzeltilen sürüm eski adı taşır). */
-type GenerationMeta = Pick<GenerateInput, "projectId" | "title">;
+export type GenerationMeta = Pick<GenerateInput, "projectId" | "title">;
 
 export type Result<T, E extends string> = ({ ok: true } & T) | { ok: false; error: E };
 
@@ -393,7 +393,7 @@ export async function deleteSession(db: Db, token: string): Promise<void> {
 
 type GrantRow = typeof creditGrants.$inferSelect;
 type OrderRow = typeof orders.$inferSelect;
-type GenerationRow = typeof generations.$inferSelect;
+export type GenerationRow = typeof generations.$inferSelect;
 
 const toGrant = ({ userId: _u, ...g }: GrantRow): Grant => g;
 
@@ -402,7 +402,7 @@ export const toOrder = ({ userId: _u, amountCents, ...o }: OrderRow): Order => (
   amountUsd: amountCents / 100,
 });
 
-const toGeneration = (g: GenerationRow): Generation => ({
+export const toGeneration = (g: GenerationRow): Generation => ({
   id: g.id,
   type: g.type,
   text: g.text,
@@ -419,6 +419,8 @@ const toGeneration = (g: GenerationRow): Generation => ({
   voiceSettings: g.voiceSettings ?? undefined,
   subtitleUrl: g.captionsKey ? `/media/subtitle/${g.id}` : undefined,
   progress: g.type === "tts" && g.status === "pending" ? speechProgress(g.id) : undefined,
+  edit: g.editKind ?? undefined,
+  sourceId: g.sourceId ?? undefined,
 });
 
 /** Kayda yazılacak ses ayarları: aralığa kırpılır; varsayılansa boş. */
@@ -1063,6 +1065,8 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           title: null,
           voiceSettings: storedSettings(input.settings),
           captionsKey: null,
+          editKind: null,
+          sourceId: null,
         },
       };
     }
@@ -1086,6 +1090,8 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           title: null,
           voiceSettings: null,
           captionsKey: null,
+          editKind: null,
+          sourceId: null,
         },
       };
     }
@@ -1115,6 +1121,8 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           title: null,
           voiceSettings: null,
           captionsKey: null,
+          editKind: null,
+          sourceId: null,
         },
       };
     }
@@ -1149,7 +1157,7 @@ export async function generateContent(
  * paketten kaç kredi düşüldüğü kayda yazılır (başarısız işte iade için).
  * Bakiye yetmezse false; row.charges çağırana göre doldurulur.
  */
-async function chargeAndRecord(
+export async function chargeAndRecord(
   db: Db,
   userId: string,
   kind: CreditKind,
@@ -1397,6 +1405,8 @@ export async function generateImages(
     title: null,
     voiceSettings: null,
     captionsKey: null,
+    editKind: null,
+    sourceId: null,
     cost,
     createdAt: now.toISOString(),
   };
@@ -1495,6 +1505,8 @@ export async function startVideo(
     title: null,
     voiceSettings: null,
     captionsKey: null,
+    editKind: null,
+    sourceId: null,
     cost,
     createdAt: now.toISOString(),
   };
@@ -1879,6 +1891,8 @@ export async function generateSpeech(
     title: null,
     voiceSettings: settings,
     captionsKey: null,
+    editKind: null,
+    sourceId: null,
     cost,
     createdAt: now.toISOString(),
   };

@@ -16,6 +16,7 @@ import type {
   ActionErrorCode,
   AuthErrorCode,
   ClaimErrorCode,
+  EditErrorCode,
   EmailErrorCode,
   GenerateInput,
   Generation,
@@ -26,6 +27,7 @@ import type {
   ProjectErrorCode,
   RateLimited,
   SessionPayload,
+  SubtitleCue,
   TokenErrorCode,
   TopUpErrorCode,
   TopUpIntent,
@@ -97,6 +99,16 @@ interface Store {
     id: string,
     title: string,
   ) => Promise<Outcome<{ generation: Generation }, ProjectErrorCode>>;
+  /**
+   * Düzenleyici: sesi kırpar ve altyazıyı düzeltir (`cues` kaynak sesin zaman
+   * çizgisinde). Yeni sürüm açılır, kredi harcanmaz.
+   */
+  trimSpeech: (input: {
+    id: string;
+    startMs: number;
+    endMs: number;
+    cues?: SubtitleCue[] | undefined;
+  }) => Promise<Outcome<{ generation: Generation }, EditErrorCode> | RateLimited>;
   /** Üretimi projeye taşır ya da projeden çıkarır (null). */
   moveGeneration: (
     id: string,
@@ -281,6 +293,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       renameGeneration: async (id, title) => {
         const res = await call(() => api.renameGeneration({ data: { id, title } }));
         if (res.ok && userId) upsertHistory(qc, userId, res.generation, false);
+        return res;
+      },
+      trimSpeech: async (input) => {
+        const res = await call(() => api.trimSpeech({ data: input }));
+        if (res.ok && userId) {
+          upsertHistory(qc, userId, res.generation, true);
+          void qc.invalidateQueries({ queryKey: [PROJECTS] });
+        }
         return res;
       },
       moveGeneration: async (id, projectId) => {

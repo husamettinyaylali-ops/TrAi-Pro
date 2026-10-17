@@ -44,6 +44,7 @@ const PRIVATE_PATHS = [
   "/account",
   "/labs",
   "/projects",
+  "/editor",
   "/payment",
   "/payment-history",
   "/verify-email",

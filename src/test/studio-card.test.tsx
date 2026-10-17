@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 
 import { GenerationCard } from "@/components/studio/card";
 import { regenerateInput } from "@/components/studio/hooks";
@@ -11,6 +12,23 @@ const generate = vi.fn();
 const deleteGeneration = vi.fn();
 const moveGeneration = vi.fn(async () => ({ ok: true }));
 
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    to,
+    params,
+    className,
+  }: {
+    children: ReactNode;
+    to: string;
+    params?: { id: string };
+    className?: string;
+  }) => (
+    <a href={params ? to.replace("$id", params.id) : to} className={className}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock("@/lib/store", () => ({
   useApp: () => ({ generate, deleteGeneration, moveGeneration, renameGeneration: vi.fn() }),
   useProjects: () => ({ data: [] }),
@@ -43,13 +61,16 @@ describe("stüdyo üretim kartı", () => {
     generate.mockReset();
   });
 
-  it("demo seste indirme nedeniyle kapalı; düzenle kaydı verir; yeniden üret aynı ayarlarla", async () => {
+  it("demo seste indirme ve editör nedeniyle kapalı; metni düzenle kaydı verir; yeniden üret aynı ayarlarla", async () => {
     generate.mockResolvedValueOnce({ ok: true, generation: { ...speech, id: "s2" } });
     const onEdit = renderCard(speech);
     expect(
       screen.getByRole("button", { name: "İndirilecek dosya yok: demo üretimde dosya oluşmaz" }),
     ).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Düzenle" }));
+    expect(
+      screen.getByRole("button", { name: "Demo üretimde düzenlenecek dosya yok" }),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Metni düzenle" }));
     expect(onEdit).toHaveBeenCalledWith(speech);
     fireEvent.click(screen.getByRole("button", { name: "Yeniden üret" }));
     await waitFor(() =>
@@ -133,12 +154,18 @@ describe("stüdyo üretim kartı", () => {
     ]);
   });
 
-  it("altyazısı olmayan seste tek indirme bağlantısı", () => {
+  it("altyazısı olmayan seste tek indirme bağlantısı; gerçek ses editörde açılır", () => {
     renderCard({ ...speech, audioUrl: "/media/audio/s1" });
     expect(screen.getByRole("link", { name: "İndir" })).toHaveAttribute(
       "href",
       "/media/audio/s1?download=1",
     );
+    expect(screen.getByRole("link", { name: "Editörde aç" })).toHaveAttribute("href", "/editor/s1");
+  });
+
+  it("düzenleyicide oluşan sürüm künyede belirtilir", () => {
+    renderCard({ ...speech, audioUrl: "/media/audio/s3", edit: "trim", cost: 0 });
+    expect(screen.getByText(/Kırpıldı · 0 kr/)).toBeInTheDocument();
   });
 
   it("uzun seslendirme ilerlemeyi gösterir; başarısızsa iadeyi söyler", () => {

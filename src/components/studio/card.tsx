@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
@@ -13,6 +14,7 @@ import {
   Pencil,
   Play,
   RefreshCw,
+  Scissors,
   Square,
   Subtitles,
   TextCursorInput,
@@ -34,6 +36,8 @@ import { useFormat, useI18n } from "@/lib/i18n";
 import { gens } from "@/lib/samples";
 import { useApp, useProjects, type Generation } from "@/lib/store";
 import { speak, stockVoices, stopSpeaking, type Voice } from "@/lib/voices";
+
+import { editorBlock } from "@/components/editor/utils";
 
 import { regenerateInput, useActionError } from "./hooks";
 
@@ -337,12 +341,13 @@ export function GenerationCard({
       ? `${f.num(vs.speed)}x`
       : t.studio.voiceSettings.custom
     : null;
-  const meta =
+  const kind =
     g.type === "tts"
       ? [voice?.name ?? t.labs.tts.unknownVoice, tuned].filter(Boolean).join(" · ")
       : g.type === "image"
         ? t.studio.images(f.num(g.fileUrls?.length || g.images?.length || 1))
         : (t.labs.video.styles[Number(g.style)] ?? t.studio.tool.video);
+  const meta = g.edit ? `${kind} · ${t.studio.editTag[g.edit]}` : kind;
 
   const regenerate = async () => {
     if (!again) return;
@@ -400,9 +405,27 @@ export function GenerationCard({
       {g.status !== "pending" && (
         <div className="mt-2 flex flex-wrap items-center gap-0.5">
           <DownloadAction g={g} />
+          {g.type === "tts" &&
+            (editorBlock(g) ? (
+              <button
+                type="button"
+                disabled
+                aria-label={t.studio.editorUnavailable}
+                title={t.studio.editorUnavailable}
+                className={actBtn}
+              >
+                <Scissors className="h-4 w-4" aria-hidden />
+                {t.studio.openEditor}
+              </button>
+            ) : (
+              <Link to="/editor/$id" params={{ id: g.id }} className={actBtn}>
+                <Scissors className="h-4 w-4" aria-hidden />
+                {t.studio.openEditor}
+              </Link>
+            ))}
           <button type="button" onClick={() => onEdit(g)} className={actBtn}>
             <Pencil className="h-4 w-4" aria-hidden />
-            {t.studio.edit}
+            {t.studio.editText[g.type]}
           </button>
           <button
             type="button"

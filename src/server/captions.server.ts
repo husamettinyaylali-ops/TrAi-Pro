@@ -139,6 +139,48 @@ export function toVtt(cues: Cue[]): string {
     .join("\n")}`;
 }
 
+/**
+ * Kesilen sesin altyazısı: zamanlar `offset` ms kaydırılır, `duration` ms
+ * dışına düşen satır atılır, taşan satır kırpılır.
+ */
+export function shiftCues(cues: Cue[], offset: number, duration: number): Cue[] {
+  return cues.flatMap((c) => {
+    const start = Math.max(0, Math.round(c.start - offset));
+    const end = Math.min(Math.round(duration), Math.round(c.end - offset));
+    return end > start ? [{ start, end, text: c.text }] : [];
+  });
+}
+
+export const CUE_TEXT_MAX = 200;
+export const MAX_CUES = 5_000;
+
+/**
+ * Kullanıcının düzelttiği altyazı: denetim karakterleri atılır, en çok iki
+ * satır kalır; boş satır silinmiş sayılır. Zamanlar sesin süresine kırpılır,
+ * satırlar başlangıca göre sıralanır. Çok uzun satır ya da çok satır varsa null.
+ */
+export function cleanCues(raw: Cue[], duration: number): Cue[] | null {
+  if (raw.length > MAX_CUES) return null;
+  const out: Cue[] = [];
+  for (const c of raw) {
+    if (!Number.isFinite(c.start) || !Number.isFinite(c.end)) return null;
+    const text = c.text
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("\n");
+    if (!text) continue;
+    if (len(text) > CUE_TEXT_MAX) return null;
+    const start = Math.max(0, Math.round(c.start));
+    const end = Math.min(Math.round(duration), Math.round(c.end));
+    if (end > start) out.push({ start, end, text });
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+
 /** Depodaki altyazı dosyası: `{ "cues": [...] }`. Bozuksa null. */
 export function parseCues(raw: Uint8Array): Cue[] | null {
   try {

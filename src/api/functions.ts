@@ -39,6 +39,7 @@ import { imageDeps, receiptContext, speechDeps, videoDeps } from "@/server/deps.
 import { getMailer } from "@/server/email.server";
 import { paypalConfig, sharedPaypal } from "@/server/paypal.server";
 import { env, isProduction } from "@/server/env.server";
+import * as editor from "@/server/editor.server";
 import * as projectSvc from "@/server/projects.server";
 import { setupStatus, testIntegration } from "@/server/setup-check.server";
 import * as svc from "@/server/services.server";
@@ -465,6 +466,30 @@ export const moveGeneration = createServerFn({ method: "POST" })
     const user = await currentUser();
     if (!user) return { ok: false as const, error: "unauthorized" as const };
     return svc.moveGeneration(await getDb(), user.id, data.id, data.projectId, clock());
+  });
+
+const cueSchema = z.object({
+  start: z.number().finite(),
+  end: z.number().finite(),
+  text: z.string().max(400),
+});
+
+/** Düzenleyici: sesi kırpar ve altyazıyı düzeltir; yeni sürüm açılır, kredi harcanmaz. */
+export const trimSpeech = createServerFn({ method: "POST" })
+  .validator(
+    parse(
+      z.object({
+        id,
+        startMs: z.number().finite(),
+        endMs: z.number().finite(),
+        cues: z.array(cueSchema).max(5_000).optional(),
+      }),
+    ),
+  )
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    return editor.trimSpeech(await getDb(), fileStorage(), user.id, data, clock());
   });
 
 /** Üretime ad verir; boş ad adı kaldırır. */

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useRef, useState, type KeyboardEvent } from "react";
 import {
   Download,
@@ -5,6 +6,7 @@ import {
   FolderInput,
   MoreHorizontal,
   Pencil,
+  Scissors,
   TextCursorInput,
   Trash2,
 } from "lucide-react";
@@ -21,6 +23,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { editorBlock } from "@/components/editor/utils";
 import { useI18n } from "@/lib/i18n";
 import { GENERATION_TITLE_MAX } from "@/lib/projects";
 import { useApp, useProjects, type Generation } from "@/lib/store";
@@ -169,6 +172,13 @@ export function GenerationMenu({
         <DropdownMenuItem className={item} disabled={pending} onSelect={focusElsewhere(onEdit)}>
           <Pencil /> {t.labs.edit}
         </DropdownMenuItem>
+        {g.type === "tts" && !editorBlock(g) && (
+          <DropdownMenuItem asChild className={item}>
+            <Link to="/editor/$id" params={{ id: g.id }}>
+              <Scissors /> {t.studio.openEditor}
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem className={item} onSelect={focusElsewhere(onRename)}>
           <TextCursorInput /> {t.labs.rename}
         </DropdownMenuItem>

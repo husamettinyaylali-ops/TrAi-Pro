@@ -93,7 +93,7 @@ export function serveAudio(request: Request, id: string, deps: MediaDeps = {}) {
 }
 
 /**
- * Seslendirmenin altyazısı SRT (varsayılan) ya da WebVTT olarak (`format=vtt`),
+ * Seslendirmenin altyazısı SRT (varsayılan), WebVTT (`format=vtt`) ya da JSON (`format=json`),
  * yalnız sahibine. Oturum ya da API anahtarıyla doğrulanmış kullanıcı için.
  */
 export async function ownedSubtitleResponse(
@@ -101,7 +101,7 @@ export async function ownedSubtitleResponse(
   storage: FileStorage,
   userId: string,
   id: string,
-  format: "srt" | "vtt",
+  format: SubtitleFormat,
   download: boolean,
 ): Promise<Response> {
   const row = await db
@@ -112,11 +112,12 @@ export async function ownedSubtitleResponse(
   const raw = row?.key ? await storage.read(row.key) : null;
   const cues = raw ? parseCues(raw) : null;
   if (!cues) return new Response("Bulunamadı", { status: 404 });
-  const body = new TextEncoder().encode(format === "vtt" ? toVtt(cues) : toSrt(cues));
+  const body = new TextEncoder().encode(
+    format === "json" ? JSON.stringify({ cues }) : format === "vtt" ? toVtt(cues) : toSrt(cues),
+  );
   return new Response(body, {
     headers: {
-      "content-type":
-        format === "vtt" ? "text/vtt; charset=utf-8" : "application/x-subrip; charset=utf-8",
+      "content-type": SUBTITLE_TYPES[format],
       "content-length": String(body.byteLength),
       "cache-control": "private, max-age=3600",
       "x-content-type-options": "nosniff",
@@ -127,8 +128,18 @@ export async function ownedSubtitleResponse(
   });
 }
 
-export const subtitleFormat = (url: string): "srt" | "vtt" =>
-  new URL(url).searchParams.get("format") === "vtt" ? "vtt" : "srt";
+type SubtitleFormat = "srt" | "vtt" | "json";
+const SUBTITLE_TYPES: Record<SubtitleFormat, string> = {
+  srt: "application/x-subrip; charset=utf-8",
+  vtt: "text/vtt; charset=utf-8",
+  json: "application/json; charset=utf-8",
+};
+
+/** `?format=vtt` WebVTT, `?format=json` düzenleyici için zamanlı satırlar; varsayılan SRT. */
+export const subtitleFormat = (url: string): SubtitleFormat => {
+  const f = new URL(url).searchParams.get("format");
+  return f === "vtt" || f === "json" ? f : "srt";
+};
 
 /** GET /media/subtitle/:id — seslendirmenin altyazısı (`?format=vtt`, `?download=1`). */
 export async function serveSubtitle(request: Request, id: string, deps: MediaDeps = {}) {

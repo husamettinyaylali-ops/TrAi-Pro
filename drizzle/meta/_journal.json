@@ -113,6 +113,13 @@
       "when": 1792239794993,
       "tag": "0015_altyazi",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1792242283652,
+      "tag": "0016_duzenleyici",
+      "breakpoints": true
     }
   ]
 }

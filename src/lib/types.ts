@@ -78,6 +78,9 @@ export interface Generation {
   status?: "pending" | "failed" | undefined;
   /** Arka planda seslendirilen uzun metnin ilerlemesi (parça). */
   progress?: { done: number; total: number } | undefined;
+  /** Düzenleyicide oluşturulan sürüm (ücretsiz): kırpma, birleştirme ya da görsel düzenleme. */
+  edit?: "trim" | "merge" | "image" | undefined;
+  sourceId?: string | undefined;
   cost: number;
   createdAt: string;
   /** Kullanıcının verdiği ad; yoksa metin/istem gösterilir. */
@@ -86,6 +89,15 @@ export interface Generation {
   /** Seslendirmede kullanılan ayarlar; varsayılan ayarlarla üretildiyse yok. */
   voiceSettings?: VoiceSettings | undefined;
 }
+
+/** Altyazı satırı: zamanlar milisaniye, metin en çok iki satır. */
+export interface SubtitleCue {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export type EditErrorCode = "unauthorized" | "invalidInput" | "notFound";
 
 /** Kullanıcının çalışma alanı; üretimler bir projede toplanır. */
 export interface Project {

@@ -47,6 +47,8 @@ export const LIMITS = {
   setupTestPerAdmin: { max: 30, windowMs: 10 * MINUTE },
   /** Proje ZIP'i tüm dosyaları okur; kullanıcı başına saatte 20 arşiv. */
   projectZipPerUser: { max: 20, windowMs: 60 * MINUTE },
+  /** Düzenleyici (kırpma, birleştirme, görsel kaydı) dosya okuyup yazar; kullanıcı başına saatte 60. */
+  editPerUser: { max: 60, windowMs: 60 * MINUTE },
 } as const satisfies Record<string, Limit>;
 
 export type LimitCheck = { allowed: true } | { allowed: false; retryAfterMs: number };
