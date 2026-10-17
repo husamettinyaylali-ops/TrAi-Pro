@@ -244,3 +244,63 @@ export async function mergeSpeech(
   );
   return { ok: true, generation };
 }
+
+/** Düzenlenmiş görselin en büyük boyutu. */
+export const MAX_EDIT_IMAGE_BYTES = 15 * 1024 * 1024;
+
+const IMAGE_TYPES = {
+  "image/jpeg": { ext: "jpg", magic: [0xff, 0xd8, 0xff] },
+  "image/png": { ext: "png", magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+} as const;
+
+/**
+ * Tarayıcıda düzenlenen (kırpılan, döndürülen, yazı eklenen) görseli yeni
+ * sürüm olarak kaydeder. Yalnız JPEG ya da PNG kabul edilir; tür dosyanın ilk
+ * baytlarından da doğrulanır. Kaynak kayıt değişmez, kredi harcanmaz.
+ */
+export async function saveImageEdit(
+  db: Db,
+  storage: FileStorage,
+  userId: string,
+  input: { sourceId: string; type: string; data: Uint8Array },
+  now: Date,
+): Promise<EditResult> {
+  const src = await ownRow(db, userId, input.sourceId);
+  if (!src || src.type !== "image" || !src.files?.length || src.status) {
+    return { ok: false, error: "notFound" };
+  }
+  const kind = IMAGE_TYPES[input.type as keyof typeof IMAGE_TYPES];
+  if (
+    !kind ||
+    input.data.byteLength === 0 ||
+    input.data.byteLength > MAX_EDIT_IMAGE_BYTES ||
+    !kind.magic.every((b, i) => input.data[i] === b)
+  ) {
+    return { ok: false, error: "invalidInput" };
+  }
+  const stop = await limited(db, userId, now);
+  if (stop) return stop;
+
+  const id = randomUUID();
+  const key = `${userId}/${id}-0.${kind.ext}`;
+  await storage.put(key, input.data);
+  const generation = await recordVersion(
+    db,
+    userId,
+    {
+      ...src,
+      id,
+      images: null,
+      files: [key],
+      status: null,
+      job: null,
+      charges: null,
+      cost: 0,
+      editKind: "image",
+      sourceId: src.id,
+      createdAt: now.toISOString(),
+    },
+    now,
+  );
+  return { ok: true, generation };
+}

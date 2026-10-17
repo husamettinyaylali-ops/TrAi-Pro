@@ -510,6 +510,33 @@ export const mergeSpeech = createServerFn({ method: "POST" })
     return editor.mergeSpeech(await getDb(), fileStorage(), user.id, data, clock());
   });
 
+/** Düzenleyici: tarayıcıda düzenlenen görsel (FormData: sourceId, file); yeni sürüm, kredi harcanmaz. */
+export const saveImageEdit = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    if (!(input instanceof FormData)) throw new Error("FormData bekleniyor");
+    return input;
+  })
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    const sourceId = data.get("sourceId");
+    const file = data.get("file");
+    if (typeof sourceId !== "string" || !(file instanceof File)) {
+      return { ok: false as const, error: "invalidInput" as const };
+    }
+    // Boyut, dosya belleğe okunmadan önce kontrol edilir.
+    if (file.size > editor.MAX_EDIT_IMAGE_BYTES) {
+      return { ok: false as const, error: "invalidInput" as const };
+    }
+    return editor.saveImageEdit(
+      await getDb(),
+      fileStorage(),
+      user.id,
+      { sourceId, type: file.type, data: new Uint8Array(await file.arrayBuffer()) },
+      clock(),
+    );
+  });
+
 /** Üretime ad verir; boş ad adı kaldırır. */
 export const renameGeneration = createServerFn({ method: "POST" })
   .validator(parse(z.object({ id, title: z.string().max(200) })))

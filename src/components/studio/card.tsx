@@ -405,7 +405,8 @@ export function GenerationCard({
       {g.status !== "pending" && (
         <div className="mt-2 flex flex-wrap items-center gap-0.5">
           <DownloadAction g={g} />
-          {g.type === "tts" &&
+          {g.type !== "video" &&
+            g.status !== "failed" &&
             (editorBlock(g) ? (
               <button
                 type="button"

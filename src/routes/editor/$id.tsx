@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Film, ImageIcon, Mic } from "lucide-react";
 
 import { AudioEditor } from "@/components/editor/audio-editor";
+import { ImageEditor } from "@/components/editor/image-editor";
 import { editorBlock } from "@/components/editor/utils";
 import { Panel } from "@/components/labs/tools";
 import { RequireAuth } from "@/components/site/require-auth";
@@ -93,8 +94,10 @@ function EditorBody() {
         <Panel>
           <p className="text-center text-muted-foreground">{t.editor.unavailable[block]}</p>
         </Panel>
+      ) : g.type === "tts" ? (
+        <AudioEditor key={g.id} g={g} />
       ) : (
-        g.type === "tts" && <AudioEditor key={g.id} g={g} />
+        <ImageEditor key={g.id} g={g} />
       )}
     </div>
   );

@@ -5,14 +5,14 @@ export const smallBtn =
   "inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-4 text-sm transition hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40";
 
 /**
- * Düzenleyicide açılamayan kaydın nedeni; açılabilirse null. Yalnız gerçek
- * dosyası olan seslendirme düzenlenir (demo üretimde dosya yok).
+ * Düzenleyicide açılamayan kaydın nedeni; açılabilirse null. Gerçek dosyası
+ * olan seslendirme ve görsel düzenlenir (demo üretimde dosya yok); video henüz yok.
  */
 export function editorBlock(g: Generation): "pending" | "failed" | "demo" | "unsupported" | null {
   if (g.status === "pending") return "pending";
   if (g.status === "failed") return "failed";
-  if (g.type !== "tts") return "unsupported";
-  if (!g.audioUrl) return "demo";
+  if (g.type === "video") return "unsupported";
+  if (g.type === "tts" ? !g.audioUrl : !g.fileUrls?.length) return "demo";
   return null;
 }
 

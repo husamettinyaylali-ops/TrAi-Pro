@@ -7,12 +7,26 @@ import { join } from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { envelope, bucketPeaks, silenceBounds } from "@/components/editor/audio-analysis";
+import {
+  clampCenter,
+  cropRect,
+  outputSize,
+  rotatedSize,
+  wrapLines,
+} from "@/components/editor/image-geometry";
 import { editorBlock } from "@/components/editor/utils";
 import { balance } from "@/lib/credits";
 import { LIMITS } from "@/lib/rate-limit";
 import { cleanCues, encodeCues, parseCues, shiftCues } from "@/server/captions.server";
 import { openDb, type Db } from "@/server/db.server";
-import { MERGE_MAX_CLIPS, MIN_TRIM_MS, mergeSpeech, trimSpeech } from "@/server/editor.server";
+import {
+  MAX_EDIT_IMAGE_BYTES,
+  MERGE_MAX_CLIPS,
+  MIN_TRIM_MS,
+  mergeSpeech,
+  saveImageEdit,
+  trimSpeech,
+} from "@/server/editor.server";
 import { localFileStorage, type FileStorage } from "@/server/file-storage.server";
 import { serveSubtitle } from "@/server/media.server";
 import { readMp3, silenceLike, sliceMp3 } from "@/server/mp3.server";
@@ -306,6 +320,8 @@ describe("düzenleyiciye açılabilirlik", () => {
     expect(editorBlock({ ...base, type: "tts", status: "pending" })).toBe("pending");
     expect(editorBlock({ ...base, type: "tts", status: "failed" })).toBe("failed");
     expect(editorBlock({ ...base, type: "video", fileUrls: ["/v"] })).toBe("unsupported");
+    expect(editorBlock({ ...base, type: "image", fileUrls: ["/i"] })).toBeNull();
+    expect(editorBlock({ ...base, type: "image", images: [1] })).toBe("demo");
   });
 });
 
@@ -394,5 +410,140 @@ describe("sesleri birleştirme", () => {
       ok: false,
       error: "invalidInput",
     });
+  });
+});
+
+describe("görsel kırpma geometrisi", () => {
+  it("90 ve 270 derecede genişlik ve yükseklik yer değiştirir", () => {
+    expect(rotatedSize(1200, 800, 0)).toEqual({ w: 1200, h: 800 });
+    expect(rotatedSize(1200, 800, 90)).toEqual({ w: 800, h: 1200 });
+    expect(rotatedSize(1200, 800, 270)).toEqual({ w: 800, h: 1200 });
+  });
+
+  it("oran sığan en büyük alana, yakınlaştırma alanı küçültür; alan görselden taşmaz", () => {
+    expect(cropRect(1200, 800, null, 1, 0.5, 0.5)).toEqual({ x: 0, y: 0, w: 1200, h: 800 });
+    expect(cropRect(1200, 800, 1, 1, 0.5, 0.5)).toEqual({ x: 200, y: 0, w: 800, h: 800 });
+    expect(cropRect(1200, 800, 9 / 16, 1, 0.5, 0.5)).toEqual({ x: 375, y: 0, w: 450, h: 800 });
+    expect(cropRect(1000, 1000, 16 / 9, 1, 0.5, 0.5)).toEqual({ x: 0, y: 219, w: 1000, h: 563 });
+    expect(cropRect(1200, 800, 1, 2, 0.5, 0.5)).toEqual({ x: 400, y: 200, w: 400, h: 400 });
+    // Merkez kenara itilse de alan içeride kalır.
+    expect(cropRect(1200, 800, 1, 2, 0, 1)).toEqual({ x: 0, y: 400, w: 400, h: 400 });
+    expect(clampCenter(1200, 800, 1, 2, 0, 1)).toEqual({ cx: 1 / 6, cy: 0.75 });
+  });
+
+  it("çıktı en uzun kenarda 4096 ile sınırlanır", () => {
+    expect(outputSize(800, 600)).toEqual({ w: 800, h: 600 });
+    expect(outputSize(8192, 4096)).toEqual({ w: 4096, h: 2048 });
+  });
+
+  it("yazı genişliğe göre satırlara bölünür; satır sonları korunur", () => {
+    const measure = (s: string) => s.length * 10;
+    expect(wrapLines("bir iki üç dört beş", 80, measure)).toEqual(["bir iki", "üç dört", "beş"]);
+    expect(wrapLines("başlık\nalt  satır", 200, measure)).toEqual(["başlık", "alt satır"]);
+    expect(wrapLines("çokuzunkelimetekbaşına", 50, measure)).toEqual(["çokuzunkelimetekbaşına"]);
+  });
+});
+
+describe("görsel düzenleme kaydı", () => {
+  const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+
+  async function image(userId: string, projectId?: string) {
+    const id = randomUUID();
+    const key = `${userId}/${id}-0.jpg`;
+    await storage.put(key, JPEG);
+    await db.insert(generations).values({
+      id,
+      userId,
+      type: "image",
+      text: "neon İstanbul",
+      files: [key, `${userId}/${id}-1.jpg`],
+      projectId: projectId ?? null,
+      title: "Kapak",
+      cost: 2,
+      createdAt: now.toISOString(),
+    });
+    return id;
+  }
+
+  it("JPEG ya da PNG yeni sürüm olarak kaydedilir; ücretsiz, kaynak değişmez", async () => {
+    const user = await newUser();
+    const p = await createProject(db, user, { name: "Kapaklar" }, now);
+    if (!p.ok) throw new Error(p.error);
+    const src = await image(user, p.project.id);
+    const jpg = await saveImageEdit(
+      db,
+      storage,
+      user,
+      { sourceId: src, type: "image/jpeg", data: JPEG },
+      now,
+    );
+    if (!jpg.ok) throw new Error(jpg.error);
+    expect(jpg.generation).toMatchObject({
+      type: "image",
+      cost: 0,
+      edit: "image",
+      sourceId: src,
+      text: "neon İstanbul",
+      title: "Kapak",
+      projectId: p.project.id,
+      fileUrls: [`/media/file/${jpg.generation.id}/0`],
+    });
+    expect([...(await storage.read(`${user}/${jpg.generation.id}-0.jpg`))!]).toEqual([...JPEG]);
+    const png = await saveImageEdit(
+      db,
+      storage,
+      user,
+      { sourceId: src, type: "image/png", data: PNG },
+      now,
+    );
+    if (!png.ok) throw new Error(png.error);
+    expect(await storage.read(`${user}/${png.generation.id}-0.png`)).not.toBeNull();
+    expect((await getGeneration(db, user, src))?.fileUrls).toHaveLength(2);
+  });
+
+  it("tür ile içerik uyuşmazsa, boşsa ya da çok büyükse reddedilir", async () => {
+    const user = await newUser();
+    const src = await image(user);
+    for (const [type, data] of [
+      ["image/png", JPEG],
+      ["image/jpeg", PNG],
+      ["image/webp", JPEG],
+      ["image/jpeg", new Uint8Array()],
+      [
+        "image/jpeg",
+        (() => {
+          const big = new Uint8Array(MAX_EDIT_IMAGE_BYTES + 1);
+          big.set(JPEG);
+          return big;
+        })(),
+      ],
+    ] as const) {
+      expect(await saveImageEdit(db, storage, user, { sourceId: src, type, data }, now)).toEqual({
+        ok: false,
+        error: "invalidInput",
+      });
+    }
+  });
+
+  it("başkasının görseli ya da görsel olmayan kayıt bulunamaz", async () => {
+    const owner = await newUser("sahip@example.com");
+    const other = await newUser("baska@example.com");
+    const src = await image(owner);
+    const audio = await speech(owner);
+    for (const [user, id] of [
+      [other, src],
+      [owner, audio],
+    ] as const) {
+      expect(
+        await saveImageEdit(
+          db,
+          storage,
+          user,
+          { sourceId: id, type: "image/jpeg", data: JPEG },
+          now,
+        ),
+      ).toEqual({ ok: false, error: "notFound" });
+    }
   });
 });

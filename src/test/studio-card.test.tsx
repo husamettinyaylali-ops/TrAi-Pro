@@ -111,6 +111,8 @@ describe("stüdyo üretim kartı", () => {
     });
     expect(screen.getAllByRole("img", { name: "kırmızı tilki" })).toHaveLength(2);
     expect(screen.getByRole("button", { name: "İndir" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Editörde aç" })).toHaveAttribute("href", "/editor/i1");
+    expect(screen.getByRole("button", { name: "İstemi düzenle" })).toBeInTheDocument();
   });
 
   it("hazırlanan videoda işlem yok; başarısız iş iadeyi söyler", () => {

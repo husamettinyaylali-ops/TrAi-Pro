@@ -172,7 +172,7 @@ export function GenerationMenu({
         <DropdownMenuItem className={item} disabled={pending} onSelect={focusElsewhere(onEdit)}>
           <Pencil /> {t.labs.edit}
         </DropdownMenuItem>
-        {g.type === "tts" && !editorBlock(g) && (
+        {!editorBlock(g) && (
           <DropdownMenuItem asChild className={item}>
             <Link to="/editor/$id" params={{ id: g.id }}>
               <Scissors /> {t.studio.openEditor}
