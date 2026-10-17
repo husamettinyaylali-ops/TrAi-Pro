@@ -10,6 +10,7 @@ import { balance } from "@/lib/credits";
 import { localFileStorage, type FileStorage } from "@/server/file-storage.server";
 import { openDb, type Db } from "@/server/db.server";
 import { serveAudio } from "@/server/media.server";
+import { fakeAlignment } from "./speech-fixtures";
 import {
   createSession,
   createVoiceClone,
@@ -59,7 +60,7 @@ function fakeTts(opts: { fail?: boolean } = {}) {
       calls.synth.push([voiceId, text]);
       calls.settings.push(settings);
       if (opts.fail) throw new Error("ElevenLabs 500");
-      return new Uint8Array([0x49, 0x44, 0x33, 1, 2, 3]);
+      return { audio: new Uint8Array([0x49, 0x44, 0x33, 1, 2, 3]), alignment: fakeAlignment(text) };
     },
     async cloneVoice({ name }) {
       calls.cloned.push(name);
@@ -113,24 +114,82 @@ describe("ElevenLabs istemcisi", () => {
     return { seen, f };
   }
 
-  it("seslendirme isteği doğru adres, anahtar başlığı ve modelle gider", async () => {
-    const { seen, f } = recorder(() => new Response(new Uint8Array([1, 2, 3])));
+  const timed = (
+    alignment: unknown = {
+      characters: ["H", "i"],
+      character_start_times_seconds: [0, 0.1],
+      character_end_times_seconds: [0.1, 0.2],
+    },
+  ) =>
+    Response.json({
+      audio_base64: Buffer.from([1, 2, 3]).toString("base64"),
+      alignment,
+      normalized_alignment: null,
+    });
+
+  it("seslendirme zaman damgalı uca doğru anahtar ve modelle gider; ses ve zamanlama döner", async () => {
+    const { seen, f } = recorder(() => timed());
     const p = elevenLabsProvider({ apiKey: "anahtar", fetchImpl: f });
-    const audio = await p.synthesize("ses-1", "Merhaba");
-    expect([...audio]).toEqual([1, 2, 3]);
+    const res = await p.synthesize("ses-1", "Hi");
+    expect([...res.audio]).toEqual([1, 2, 3]);
+    expect(res.alignment).toEqual({ characters: ["H", "i"], starts: [0, 0.1], ends: [0.1, 0.2] });
     expect(seen[0]!.url).toBe(
-      `${ELEVENLABS_API}/v1/text-to-speech/ses-1?output_format=mp3_44100_128`,
+      `${ELEVENLABS_API}/v1/text-to-speech/ses-1/with-timestamps?output_format=mp3_44100_128`,
     );
     const headers = seen[0]!.init!.headers as Record<string, string>;
     expect(headers["xi-api-key"]).toBe("anahtar");
     expect(JSON.parse(String(seen[0]!.init!.body))).toEqual({
-      text: "Merhaba",
+      text: "Hi",
       model_id: "eleven_multilingual_v2",
     });
   });
 
+  it("uzun metin parçasında komşu metin gider; v3 modelinde gönderilmez", async () => {
+    const { seen, f } = recorder(() => timed());
+    const context = { previousText: "Önceki.", nextText: "Sonraki." };
+    await elevenLabsProvider({ apiKey: "x", fetchImpl: f }).synthesize(
+      "ses-1",
+      "Orta.",
+      undefined,
+      context,
+    );
+    expect(JSON.parse(String(seen[0]!.init!.body))).toMatchObject({
+      previous_text: "Önceki.",
+      next_text: "Sonraki.",
+    });
+    await elevenLabsProvider({ apiKey: "x", model: "eleven_v3", fetchImpl: f }).synthesize(
+      "ses-1",
+      "Orta.",
+      undefined,
+      context,
+    );
+    const body = JSON.parse(String(seen[1]!.init!.body)) as object;
+    expect(body).not.toHaveProperty("previous_text");
+    expect(body).not.toHaveProperty("next_text");
+  });
+
+  it("zamanlama eksik ya da uyumsuzsa ses yine döner, zamanlama null olur", async () => {
+    for (const alignment of [
+      null,
+      {
+        characters: ["a"],
+        character_start_times_seconds: [0, 1],
+        character_end_times_seconds: [1],
+      },
+    ]) {
+      const { f } = recorder(() => timed(alignment));
+      const res = await elevenLabsProvider({ apiKey: "x", fetchImpl: f }).synthesize("s", "a");
+      expect(res.alignment).toBeNull();
+      expect(res.audio.byteLength).toBe(3);
+    }
+    const { f } = recorder(() => Response.json({ alignment: null }));
+    await expect(
+      elevenLabsProvider({ apiKey: "x", fetchImpl: f }).synthesize("s", "a"),
+    ).rejects.toThrow("ses dönmedi");
+  });
+
   it("ses ayarları ElevenLabs alan adlarıyla gider", async () => {
-    const { seen, f } = recorder(() => new Response(new Uint8Array([1])));
+    const { seen, f } = recorder(() => timed());
     await elevenLabsProvider({ apiKey: "x", fetchImpl: f }).synthesize("ses-1", "Merhaba", {
       speed: 1.1,
       stability: 0.3,
@@ -223,7 +282,10 @@ describe("gerçek seslendirme", () => {
     expect(calls.synth).toEqual([["hazir-1", "Merhaba dünya"]]);
     expect(res.generation.cost).toBe(13);
     expect(res.generation.audioUrl).toBe(`/media/audio/${res.generation.id}`);
+    expect(res.generation.subtitleUrl).toBe(`/media/subtitle/${res.generation.id}`);
+    expect(res.generation.status).toBeUndefined();
     expect(await storage.read(`${id}/${res.generation.id}.mp3`)).not.toBeNull();
+    expect(await storage.read(`${id}/${res.generation.id}-captions.json`)).not.toBeNull();
     expect(balance((await loadUserData(db, id)).grants, "voice", now)).toBe(5_000 - 13);
   });
 
@@ -343,6 +405,7 @@ describe("gerçek seslendirme", () => {
     if (!res.ok) throw new Error(res.error);
     await removeGeneration(db, id, res.generation.id, storage);
     expect(await storage.read(`${id}/${res.generation.id}.mp3`)).toBeNull();
+    expect(await storage.read(`${id}/${res.generation.id}-captions.json`)).toBeNull();
   });
 });
 

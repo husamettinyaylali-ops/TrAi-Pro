@@ -69,8 +69,15 @@ export interface Generation {
   audioUrl?: string | undefined;
   /** Gerçek görsel/video dosyalarının adresleri (yalnız sahibine sunulur); demo üretimde yok. */
   fileUrls?: string[] | undefined;
-  /** Video hazırlanıyor ya da başarısız oldu (kredisi iade edildi); boşsa tamamlandı. */
+  /** Altyazı adresi (`?format=srt|vtt`); demo üretimde ya da zamanlama yoksa yok. */
+  subtitleUrl?: string | undefined;
+  /**
+   * Video ya da uzun seslendirme hazırlanıyor veya başarısız oldu (kredisi iade
+   * edildi); boşsa tamamlandı.
+   */
   status?: "pending" | "failed" | undefined;
+  /** Arka planda seslendirilen uzun metnin ilerlemesi (parça). */
+  progress?: { done: number; total: number } | undefined;
   cost: number;
   createdAt: string;
   /** Kullanıcının verdiği ad; yoksa metin/istem gösterilir. */

@@ -66,6 +66,7 @@ import type {
   TopUpMethod,
   UserData,
 } from "@/lib/types";
+import { splitForSpeech } from "@/lib/speech-text";
 import { stockVoices } from "@/lib/voices";
 
 import type { Lang } from "@/lib/i18n";
@@ -119,7 +120,15 @@ import {
   walletEntries,
 } from "./schema.server";
 import { SESSION_DAYS, hashToken, newSessionToken } from "./session.server";
-import type { CloneFile, ProviderVoice, TtsProvider } from "./tts.server";
+import {
+  TtsError,
+  type CloneFile,
+  type ProviderVoice,
+  type SpeechResult,
+  type TtsProvider,
+} from "./tts.server";
+import { buildCues, encodeCues, type Cue, type SpeechAlignment } from "./captions.server";
+import { concatBytes, readMp3 } from "./mp3.server";
 
 const DAY = 86_400_000;
 const SAMPLE_IMAGE_COUNT = 4;
@@ -408,6 +417,8 @@ const toGeneration = (g: GenerationRow): Generation => ({
   title: g.title ?? undefined,
   projectId: g.projectId ?? undefined,
   voiceSettings: g.voiceSettings ?? undefined,
+  subtitleUrl: g.captionsKey ? `/media/subtitle/${g.id}` : undefined,
+  progress: g.type === "tts" && g.status === "pending" ? speechProgress(g.id) : undefined,
 });
 
 /** Kayda yazılacak ses ayarları: aralığa kırpılır; varsayılansa boş. */
@@ -1051,6 +1062,7 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           projectId: null,
           title: null,
           voiceSettings: storedSettings(input.settings),
+          captionsKey: null,
         },
       };
     }
@@ -1073,6 +1085,7 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           projectId: null,
           title: null,
           voiceSettings: null,
+          captionsKey: null,
         },
       };
     }
@@ -1101,6 +1114,7 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           projectId: null,
           title: null,
           voiceSettings: null,
+          captionsKey: null,
         },
       };
     }
@@ -1295,14 +1309,25 @@ export async function removeGeneration(
   storage?: FileStorage,
 ): Promise<void> {
   const row = await db
-    .select({ audioKey: generations.audioKey, files: generations.files })
+    .select({
+      audioKey: generations.audioKey,
+      captionsKey: generations.captionsKey,
+      files: generations.files,
+    })
     .from(generations)
     .where(and(eq(generations.id, id), eq(generations.userId, userId)))
     .get();
   if (!row) return;
   await db.delete(generations).where(and(eq(generations.id, id), eq(generations.userId, userId)));
+  // Arka planda süren uzun seslendirme kalan parçaları göndermez.
+  const job = speechJobs.get(id);
+  if (job) job.cancelled = true;
   if (!storage) return;
-  const keys = [...(row.audioKey ? [row.audioKey] : []), ...(row.files ?? [])];
+  const keys = [
+    ...(row.audioKey ? [row.audioKey] : []),
+    ...(row.captionsKey ? [row.captionsKey] : []),
+    ...(row.files ?? []),
+  ];
   await Promise.all(keys.map((k) => storage.remove(k)));
 }
 
@@ -1371,6 +1396,7 @@ export async function generateImages(
     projectId: null,
     title: null,
     voiceSettings: null,
+    captionsKey: null,
     cost,
     createdAt: now.toISOString(),
   };
@@ -1426,7 +1452,13 @@ export async function startVideo(
   const pending = await db
     .select({ n: count() })
     .from(generations)
-    .where(and(eq(generations.userId, userId), eq(generations.status, "pending")))
+    .where(
+      and(
+        eq(generations.userId, userId),
+        eq(generations.type, "video"),
+        eq(generations.status, "pending"),
+      ),
+    )
     .get();
   if ((pending?.n ?? 0) >= VIDEO_MAX_PENDING) return { ok: false, error: "limit" };
 
@@ -1462,6 +1494,7 @@ export async function startVideo(
     projectId: null,
     title: null,
     voiceSettings: null,
+    captionsKey: null,
     cost,
     createdAt: now.toISOString(),
   };
@@ -1472,8 +1505,8 @@ export async function startVideo(
   return { ok: true, generation: toGeneration(row) };
 }
 
-/** Başarısız işi işaretler ve krediyi düşüldüğü paketlere iade eder (bir kez). */
-async function failVideo(db: Db, row: GenerationRow): Promise<GenerationRow> {
+/** Başarısız işi (video, uzun seslendirme) işaretler ve krediyi düşüldüğü paketlere iade eder (bir kez). */
+async function failGeneration(db: Db, row: GenerationRow): Promise<GenerationRow> {
   return db.transaction(async (tx) => {
     const res = await tx
       .update(generations)
@@ -1509,9 +1542,9 @@ async function settleVideo(db: Db, deps: VideoDeps, row: GenerationRow, now: Dat
   if (check.state === "pending") {
     if (now.getTime() - Date.parse(row.createdAt) < VIDEO_MAX_AGE_MS) return row;
     await deps.video.cancel(row.job).catch(() => {});
-    return failVideo(db, row);
+    return failGeneration(db, row);
   }
-  if (check.state === "failed") return failVideo(db, row);
+  if (check.state === "failed") return failGeneration(db, row);
 
   const key = `${row.userId}/${row.id}-0.mp4`;
   await deps.storage.put(key, check.video);
@@ -1572,6 +1605,36 @@ export interface SpeechDeps {
   storage: FileStorage;
   /** Herkese açık hazır sesler (kullanıcı klonları ayıklanmış). */
   catalog: () => Promise<ProviderVoice[]>;
+  /** Uzun metinde geçici hata alan parça bu kadar bekleyip bir kez yeniden denenir. */
+  retryDelayMs?: number;
+}
+
+/** Kullanıcı başına aynı anda arka planda seslendirilebilecek uzun metin sayısı. */
+export const SPEECH_MAX_PENDING = 2;
+/** Uzun metinde aynı anda sağlayıcıya gönderilen parça sayısı. */
+const SPEECH_CONCURRENCY = 2;
+/** Komşu parçadan bağlam olarak verilen karakter sayısı. */
+const SPEECH_CONTEXT_CHARS = 300;
+
+interface SpeechJob {
+  total: number;
+  done: number;
+  /** Üretim silindi: kalan parçalar gönderilmez. */
+  cancelled: boolean;
+}
+
+/**
+ * Bu süreçte arka planda çalışan uzun seslendirmeler. Listede olmayan bekleyen
+ * kayıt yarım kalmıştır (sunucu yeniden başladı) ve iade edilir. Geliştirmede
+ * modül yeniden yüklense de kaybolmasın diye global nesnede durur.
+ */
+const speechJobs: Map<string, SpeechJob> = ((
+  globalThis as { __traiSpeechJobs?: Map<string, SpeechJob> }
+).__traiSpeechJobs ??= new Map());
+
+function speechProgress(id: string): { done: number; total: number } | undefined {
+  const job = speechJobs.get(id);
+  return job ? { done: job.done, total: job.total } : undefined;
 }
 
 /** Veritabanındaki klonların sağlayıcı kimlikleri; hazır ses listesinden ayıklanır. */
@@ -1603,9 +1666,148 @@ async function resolveVoice(
 }
 
 /**
- * Gerçek seslendirme. Kredi yalnız başarıda düşer: bakiye ön kontrolü, sağlayıcı
- * çağrısı, ardından tek transaction'da düşüm ve kayıt. Düşüm eşzamanlı başka bir
- * istek yüzünden başarısız olursa üretilen dosya silinir.
+ * Parçaların sesi tek MP3'te birleşir; altyazı zamanları her parçanın birleşik
+ * dosyadaki başlangıcına kaydırılır. Zamanlaması eksik parça varsa altyazı
+ * üretilmez. MP3 okunamazsa null.
+ */
+function assembleSpeech(results: SpeechResult[]): { audio: Uint8Array; cues: Cue[] } | null {
+  const cuesOf = (timed: { alignment: SpeechAlignment | null; offset: number }[]) =>
+    timed.every((t) => t.alignment)
+      ? buildCues(timed as { alignment: SpeechAlignment; offset: number }[])
+      : [];
+  if (results.length === 1) {
+    const only = results[0]!;
+    return { audio: only.audio, cues: cuesOf([{ alignment: only.alignment, offset: 0 }]) };
+  }
+  const parts = results.map((r) => readMp3(r.audio));
+  if (parts.some((p) => !p)) return null;
+  let offset = 0;
+  const timed = parts.map((p, i) => {
+    const at = { alignment: results[i]!.alignment, offset };
+    offset += p!.seconds;
+    return at;
+  });
+  return { audio: concatBytes(parts.map((p) => p!.data)), cues: cuesOf(timed) };
+}
+
+/** Ses ve (varsa) altyazı depoya yazılır. */
+async function storeSpeech(
+  storage: FileStorage,
+  userId: string,
+  id: string,
+  speech: { audio: Uint8Array; cues: Cue[] },
+): Promise<{ audioKey: string; captionsKey: string | null }> {
+  const audioKey = `${userId}/${id}.mp3`;
+  await storage.put(audioKey, speech.audio);
+  if (!speech.cues.length) return { audioKey, captionsKey: null };
+  const captionsKey = `${userId}/${id}-captions.json`;
+  await storage.put(captionsKey, encodeCues(speech.cues));
+  return { audioKey, captionsKey };
+}
+
+const removeSpeech = (
+  storage: FileStorage,
+  keys: { audioKey: string; captionsKey: string | null },
+) => Promise.all([keys.audioKey, keys.captionsKey].flatMap((k) => (k ? [storage.remove(k)] : [])));
+
+/** Geçici hata (ağ, zaman aşımı, 429, 5xx) bir kez yeniden denenir. */
+async function synthesizeWithRetry(
+  deps: SpeechDeps,
+  ...args: Parameters<TtsProvider["synthesize"]>
+): Promise<SpeechResult> {
+  try {
+    return await deps.tts.synthesize(...args);
+  } catch (err) {
+    if (err instanceof TtsError && err.status !== 429 && err.status < 500) throw err;
+    await new Promise((r) => setTimeout(r, deps.retryDelayMs ?? 2_000));
+    return deps.tts.synthesize(...args);
+  }
+}
+
+/** En çok `limit` iş aynı anda; biri başarısız olursa yenisi başlamaz. */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = new Array<R>(items.length);
+  let next = 0;
+  let failed = false;
+  const worker = async () => {
+    while (next < items.length && !failed) {
+      const i = next++;
+      try {
+        out[i] = await fn(items[i]!, i);
+      } catch (err) {
+        failed = true;
+        throw err;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+const head = (s: string | undefined) =>
+  s === undefined ? undefined : [...s].slice(0, SPEECH_CONTEXT_CHARS).join("");
+const tail = (s: string | undefined) =>
+  s === undefined ? undefined : [...s].slice(-SPEECH_CONTEXT_CHARS).join("");
+
+/**
+ * Uzun metnin arka plan işi: parçalar (en çok ikisi aynı anda) seslendirilir,
+ * birleştirilir ve kayıt tamamlanır. Herhangi bir parça başarısız olursa kredi
+ * aynı paketlere iade edilir. Bu arada kayıt silinmiş ya da iade edilmişse
+ * yazılan dosyalar kaldırılır.
+ */
+async function runLongSpeech(
+  db: Db,
+  deps: SpeechDeps,
+  row: GenerationRow,
+  job: SpeechJob,
+  input: { providerVoiceId: string; chunks: string[]; settings: VoiceSettings | null },
+): Promise<void> {
+  const { chunks } = input;
+  try {
+    const results = await mapLimit(chunks, SPEECH_CONCURRENCY, async (chunk, i) => {
+      if (job.cancelled) throw new Error("üretim silindi");
+      const result = await synthesizeWithRetry(
+        deps,
+        input.providerVoiceId,
+        chunk,
+        input.settings ?? undefined,
+        { previousText: tail(chunks[i - 1]), nextText: head(chunks[i + 1]) },
+      );
+      job.done += 1;
+      return result;
+    });
+    const speech = assembleSpeech(results);
+    if (!speech) throw new Error("ses parçaları birleştirilemedi");
+    const keys = await storeSpeech(deps.storage, row.userId, row.id, speech);
+    const res = await db
+      .update(generations)
+      .set({ status: null, ...keys })
+      .where(and(eq(generations.id, row.id), eq(generations.status, "pending")));
+    if (res.rowsAffected === 0) await removeSpeech(deps.storage, keys);
+  } catch (err) {
+    if (!job.cancelled) {
+      console.error("[ses] uzun seslendirme başarısız:", err instanceof Error ? err.message : err);
+    }
+    await failGeneration(db, row);
+  } finally {
+    speechJobs.delete(row.id);
+  }
+}
+
+/**
+ * Gerçek seslendirme. Kısa metin (tek parça) hemen seslendirilir; kredi yalnız
+ * başarıda düşer: bakiye ön kontrolü, sağlayıcı çağrısı, ardından tek
+ * transaction'da düşüm ve kayıt. Düşüm eşzamanlı başka bir istek yüzünden
+ * başarısız olursa üretilen dosya silinir.
+ *
+ * 5.000 karakteri aşan metin parçalara bölünür ve arka planda seslendirilir:
+ * kredi hemen düşer (beklerken başka harcamada kullanılmasın), kayıt "pending"
+ * döner, iş başarısız olursa kredi iade edilir. Altyazı, sağlayıcı zamanlama
+ * verdiyse sesle birlikte kaydedilir.
  */
 export async function generateSpeech(
   db: Db,
@@ -1637,22 +1839,29 @@ export async function generateSpeech(
   );
   if (balance(grants, "voice", now) < cost) return { ok: false, error: "insufficient" };
 
+  const chunks = splitForSpeech(text);
+  const long = chunks.length > 1;
+  if (long) {
+    const pending = await db
+      .select({ n: count() })
+      .from(generations)
+      .where(
+        and(
+          eq(generations.userId, userId),
+          eq(generations.type, "tts"),
+          eq(generations.status, "pending"),
+        ),
+      )
+      .get();
+    if ((pending?.n ?? 0) >= SPEECH_MAX_PENDING) return { ok: false, error: "limit" };
+  }
+
   const key = `tts:user:${userId}`;
   const stop = await blocked(db, [[key, LIMITS.ttsPerUser]], now);
   if (stop) return stop;
   await recordAttempt(db, key, now);
 
-  let audio: Uint8Array;
-  try {
-    audio = await deps.tts.synthesize(providerVoiceId, text, settings ?? undefined);
-  } catch (err) {
-    console.error("[ses] seslendirme başarısız:", err instanceof Error ? err.message : err);
-    return { ok: false, error: "providerFailed" };
-  }
-
   const id = randomUUID();
-  const audioKey = `${userId}/${id}.mp3`;
-  await deps.storage.put(audioKey, audio);
   const row: GenerationRow = {
     id,
     userId,
@@ -1661,22 +1870,105 @@ export async function generateSpeech(
     voiceId: input.voiceId,
     style: null,
     images: null,
-    audioKey,
+    audioKey: null,
     files: null,
-    status: null,
+    status: long ? "pending" : null,
     job: null,
     charges: null,
     projectId: null,
     title: null,
     voiceSettings: settings,
+    captionsKey: null,
     cost,
     createdAt: now.toISOString(),
   };
+
+  if (long) {
+    // İş, kayıt görünür olmadan önce listeye girer: aradaki kontrol onu yarım sanmasın.
+    const job: SpeechJob = { total: chunks.length, done: 0, cancelled: false };
+    speechJobs.set(id, job);
+    let charged = false;
+    try {
+      charged = await chargeAndRecord(db, userId, "voice", cost, row, now, input);
+    } finally {
+      if (!charged) speechJobs.delete(id);
+    }
+    if (!charged) return { ok: false, error: "insufficient" };
+    void runLongSpeech(db, deps, row, job, { providerVoiceId, chunks, settings }).catch(
+      (err: unknown) =>
+        console.error("[ses] uzun seslendirme işi:", err instanceof Error ? err.message : err),
+    );
+    return { ok: true, generation: toGeneration(row) };
+  }
+
+  let speech: { audio: Uint8Array; cues: Cue[] } | null;
+  try {
+    speech = assembleSpeech([
+      await deps.tts.synthesize(providerVoiceId, text, settings ?? undefined),
+    ]);
+  } catch (err) {
+    console.error("[ses] seslendirme başarısız:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "providerFailed" };
+  }
+  if (!speech) return { ok: false, error: "providerFailed" };
+
+  const keys = await storeSpeech(deps.storage, userId, id, speech);
+  Object.assign(row, keys);
   if (!(await chargeAndRecord(db, userId, "voice", cost, row, now, input))) {
-    await deps.storage.remove(audioKey);
+    await removeSpeech(deps.storage, keys);
     return { ok: false, error: "insufficient" };
   }
   return { ok: true, generation: toGeneration(row) };
+}
+
+/** Bekleyen uzun seslendirme bu süreçte çalışmıyorsa yarım kalmıştır: kredi iade edilir. */
+async function settleSpeech(db: Db, row: GenerationRow): Promise<GenerationRow> {
+  if (row.status !== "pending" || speechJobs.has(row.id)) return row;
+  return failGeneration(db, row);
+}
+
+/**
+ * Bekleyen üretimin durumu (stüdyo sayfası düzenli çağırır): video sağlayıcıdan
+ * sorulur, uzun seslendirme yarım kaldıysa iade edilir.
+ */
+export async function refreshPending(
+  db: Db,
+  video: VideoDeps | null,
+  userId: string,
+  id: string,
+  now: Date,
+): Promise<Result<{ generation: Generation }, "notFound">> {
+  const row = await db
+    .select()
+    .from(generations)
+    .where(and(eq(generations.id, id), eq(generations.userId, userId)))
+    .get();
+  if (!row) return { ok: false, error: "notFound" };
+  const fresh =
+    row.type === "tts"
+      ? await settleSpeech(db, row)
+      : row.type === "video" && video
+        ? await settleVideo(db, video, row, now)
+        : row;
+  return { ok: true, generation: toGeneration(fresh) };
+}
+
+/**
+ * Sunucu yeniden başlayınca yarım kalan uzun seslendirmeler: kredi iade edilir
+ * (günlük bakım çağırır). İade edilen kayıt sayısını döner.
+ */
+export async function failOrphanSpeech(db: Db): Promise<number> {
+  const rows = await db
+    .select()
+    .from(generations)
+    .where(and(eq(generations.type, "tts"), eq(generations.status, "pending")));
+  let n = 0;
+  for (const row of rows) {
+    if (speechJobs.has(row.id)) continue;
+    await failGeneration(db, row);
+    n += 1;
+  }
+  return n;
 }
 
 // ---------------------------------------------------------------- ses klonu

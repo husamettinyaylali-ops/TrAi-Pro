@@ -38,6 +38,7 @@ import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as MediaAudioIdRouteImport } from './routes/media/audio/$id'
 import { Route as MediaProjectIdRouteImport } from './routes/media/project/$id'
+import { Route as MediaSubtitleIdRouteImport } from './routes/media/subtitle/$id'
 import { Route as MediaFileIdIndexRouteImport } from './routes/media/file/$id/$index'
 
 const IndexRoute = IndexRouteImport.update({
@@ -185,6 +186,11 @@ const MediaProjectIdRoute = MediaProjectIdRouteImport.update({
   path: '/media/project/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MediaSubtitleIdRoute = MediaSubtitleIdRouteImport.update({
+  id: '/media/subtitle/$id',
+  path: '/media/subtitle/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MediaFileIdIndexRoute = MediaFileIdIndexRouteImport.update({
   id: '/media/file/$id/$index',
   path: '/media/file/$id/$index',
@@ -221,6 +227,7 @@ export interface FileRoutesByFullPath {
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
   '/media/project/$id': typeof MediaProjectIdRoute
+  '/media/subtitle/$id': typeof MediaSubtitleIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -253,6 +260,7 @@ export interface FileRoutesByTo {
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
   '/media/project/$id': typeof MediaProjectIdRoute
+  '/media/subtitle/$id': typeof MediaSubtitleIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRoutesById {
@@ -286,6 +294,7 @@ export interface FileRoutesById {
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/media/audio/$id': typeof MediaAudioIdRoute
   '/media/project/$id': typeof MediaProjectIdRoute
+  '/media/subtitle/$id': typeof MediaSubtitleIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -320,6 +329,7 @@ export interface FileRouteTypes {
     | '/auth/google/callback'
     | '/media/audio/$id'
     | '/media/project/$id'
+    | '/media/subtitle/$id'
     | '/media/file/$id/$index'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -352,6 +362,7 @@ export interface FileRouteTypes {
     | '/auth/google/callback'
     | '/media/audio/$id'
     | '/media/project/$id'
+    | '/media/subtitle/$id'
     | '/media/file/$id/$index'
   id:
     | '__root__'
@@ -384,6 +395,7 @@ export interface FileRouteTypes {
     | '/auth/google/callback'
     | '/media/audio/$id'
     | '/media/project/$id'
+    | '/media/subtitle/$id'
     | '/media/file/$id/$index'
   fileRoutesById: FileRoutesById
 }
@@ -416,6 +428,7 @@ export interface RootRouteChildren {
   ApiV1SplatRoute: typeof ApiV1SplatRoute
   MediaAudioIdRoute: typeof MediaAudioIdRoute
   MediaProjectIdRoute: typeof MediaProjectIdRoute
+  MediaSubtitleIdRoute: typeof MediaSubtitleIdRoute
   MediaFileIdIndexRoute: typeof MediaFileIdIndexRoute
 }
 
@@ -624,6 +637,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MediaProjectIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/media/subtitle/$id': {
+      id: '/media/subtitle/$id'
+      path: '/media/subtitle/$id'
+      fullPath: '/media/subtitle/$id'
+      preLoaderRoute: typeof MediaSubtitleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/media/file/$id/$index': {
       id: '/media/file/$id/$index'
       path: '/media/file/$id/$index'
@@ -675,6 +695,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiV1SplatRoute: ApiV1SplatRoute,
   MediaAudioIdRoute: MediaAudioIdRoute,
   MediaProjectIdRoute: MediaProjectIdRoute,
+  MediaSubtitleIdRoute: MediaSubtitleIdRoute,
   MediaFileIdIndexRoute: MediaFileIdIndexRoute,
 }
 export const routeTree = rootRouteImport

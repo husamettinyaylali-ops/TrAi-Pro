@@ -4,7 +4,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { env } from "./env.server";
 
 /**
- * Üretilen dosyaların (ses, görsel, video) deposu. Anahtar biçimi
+ * Üretilen dosyaların (ses, altyazı, görsel, video) deposu. Anahtar biçimi
  * `<kullanıcı>/<dosya>.<uzantı>`; hesap silinince kullanıcı öneki toptan silinir.
  * Yayın ortamına göre (ör. R2/S3) değiştirilebilir.
  */
@@ -16,7 +16,7 @@ export interface FileStorage {
   removePrefix(prefix: string): Promise<void>;
 }
 
-const KEY_RE = /^[A-Za-z0-9-]+(\/[A-Za-z0-9-]+)*(\.(mp3|jpg|png|webp|mp4))?$/;
+const KEY_RE = /^[A-Za-z0-9-]+(\/[A-Za-z0-9-]+)*(\.(mp3|jpg|png|webp|mp4|json))?$/;
 
 /** Anahtar yalnız kendi ürettiğimiz biçimde olabilir; dizin dışına çıkış engellenir. */
 function pathFor(root: string, key: string): string {

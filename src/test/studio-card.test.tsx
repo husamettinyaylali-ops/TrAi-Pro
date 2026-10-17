@@ -116,6 +116,53 @@ describe("stüdyo üretim kartı", () => {
     });
     expect(screen.getByText("Video üretilemedi; 15 kredi iade edildi.")).toBeInTheDocument();
   });
+
+  it("altyazılı seste indirme menüsü MP3, SRT ve VTT sunar", async () => {
+    renderCard({
+      ...speech,
+      audioUrl: "/media/audio/s1",
+      subtitleUrl: "/media/subtitle/s1",
+    });
+    const trigger = screen.getByRole("button", { name: "İndir" });
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    const links = await screen.findAllByRole("menuitem");
+    expect(links.map((l) => [l.textContent?.trim(), l.getAttribute("href")])).toEqual([
+      ["Ses (MP3)", "/media/audio/s1?download=1"],
+      ["Altyazı (SRT)", "/media/subtitle/s1?format=srt&download=1"],
+      ["Altyazı (VTT)", "/media/subtitle/s1?format=vtt&download=1"],
+    ]);
+  });
+
+  it("altyazısı olmayan seste tek indirme bağlantısı", () => {
+    renderCard({ ...speech, audioUrl: "/media/audio/s1" });
+    expect(screen.getByRole("link", { name: "İndir" })).toHaveAttribute(
+      "href",
+      "/media/audio/s1?download=1",
+    );
+  });
+
+  it("uzun seslendirme ilerlemeyi gösterir; başarısızsa iadeyi söyler", () => {
+    const { unmount } = render(
+      <I18nProvider>
+        <GenerationCard
+          g={{ ...speech, status: "pending", progress: { done: 2, total: 5 }, cost: 24_000 }}
+          voices={stockVoices}
+          showProject={false}
+          onEdit={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Uzun metin seslendiriliyor: 2 / 5 parça.",
+    );
+    expect(screen.getByRole("progressbar")).toHaveAttribute("value", "2");
+    expect(screen.queryByRole("button", { name: "Yeniden üret" })).toBeNull();
+    unmount();
+    renderCard({ ...speech, status: "failed", cost: 24_000 });
+    expect(
+      screen.getByText("Seslendirme tamamlanamadı; 24.000 kredi iade edildi."),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("yeniden üretim girdisi", () => {

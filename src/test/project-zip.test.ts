@@ -7,6 +7,7 @@ import { crc32 } from "node:zlib";
 
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { encodeCues } from "@/server/captions.server";
 import { openDb, type Db } from "@/server/db.server";
 import { localFileStorage, type FileStorage } from "@/server/file-storage.server";
 import { slugify, serveProjectZip } from "@/server/project-zip.server";
@@ -127,9 +128,18 @@ describe("proje ZIP'i", () => {
     if (!p.ok) throw new Error(p.error);
     const pid = p.project.id;
     await storage.put(`${a.id}/ses-1.mp3`, bytes("MP3"));
+    await storage.put(
+      `${a.id}/ses-1-captions.json`,
+      encodeCues([{ start: 0, end: 1200, text: "Merhaba" }]),
+    );
     await storage.put(`${a.id}/img-1.jpg`, bytes("JPG1"));
     await storage.put(`${a.id}/img-2.jpg`, bytes("JPG2"));
-    await row(a.id, pid, 1, { title: "Giriş", text: "Merhaba", audioKey: `${a.id}/ses-1.mp3` });
+    await row(a.id, pid, 1, {
+      title: "Giriş",
+      text: "Merhaba",
+      audioKey: `${a.id}/ses-1.mp3`,
+      captionsKey: `${a.id}/ses-1-captions.json`,
+    });
     await row(a.id, pid, 2, {
       type: "image",
       text: "mavi kuş",
@@ -155,16 +165,20 @@ describe("proje ZIP'i", () => {
     const files = readZip(new Uint8Array(await res.arrayBuffer()));
     expect([...files.keys()]).toEqual([
       "ses/001-giris.mp3",
+      "ses/001-giris.srt",
       "gorsel/002-mavi-kus-1.jpg",
       "gorsel/002-mavi-kus-2.jpg",
       "icerik.txt",
     ]);
     expect(new TextDecoder().decode(files.get("gorsel/002-mavi-kus-2.jpg"))).toBe("JPG2");
+    expect(new TextDecoder().decode(files.get("ses/001-giris.srt"))).toBe(
+      "1\r\n00:00:00,000 --> 00:00:01,200\r\nMerhaba\r\n",
+    );
     const manifest = new TextDecoder().decode(files.get("icerik.txt"));
     expect(manifest).toContain("Proje: Bölüm 12");
     expect(manifest).toContain("Teslim cuma");
     expect(manifest).toContain("001 · Ses · Giriş");
-    expect(manifest).toContain("Dosya: ses/001-giris.mp3");
+    expect(manifest).toContain("Dosya: ses/001-giris.mp3, ses/001-giris.srt");
     expect(manifest).toContain("003 · Video");
     expect(manifest).toContain("(Demo üretim: dosya yok)");
     expect(manifest).toContain("gemi");

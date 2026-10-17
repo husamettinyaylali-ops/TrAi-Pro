@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 
 import { clock } from "@/lib/clock";
 
+import { parseCues, toSrt, toVtt } from "./captions.server";
 import { fileStorage, type FileStorage } from "./file-storage.server";
 import { parseCookies } from "./cookies.server";
 import { getDb, type Db } from "./db.server";
@@ -89,6 +90,60 @@ export async function ownedFileResponse(
 /** GET /media/audio/:id — üretilen ses. */
 export function serveAudio(request: Request, id: string, deps: MediaDeps = {}) {
   return serveOwned(request, id, (r) => r.audioKey, deps);
+}
+
+/**
+ * Seslendirmenin altyazısı SRT (varsayılan) ya da WebVTT olarak (`format=vtt`),
+ * yalnız sahibine. Oturum ya da API anahtarıyla doğrulanmış kullanıcı için.
+ */
+export async function ownedSubtitleResponse(
+  db: Db,
+  storage: FileStorage,
+  userId: string,
+  id: string,
+  format: "srt" | "vtt",
+  download: boolean,
+): Promise<Response> {
+  const row = await db
+    .select({ key: generations.captionsKey })
+    .from(generations)
+    .where(and(eq(generations.id, id), eq(generations.userId, userId)))
+    .get();
+  const raw = row?.key ? await storage.read(row.key) : null;
+  const cues = raw ? parseCues(raw) : null;
+  if (!cues) return new Response("Bulunamadı", { status: 404 });
+  const body = new TextEncoder().encode(format === "vtt" ? toVtt(cues) : toSrt(cues));
+  return new Response(body, {
+    headers: {
+      "content-type":
+        format === "vtt" ? "text/vtt; charset=utf-8" : "application/x-subrip; charset=utf-8",
+      "content-length": String(body.byteLength),
+      "cache-control": "private, max-age=3600",
+      "x-content-type-options": "nosniff",
+      "content-disposition": download
+        ? `attachment; filename="trai-pro-${id.slice(0, 8)}.${format}"`
+        : "inline",
+    },
+  });
+}
+
+export const subtitleFormat = (url: string): "srt" | "vtt" =>
+  new URL(url).searchParams.get("format") === "vtt" ? "vtt" : "srt";
+
+/** GET /media/subtitle/:id — seslendirmenin altyazısı (`?format=vtt`, `?download=1`). */
+export async function serveSubtitle(request: Request, id: string, deps: MediaDeps = {}) {
+  const db = deps.db ?? (await getDb());
+  const user = await requestUser(request, db, deps.now ?? clock());
+  if (!user) return new Response("Oturum gerekli", { status: 401 });
+  const download = new URL(request.url).searchParams.has("download");
+  return ownedSubtitleResponse(
+    db,
+    deps.storage ?? fileStorage(),
+    user.id,
+    id,
+    subtitleFormat(request.url),
+    download,
+  );
 }
 
 /** GET /media/file/:id/:index — üretilen görsel ya da video dosyası. */

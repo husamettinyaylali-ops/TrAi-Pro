@@ -12,7 +12,13 @@ export interface Grant {
 
 const DAY = 86_400_000;
 
-export const MAX_TTS_CHARS = 5_000;
+/** Tek seslendirmede en uzun metin (karakter). */
+export const MAX_TTS_CHARS = 50_000;
+/**
+ * Tek istekte seslendirilen en uzun metin. Daha uzunu cümle sınırlarından
+ * parçalara bölünür, arka planda seslendirilip tek dosyada birleştirilir.
+ */
+export const TTS_CHUNK_CHARS = 5_000;
 export const MAX_CLONES = 5;
 export const MEDIA_COST = { image: 1, video: 15 } as const;
 /** Tek istekte üretilebilecek görsel sayıları. */

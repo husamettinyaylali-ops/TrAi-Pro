@@ -5,6 +5,7 @@ import { MAX_ZIP_GENERATIONS } from "@/lib/projects";
 import { LIMITS } from "@/lib/rate-limit";
 import type { GenerationType } from "@/lib/types";
 
+import { parseCues, toSrt } from "./captions.server";
 import { getDb } from "./db.server";
 import { fileStorage } from "./file-storage.server";
 import { requestUser, type MediaDeps } from "./media.server";
@@ -29,7 +30,7 @@ const COPY = {
     files: "Dosya",
     text: "Metin / istem",
     demo: "Demo üretim: dosya yok",
-    pending: "Video hazırlanıyor: dosya henüz yok",
+    pending: "Hazırlanıyor: dosya henüz yok",
     failed: "Üretilemedi; kredi iade edildi",
     skipped: "Boyut sınırı ya da okuma hatası yüzünden eklenemeyen dosyalar",
     truncated: (n: number) => `Arşive yalnız ilk ${n} üretim alındı.`,
@@ -46,7 +47,7 @@ const COPY = {
     files: "Files",
     text: "Text / prompt",
     demo: "Demo result: no file",
-    pending: "Video in progress: no file yet",
+    pending: "In progress: no file yet",
     failed: "Failed; credits were refunded",
     skipped: "Files left out because of the size limit or a read error",
     truncated: (n: number) => `Only the first ${n} results were included.`,
@@ -138,6 +139,19 @@ export async function serveProjectZip(
     const base = `${c.folders[g.type as GenerationType]}/${String(i + 1).padStart(3, "0")}-${slugify(g.title ?? g.text)}`;
     const names = keys.map((k, j) => `${base}${keys.length > 1 ? `-${j + 1}` : ""}.${ext(k)}`);
     keys.forEach((k, j) => entries.push({ name: names[j]!, data: () => storage.read(k) }));
+    // Seslendirmenin altyazısı sesin yanında SRT olarak.
+    const captionsKey = g.captionsKey;
+    if (captionsKey) {
+      names.push(`${base}.srt`);
+      entries.push({
+        name: `${base}.srt`,
+        data: async () => {
+          const raw = await storage.read(captionsKey);
+          const cues = raw ? parseCues(raw) : null;
+          return cues ? new TextEncoder().encode(toSrt(cues)) : null;
+        },
+      });
+    }
     return { g, names, n: i + 1 };
   });
 

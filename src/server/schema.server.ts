@@ -132,7 +132,7 @@ export const generations = sqliteTable(
     /** Gerçek görsel/video üretiminde dosyaların depodaki anahtarları; demo üretimde boş. */
     files: text("files", { mode: "json" }).$type<string[]>(),
     /**
-     * Uzun süren üretimde (video) iş durumu; boşsa tamamlanmış sayılır.
+     * Uzun süren üretimde (video, uzun seslendirme) iş durumu; boşsa tamamlanmış sayılır.
      * "failed" olan işin kredisi iade edilmiştir.
      */
     status: text("status", { enum: ["pending", "failed"] }),
@@ -158,6 +158,8 @@ export const generations = sqliteTable(
     title: text("title"),
     /** Seslendirme ayarları (hız, kararlılık, benzerlik, stil); varsayılansa boş. */
     voiceSettings: text("voice_settings", { mode: "json" }).$type<VoiceSettings>(),
+    /** Seslendirmenin altyazısı (zamanlı satırlar, JSON) depodaki anahtarı; yoksa boş. */
+    captionsKey: text("captions_key"),
   },
   (t) => [
     index("generations_user_idx").on(t.userId),

@@ -154,6 +154,9 @@ const tr = {
     suggest: { tts: "Seslendirme yap", image: "Kapak görseli üret", video: "Kısa video üret" },
     download: "İndir",
     downloadImage: (n: number) => `Görsel ${n}`,
+    downloadAudio: "Ses (MP3)",
+    downloadSrt: "Altyazı (SRT)",
+    downloadVtt: "Altyazı (VTT)",
     edit: "Düzenle",
     again: "Yeniden üret",
     againHint: (n: string) => `Aynı ayarlarla yeniden üretir; ${n} kredi harcanır.`,
@@ -173,6 +176,7 @@ const tr = {
     cloneHint: "Ses klonlarını yukarıda yönet; hazır klonlar Ses aracında listelenir.",
     images: (n: string) => `${n} görsel`,
     chars: (n: string, max: string) => `${n} / ${max} karakter`,
+    longNote: (n: string) => `Uzun metin: ${n} parçada arka planda seslendirilir.`,
     credits: (n: string) => `${n} kredi`,
     needsPass: "Görsel ve video için aktif bir Video & Görsel paketi gerekir.",
     working: "Üretiliyor…",
@@ -411,6 +415,11 @@ const tr = {
       download: "MP3 indir",
       serviceDown: "Ses servisine şu an ulaşılamıyor. Biraz sonra sayfayı yenile.",
       unknownVoice: "Ses",
+      longPending: "Uzun metin seslendiriliyor… Bu sayfadan ayrılabilirsin.",
+      longProgress: (done: string, total: string) =>
+        `Uzun metin seslendiriliyor: ${done} / ${total} parça. Bu sayfadan ayrılabilirsin.`,
+      failedRefund: (n: string) => `Seslendirme tamamlanamadı; ${n} kredi iade edildi.`,
+      tooMany: "Aynı anda en fazla 2 uzun metin seslendirilebilir; birinin bitmesini bekle.",
     },
     clone: {
       name: "Ses adı",
@@ -704,18 +713,20 @@ const tr = {
     endpoints: {
       me: "Kredilerin (ses ve video/görsel) ve USD bakiyen.",
       voices: "Seslendirmede kullanabileceğin hazır sesler ve kendi ses klonların.",
-      tts: "Metni sese çevirir (MP3). Boşluklar dahil karakter başına 1 Ses AI kredisi.",
+      tts: 'Metni sese çevirir (MP3) ve altyazısını hazırlar. Boşluklar dahil karakter başına 1 Ses AI kredisi. 5.000 karaktere kadar metin hemen döner (201); daha uzunu arka planda seslendirilir ve 202 ile "pending" döner.',
       images:
         "Metinden görsel üretir: 1, 2 ya da 4 adet, 1024×1024 JPEG. Görsel başına 1 Video & Görsel kredisi.",
       videos:
         "Metinden 5 saniyelik video işini başlatır ve 202 döner. Video başına 15 Video & Görsel kredisi.",
       generation:
-        "Üretimin durumu ve dosya adresleri. Bekleyen video bu istekte sağlayıcıdan da kontrol edilir.",
+        "Üretimin durumu, dosya ve altyazı adresleri. Bekleyen video bu istekte sağlayıcıdan da kontrol edilir; uzun seslendirmede progress kaç parçanın bittiğini gösterir.",
       file: "Üretimin dosyasını indirir (MP3, JPEG ya da MP4). Anahtar başlığı burada da gerekir.",
+      subtitles:
+        "Seslendirmenin altyazısını indirir: format=srt (varsayılan) ya da format=vtt. Yalnız altyazısı olan seslendirmede vardır (yanıttaki subtitles alanı).",
     },
     fieldsTitle: "Gövde alanları",
     fields: {
-      text: "Seslendirilecek metin, en çok 5.000 karakter.",
+      text: "Seslendirilecek metin, en çok 50.000 karakter. 5.000 karakteri aşan metin cümle sınırlarından parçalara bölünüp tek MP3'te birleştirilir.",
       voiceId: "GET /voices'tan bir ses kimliği.",
       voiceSettings:
         "İsteğe bağlı ses ayarları: speed (0,7–1,2), stability, similarity ve style (0–1). Verilmeyen değer varsayılan kalır; aralık dışı değer kırpılır.",
@@ -724,9 +735,9 @@ const tr = {
       style: "Video stili: cinematic, anime, 3d ya da documentary (varsayılan cinematic).",
     },
     responseTitle: "Örnek yanıt",
-    videoFlowTitle: "Video akışı",
+    videoFlowTitle: "Video ve uzun seslendirme akışı",
     videoFlow:
-      'Video birkaç dakika sürer. POST /videos\'tan dönen kimlikle GET /generations/:id\'yi 10–15 saniyede bir sorgula. status "completed" olunca files\'taki adresten indir. İş başarısız olursa ("failed") kredi iade edilir.',
+      'Video ve uzun seslendirme birkaç dakika sürer. Dönen kimlikle GET /generations/:id\'yi 10–15 saniyede bir sorgula. status "completed" olunca files\'taki adresten (seslendirmede subtitles\'taki altyazıyla birlikte) indir. İş başarısız olursa ("failed") kredi iade edilir.',
     errorsTitle: "Hatalar",
     errorsIntro: "Başarısız istekler HTTP durum koduyla birlikte şu biçimde döner:",
     errorCols: { code: "Kod", status: "Durum", meaning: "Anlamı" },
@@ -736,7 +747,7 @@ const tr = {
       ["insufficient_credits", "402", "Yeterli kredi yok; kredi düşülmedi."],
       ["not_found", "404", "Uç nokta ya da üretim bulunamadı."],
       ["method_not_allowed", "405", "Bu uç nokta bu HTTP yöntemini kabul etmiyor."],
-      ["limit", "409", "Aynı anda en fazla 3 video hazırlanabilir."],
+      ["limit", "409", "Aynı anda en fazla 3 video ya da 2 uzun seslendirme hazırlanabilir."],
       ["content_rejected", "422", "İçerik filtresine takıldı; kredi düşülmedi."],
       ["rate_limited", "429", "Çok fazla istek; Retry-After başlığındaki saniye kadar bekle."],
       ["provider_failed", "502", "Üretim servisi hata verdi; kredi düşülmedi."],
@@ -745,14 +756,14 @@ const tr = {
     limitsTitle: "Sınırlar",
     limits: [
       "Anahtar başına dakikada 120 istek.",
-      "Seslendirme: dakikada 20 istek.",
+      "Seslendirme: dakikada 20 istek; aynı anda en fazla 2 uzun metin.",
       "Görsel: 10 dakikada 30 istek.",
       "Video: saatte 10 istek; aynı anda en fazla 3 video.",
       "Sınır aşılınca 429 ve Retry-After (saniye) döner.",
     ],
     creditsTitle: "Krediler",
     credits:
-      "Seslendirme ve görselde kredi yalnız başarılı üretimde düşer. Videoda kredi iş gönderilince düşer, iş başarısız olursa iade edilir. Kredi almak için fiyatlandırma sayfasına bak.",
+      "Kısa seslendirme ve görselde kredi yalnız başarılı üretimde düşer. Video ve uzun seslendirmede kredi iş başlayınca düşer, iş başarısız olursa iade edilir. Kredi almak için fiyatlandırma sayfasına bak.",
     seePricing: "Fiyatlandırma",
   },
 
@@ -1059,6 +1070,9 @@ const en: Dict = {
     suggest: { tts: "Generate speech", image: "Make a cover image", video: "Make a short video" },
     download: "Download",
     downloadImage: (n) => `Image ${n}`,
+    downloadAudio: "Audio (MP3)",
+    downloadSrt: "Subtitles (SRT)",
+    downloadVtt: "Subtitles (VTT)",
     edit: "Edit",
     again: "Regenerate",
     againHint: (n) => `Regenerates with the same settings; uses ${n} credits.`,
@@ -1078,6 +1092,7 @@ const en: Dict = {
     cloneHint: "Manage your voice clones above; ready clones appear in the Voice tool.",
     images: (n) => `${n} images`,
     chars: (n, max) => `${n} / ${max} characters`,
+    longNote: (n) => `Long text: voiced in the background in ${n} parts.`,
     credits: (n) => `${n} credits`,
     needsPass: "Images and videos need an active Video & Image pack.",
     working: "Generating…",
@@ -1314,6 +1329,11 @@ const en: Dict = {
       download: "Download MP3",
       serviceDown: "The voice service is unreachable right now. Refresh the page in a moment.",
       unknownVoice: "Voice",
+      longPending: "Voicing long text… You can leave this page.",
+      longProgress: (done, total) =>
+        `Voicing long text: ${done} / ${total} parts. You can leave this page.`,
+      failedRefund: (n) => `The voiceover couldn't be completed; ${n} credits were refunded.`,
+      tooMany: "Up to 2 long texts can be voiced at once; wait for one to finish.",
     },
     clone: {
       name: "Voice name",
@@ -1610,18 +1630,20 @@ const en: Dict = {
     endpoints: {
       me: "Your credits (voice and video/image) and USD balance.",
       voices: "Stock voices and your own voice clones available for speech.",
-      tts: "Turns text into speech (MP3). 1 Voice AI credit per character, spaces included.",
+      tts: 'Turns text into speech (MP3) and prepares its subtitles. 1 Voice AI credit per character, spaces included. Texts up to 5,000 characters return right away (201); longer ones are voiced in the background and return 202 with "pending".',
       images:
         "Generates images from text: 1, 2 or 4, 1024×1024 JPEG. 1 Video & Image credit per image.",
       videos:
         "Starts a 5-second text-to-video job and returns 202. 15 Video & Image credits per video.",
       generation:
-        "A generation's status and file URLs. A pending video is also checked with the provider on this request.",
+        "A generation's status, file and subtitle URLs. A pending video is also checked with the provider on this request; for long speech, progress shows how many parts are done.",
       file: "Downloads a generation's file (MP3, JPEG or MP4). The key header is required here too.",
+      subtitles:
+        "Downloads a voiceover's subtitles: format=srt (default) or format=vtt. Only available when the voiceover has subtitles (the subtitles field in the response).",
     },
     fieldsTitle: "Body fields",
     fields: {
-      text: "Text to speak, up to 5,000 characters.",
+      text: "Text to speak, up to 50,000 characters. Text over 5,000 characters is split at sentence boundaries and joined into one MP3.",
       voiceId: "A voice ID from GET /voices.",
       voiceSettings:
         "Optional voice settings: speed (0.7–1.2), stability, similarity and style (0–1). Omitted values stay at the default; out-of-range values are clamped.",
@@ -1630,9 +1652,9 @@ const en: Dict = {
       style: "Video style: cinematic, anime, 3d or documentary (default cinematic).",
     },
     responseTitle: "Example response",
-    videoFlowTitle: "Video flow",
+    videoFlowTitle: "Video and long speech flow",
     videoFlow:
-      'Videos take a few minutes. Poll GET /generations/:id with the ID returned by POST /videos every 10–15 seconds. When status is "completed", download from the URL in files. If the job fails ("failed"), the credits are refunded.',
+      'Videos and long voiceovers take a few minutes. Poll GET /generations/:id with the returned ID every 10–15 seconds. When status is "completed", download from the URL in files (for speech, together with the subtitles in subtitles). If the job fails ("failed"), the credits are refunded.',
     errorsTitle: "Errors",
     errorsIntro: "Failed requests return this shape along with the HTTP status code:",
     errorCols: { code: "Code", status: "Status", meaning: "Meaning" },
@@ -1642,7 +1664,7 @@ const en: Dict = {
       ["insufficient_credits", "402", "Not enough credits; none were used."],
       ["not_found", "404", "Endpoint or generation not found."],
       ["method_not_allowed", "405", "This endpoint doesn't accept this HTTP method."],
-      ["limit", "409", "At most 3 videos can be prepared at once."],
+      ["limit", "409", "At most 3 videos or 2 long voiceovers can be prepared at once."],
       ["content_rejected", "422", "Blocked by the content filter; no credits were used."],
       ["rate_limited", "429", "Too many requests; wait for the seconds in Retry-After."],
       ["provider_failed", "502", "The generation service failed; no credits were used."],
@@ -1651,14 +1673,14 @@ const en: Dict = {
     limitsTitle: "Limits",
     limits: [
       "120 requests per minute per key.",
-      "Speech: 20 requests per minute.",
+      "Speech: 20 requests per minute; at most 2 long texts at once.",
       "Images: 30 requests per 10 minutes.",
       "Video: 10 requests per hour; at most 3 videos at once.",
       "When a limit is hit you get 429 and Retry-After (seconds).",
     ],
     creditsTitle: "Credits",
     credits:
-      "For speech and images, credits are used only on success. For video, credits are used when the job is submitted and refunded if it fails. See the pricing page to buy credits.",
+      "For short speech and images, credits are used only on success. For video and long speech, credits are used when the job starts and refunded if it fails. See the pricing page to buy credits.",
     seePricing: "Pricing",
   },
 

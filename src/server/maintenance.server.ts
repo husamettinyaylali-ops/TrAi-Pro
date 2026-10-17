@@ -3,6 +3,7 @@ import { and, inArray, isNotNull, lt, lte, sql } from "drizzle-orm";
 import { clock } from "@/lib/clock";
 
 import { startBackups } from "./backup.server";
+import { failOrphanSpeech } from "./services.server";
 import { getDb, type Db } from "./db.server";
 import { env, isProduction } from "./env.server";
 import {
@@ -93,7 +94,8 @@ export async function purgeExpired(db: Db, now: Date, years: number | null): Pro
 let started = false;
 
 /**
- * Yayında günlük bakım: veritabanı yedeği (BACKUP_DIR varsa) ve temizleme.
+ * Yayında günlük bakım: veritabanı yedeği (BACKUP_DIR varsa), sunucu yeniden
+ * başladığı için yarım kalan uzun seslendirmelerin iadesi ve temizleme.
  * Açılıştan birkaç dakika sonra ve sonra her gün çalışır; hata loglanır.
  */
 export function startMaintenance(): void {
@@ -103,7 +105,12 @@ export function startMaintenance(): void {
   const years = retentionYears(env("RETENTION_YEARS"));
   const run = () =>
     getDb()
-      .then((db) => purgeExpired(db, clock(), years))
+      .then(async (db) => {
+        const orphans = await failOrphanSpeech(db);
+        if (orphans)
+          console.info(`[bakım] yarım kalan ${orphans} seslendirmenin kredisi iade edildi`);
+        return purgeExpired(db, clock(), years);
+      })
       .then((r) => {
         if (r.records || r.users) {
           console.info(

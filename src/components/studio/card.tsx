@@ -14,6 +14,7 @@ import {
   Play,
   RefreshCw,
   Square,
+  Subtitles,
   TextCursorInput,
   Trash2,
 } from "lucide-react";
@@ -64,10 +65,43 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/** İndir: tek dosya bağlantı, çok görsel menü; demo üretimde nedeniyle kapalı. */
+/** İndir: tek dosya bağlantı; çok görsel ya da altyazılı ses menü; demo üretimde nedeniyle kapalı. */
 function DownloadAction({ g }: { g: Generation }) {
   const { t } = useI18n();
   const files = g.audioUrl ? [g.audioUrl] : (g.fileUrls ?? []);
+  if (g.audioUrl && g.subtitleUrl) {
+    const links = [
+      { href: `${g.audioUrl}?download=1`, label: t.studio.downloadAudio, Icon: Download },
+      {
+        href: `${g.subtitleUrl}?format=srt&download=1`,
+        label: t.studio.downloadSrt,
+        Icon: Subtitles,
+      },
+      {
+        href: `${g.subtitleUrl}?format=vtt&download=1`,
+        label: t.studio.downloadVtt,
+        Icon: Subtitles,
+      },
+    ];
+    return (
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger className={`${actBtn} text-cyan`}>
+          <Download className="h-4 w-4" aria-hidden />
+          {t.studio.download}
+          <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {links.map(({ href, label, Icon }) => (
+            <DropdownMenuItem key={href} asChild className={item}>
+              <a href={href} download>
+                <Icon /> {label}
+              </a>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
   if (files.length === 0) {
     return (
       <button
@@ -124,20 +158,37 @@ function CardBody({ g, voice }: { g: Generation; voice: Voice | undefined }) {
   );
 
   if (g.status === "pending") {
+    const p = g.type === "tts" ? g.progress : undefined;
     return (
-      <p
+      <div
         role="status"
-        className="flex items-center gap-3 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground"
+        className="space-y-3 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground"
       >
-        <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
-        {t.labs.video.pending}
-      </p>
+        <p className="flex items-center gap-3">
+          <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
+          {g.type === "tts"
+            ? p
+              ? t.labs.tts.longProgress(f.num(p.done), f.num(p.total))
+              : t.labs.tts.longPending
+            : t.labs.video.pending}
+        </p>
+        {p && (
+          <progress
+            value={p.done}
+            max={p.total}
+            aria-label={t.labs.tts.longProgress(f.num(p.done), f.num(p.total))}
+            className="h-1.5 w-full overflow-hidden rounded-full bg-muted accent-violet [&::-moz-progress-bar]:bg-violet [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-violet"
+          />
+        )}
+      </div>
     );
   }
   if (g.status === "failed") {
     return (
       <p className="rounded-2xl border border-destructive/40 p-4 text-sm text-destructive">
-        {t.labs.video.failedRefund(f.num(g.cost))}
+        {g.type === "tts"
+          ? t.labs.tts.failedRefund(f.num(g.cost))
+          : t.labs.video.failedRefund(f.num(g.cost))}
       </p>
     );
   }
@@ -299,7 +350,7 @@ export function GenerationCard({
     setError(null);
     const res = await generate(again);
     setBusy(false);
-    if (!res.ok) setError(actionError(res));
+    if (!res.ok) setError(actionError(res, g.type));
   };
 
   const copy = async () => {

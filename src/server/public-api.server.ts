@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { balance } from "@/lib/credits";
+import { MAX_TTS_CHARS, balance } from "@/lib/credits";
 import { clock } from "@/lib/clock";
 import { LIMITS } from "@/lib/rate-limit";
 import type { ActionErrorCode, Generation, RateLimited } from "@/lib/types";
@@ -12,7 +12,7 @@ import { authenticateApiKey } from "./api-keys.server";
 import { getDb, type Db } from "./db.server";
 import { imageDeps, speechDeps, videoDeps } from "./deps.server";
 import { fileStorage, type FileStorage } from "./file-storage.server";
-import { ownedFileResponse } from "./media.server";
+import { ownedFileResponse, ownedSubtitleResponse, subtitleFormat } from "./media.server";
 import { voiceClones } from "./schema.server";
 import {
   blocked,
@@ -21,7 +21,7 @@ import {
   getGeneration,
   loadUserData,
   recordAttempt,
-  refreshVideo,
+  refreshPending,
   startVideo,
   type ImageDeps,
   type SpeechDeps,
@@ -55,7 +55,10 @@ const ERRORS = {
   method_not_allowed: [405, "Method not allowed."],
   invalid_input: [400, "Invalid request."],
   insufficient_credits: [402, "Not enough credits. No credits were used."],
-  limit: [409, "Too many videos in progress (max 3). Wait for one to finish."],
+  limit: [
+    409,
+    "Too many jobs in progress (max 3 videos, 2 long voiceovers). Wait for one to finish.",
+  ],
   content_rejected: [422, "Blocked by the content filter. No credits were used."],
   rate_limited: [429, "Too many requests."],
   provider_failed: [502, "The generation service failed. No credits were used."],
@@ -92,7 +95,7 @@ const VIDEO_STYLES = ["cinematic", "anime", "3d", "documentary"] as const;
 
 const schemas = {
   tts: z.object({
-    text: z.string().min(1).max(5_000),
+    text: z.string().min(1).max(MAX_TTS_CHARS),
     voice_id: z.string().min(1).max(80),
     // Verilmeyen ayar varsayılan kalır; aralık dışı değer kırpılır.
     voice_settings: z
@@ -125,11 +128,18 @@ function view(g: Generation, origin: string) {
     prompt: g.text,
     cost: g.cost,
     ...(g.voiceSettings && { voice_settings: g.voiceSettings }),
+    ...(g.progress && { progress: g.progress }),
     created_at: g.createdAt,
     files: Array.from(
       { length: count },
       (_, i) => `${origin}/api/v1/generations/${g.id}/files/${i}`,
     ),
+    ...(g.subtitleUrl && {
+      subtitles: {
+        srt: `${origin}/api/v1/generations/${g.id}/subtitles?format=srt`,
+        vtt: `${origin}/api/v1/generations/${g.id}/subtitles?format=vtt`,
+      },
+    }),
   };
 }
 
@@ -138,7 +148,8 @@ async function readBody<T extends z.ZodTypeAny>(
   schema: T,
 ): Promise<z.infer<T> | null> {
   const raw = await request.text();
-  if (raw.length > 64 * 1024) return null;
+  // En uzun seslendirme metni (50.000 karakter, çoğu çok baytlı) sığar.
+  if (raw.length > 256 * 1024) return null;
   try {
     const parsed = schema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : null;
@@ -236,7 +247,8 @@ export async function handleApi(
       );
       if (!res.ok)
         return res.error === "tooManyAttempts" ? rateLimited(res) : fail(fromAction(res.error));
-      return json(view(res.generation, origin), 201);
+      // Uzun metin arka planda seslendirilir: video gibi 202 ve "pending" döner.
+      return json(view(res.generation, origin), res.generation.status === "pending" ? 202 : 201);
     }
 
     case "images": {
@@ -292,12 +304,22 @@ export async function handleApi(
           true,
         );
       }
+      if (sub === "subtitles" && index === undefined) {
+        return ownedSubtitleResponse(
+          db,
+          deps.storage,
+          userId,
+          id,
+          subtitleFormat(request.url),
+          true,
+        );
+      }
       if (sub) return fail("not_found");
       let g = await getGeneration(db, userId, id);
       if (!g) return fail("not_found");
-      // Bekleyen video bu istekte sağlayıcıdan da kontrol edilir.
-      if (g.type === "video" && g.status === "pending" && deps.video) {
-        const fresh = await refreshVideo(db, deps.video, userId, id, now);
+      // Bekleyen iş bu istekte de kontrol edilir (video sağlayıcıdan, yarım kalan seslendirme iade).
+      if (g.status === "pending") {
+        const fresh = await refreshPending(db, deps.video, userId, id, now);
         if (fresh.ok) g = fresh.generation;
       }
       return json(view(g, origin));

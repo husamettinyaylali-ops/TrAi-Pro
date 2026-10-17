@@ -5,7 +5,7 @@ import { IMAGE_COUNTS } from "@/lib/credits";
 import { useI18n } from "@/lib/i18n";
 import { useApp, type Generation } from "@/lib/store";
 import { useStudioConfig } from "@/lib/studio-config";
-import type { GenerateInput } from "@/lib/types";
+import type { GenerateInput, GenerationType } from "@/lib/types";
 import { stockVoices, type Voice } from "@/lib/voices";
 
 /** Stüdyo araçları (yazma kutusundaki seçim; ?tab= ile aynı). */
@@ -56,17 +56,17 @@ export function useVoices(): { voices: Voice[]; live: boolean; loading: boolean 
   };
 }
 
-/** Sunucudan dönen hata sonucunu kullanıcı metnine çevirir. */
+/** Sunucudan dönen hata sonucunu kullanıcı metnine çevirir (sınır metni üretim türüne göre). */
 export function useActionError() {
   const { t } = useI18n();
-  return (res: { error: string; retryAfterMinutes?: number }) => {
+  return (res: { error: string; retryAfterMinutes?: number }, type?: GenerationType) => {
     if (res.error === "tooManyAttempts" && res.retryAfterMinutes) {
       return t.auth.errors.tooManyAttempts(res.retryAfterMinutes);
     }
     if (res.error === "insufficient") return t.labs.insufficient;
     if (res.error === "providerFailed") return t.labs.providerFailed;
     if (res.error === "contentRejected") return t.labs.contentRejected;
-    if (res.error === "limit") return t.labs.video.tooMany;
+    if (res.error === "limit") return type === "tts" ? t.labs.tts.tooMany : t.labs.video.tooMany;
     if (res.error === "network") return t.auth.errors.network;
     return t.labs.failed;
   };
@@ -74,27 +74,38 @@ export function useActionError() {
 
 /** Hazırlanan videoların kontrol aralığı. */
 export const VIDEO_POLL_MS = 8_000;
+/** Arka planda seslendirilen uzun metnin kontrol aralığı (ilerleme gösterilir). */
+export const SPEECH_POLL_MS = 3_000;
 
-/** Hazırlanan videolar sayfa açıkken düzenli kontrol edilir (bitince ya da iade olunca güncellenir). */
-export function useVideoPolling(items: Generation[]) {
-  const { checkVideo } = useApp();
-  const check = useRef(checkVideo);
+function usePolling(ids: string, ms: number) {
+  const { checkGeneration } = useApp();
+  const check = useRef(checkGeneration);
   useEffect(() => {
-    check.current = checkVideo;
+    check.current = checkGeneration;
   });
-  const pendingIds = items
-    .filter((g) => g.status === "pending")
-    .map((g) => g.id)
-    .join(",");
   useEffect(() => {
-    if (!pendingIds) return;
+    if (!ids) return;
     const tick = () => {
-      if (!document.hidden) for (const id of pendingIds.split(",")) void check.current(id);
+      if (!document.hidden) for (const id of ids.split(",")) void check.current(id);
     };
     tick();
-    const timer = window.setInterval(tick, VIDEO_POLL_MS);
+    const timer = window.setInterval(tick, ms);
     return () => window.clearInterval(timer);
-  }, [pendingIds]);
+  }, [ids, ms]);
+}
+
+/**
+ * Hazırlanan videolar ve uzun seslendirmeler sayfa açıkken düzenli kontrol
+ * edilir (bitince ya da iade olunca güncellenir).
+ */
+export function usePendingPolling(items: Generation[]) {
+  const pending = (type: GenerationType) =>
+    items
+      .filter((g) => g.status === "pending" && g.type === type)
+      .map((g) => g.id)
+      .join(",");
+  usePolling(pending("video"), VIDEO_POLL_MS);
+  usePolling(pending("tts"), SPEECH_POLL_MS);
 }
 
 /** Yerel takvim günü (akıştaki gün ayırıcıları için). */

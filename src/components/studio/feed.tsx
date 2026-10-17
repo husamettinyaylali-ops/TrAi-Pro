@@ -8,7 +8,7 @@ import type { GenerationType } from "@/lib/types";
 import type { Voice } from "@/lib/voices";
 
 import { GenerationCard } from "./card";
-import { dayKey, useDayLabel, useVideoPolling } from "./hooks";
+import { dayKey, useDayLabel, usePendingPolling } from "./hooks";
 
 const suggestions: { type: GenerationType; icon: typeof Mic }[] = [
   { type: "tts", icon: Mic },
@@ -40,7 +40,7 @@ export function StudioFeed({
   const { t } = useI18n();
   const dayLabel = useDayLabel();
   const history = useHistory(undefined, projectId);
-  useVideoPolling(history.items);
+  usePendingPolling(history.items);
   const items = [...history.items].reverse();
 
   const scroller = useRef<HTMLDivElement>(null);

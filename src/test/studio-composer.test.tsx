@@ -18,6 +18,7 @@ const mediaGrant = {
   expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
 };
 let grants: (typeof mediaGrant)[] = [];
+let ttsMode: "demo" | "live" = "demo";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => <a href={to}>{children}</a>,
@@ -28,7 +29,13 @@ vi.mock("@/lib/store", () => ({
 vi.mock("@/lib/studio-config", () => ({
   useStudioConfig: () => ({
     isPending: false,
-    data: { tts: "demo", cloning: false, image: "demo", video: "demo", voices: [] },
+    data: {
+      tts: ttsMode,
+      cloning: false,
+      image: "demo",
+      video: "demo",
+      voices: ttsMode === "live" ? [{ id: "v1", name: "Ayla", gender: "female" }] : [],
+    },
   }),
 }));
 
@@ -56,7 +63,27 @@ describe("stüdyo yazma kutusu", () => {
   beforeEach(() => {
     generate.mockReset();
     grants = [];
+    ttsMode = "demo";
     window.localStorage.clear();
+  });
+
+  it("demo kipte uzun metin anında önizlenir; parça notu çıkmaz", () => {
+    const long = Array.from({ length: 400 }, (_, i) => `Bu ${i + 1}. cümledir.`).join(" ");
+    renderComposer();
+    fireEvent.change(box(), { target: { value: long } });
+    expect(screen.queryByText(/Uzun metin/)).toBeNull();
+  });
+
+  it("canlı kipte 5.000 karakteri aşan metnin kaç parçada seslendirileceği söylenir", () => {
+    ttsMode = "live";
+    const long = Array.from({ length: 400 }, (_, i) => `Bu ${i + 1}. cümledir.`).join(" ");
+    renderComposer();
+    fireEvent.change(box(), { target: { value: "Kısa metin." } });
+    expect(screen.queryByText(/Uzun metin/)).toBeNull();
+    fireEvent.change(box(), { target: { value: long } });
+    expect(
+      screen.getByText("Uzun metin: 2 parçada arka planda seslendirilir."),
+    ).toBeInTheDocument();
   });
 
   it("Ctrl+Enter ile seçili projeye seslendirir; başarıda kutu temizlenir", async () => {
@@ -73,7 +100,7 @@ describe("stüdyo yazma kutusu", () => {
     });
     const { onBusy } = renderComposer({ projectId: "p1" });
     fireEvent.change(box(), { target: { value: "Merhaba" } });
-    expect(screen.getByText("7 / 5.000 karakter")).toBeInTheDocument();
+    expect(screen.getByText("7 / 50.000 karakter")).toBeInTheDocument();
     expect(screen.getByText("7 kredi")).toBeInTheDocument();
     fireEvent.keyDown(box(), { key: "Enter", ctrlKey: true });
     await waitFor(() =>

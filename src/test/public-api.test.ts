@@ -71,7 +71,7 @@ let videoState: VideoCheck = { state: "pending" };
 function deps(over: Partial<ApiDeps> = {}): ApiDeps {
   const tts = {
     listVoices: async () => [],
-    synthesize: async () => MP3,
+    synthesize: async () => ({ audio: MP3, alignment: null }),
     cloneVoice: async () => "x",
     deleteVoice: async () => {},
   } satisfies TtsProvider;
@@ -284,7 +284,7 @@ describe("geliştirici API'si", () => {
         await call("tts", {
           key,
           method: "POST",
-          body: { text: "x".repeat(5_001), voice_id: "hazir-1" },
+          body: { text: "x".repeat(50_001), voice_id: "hazir-1" },
         }),
       ),
     ).toEqual([400, "invalid_input"]);

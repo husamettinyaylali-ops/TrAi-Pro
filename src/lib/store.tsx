@@ -88,8 +88,8 @@ interface Store {
     input: GenerateInput,
   ) => Promise<Outcome<{ generation: Generation }, ActionErrorCode> | RateLimited>;
   deleteGeneration: (id: string) => Promise<void>;
-  /** Hazırlanan videonun durumunu yeniler. */
-  checkVideo: (id: string) => Promise<void>;
+  /** Bekleyen üretimin (video, uzun seslendirme) durumunu yeniler. */
+  checkGeneration: (id: string) => Promise<void>;
   /** Tek üretim (stüdyoda düzenlemeye açmak için). */
   getGeneration: (id: string) => Promise<Outcome<{ generation: Generation }, ProjectErrorCode>>;
   /** Üretime ad verir; boş ad adı kaldırır. */
@@ -266,8 +266,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return res;
       },
-      checkVideo: async (id) => {
-        const res = await call(() => api.checkVideo({ data: { id } }));
+      checkGeneration: async (id) => {
+        const res = await call(() => api.checkGeneration({ data: { id } }));
         if (res.ok && userId) upsertHistory(qc, userId, res.generation, false);
       },
       deleteGeneration: async (id) => {

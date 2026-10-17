@@ -21,7 +21,7 @@ const FIELD_NAMES: Record<FieldKey, string> = {
 };
 
 interface Endpoint {
-  key: "me" | "voices" | "tts" | "images" | "videos" | "generation" | "file";
+  key: "me" | "voices" | "tts" | "images" | "videos" | "generation" | "file" | "subtitles";
   method: "GET" | "POST";
   path: string;
   fields?: FieldKey[];
@@ -98,6 +98,13 @@ const ENDPOINTS: Endpoint[] = [
     method: "GET",
     path: "/generations/:id/files/:index",
     curl: (b) => `curl -o result.jpg ${b}/generations/GENERATION_ID/files/0 \\\n  ${auth}`,
+  },
+  {
+    key: "subtitles",
+    method: "GET",
+    path: "/generations/:id/subtitles",
+    curl: (b) =>
+      `curl -o subtitles.srt "${b}/generations/GENERATION_ID/subtitles?format=srt" \\\n  ${auth}`,
   },
 ];
 

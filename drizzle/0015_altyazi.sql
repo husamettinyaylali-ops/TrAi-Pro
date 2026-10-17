@@ -1,0 +1,1 @@
+ALTER TABLE `generations` ADD `captions_key` text;

@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -23,6 +24,7 @@ import { EditBanner } from "@/components/labs/generation-ui";
 import { clock } from "@/lib/clock";
 import { IMAGE_COUNTS, MAX_TTS_CHARS, balance, mediaCost, ttsCost } from "@/lib/credits";
 import { useFormat, useI18n } from "@/lib/i18n";
+import { splitForSpeech } from "@/lib/speech-text";
 import { useApp, type Generation } from "@/lib/store";
 import { useStudioConfig } from "@/lib/studio-config";
 import type { GenerateInput } from "@/lib/types";
@@ -216,11 +218,15 @@ export function Composer({
     setBusy(false);
     onBusy(null);
     if (!res.ok) {
-      return setError({ text: actionError(res), packages: res.error === "insufficient" });
+      return setError({
+        text: actionError(res, tool),
+        packages: res.error === "insufficient",
+      });
     }
     setText("");
     onCancelEdit();
-    if (res.generation.type === "tts") play(res.generation);
+    // Uzun metin arka planda seslendirilir; bitince kartta dinlenir.
+    if (res.generation.type === "tts" && res.generation.status !== "pending") play(res.generation);
   };
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -231,6 +237,8 @@ export function Composer({
   };
 
   const costText = t.studio.credits(f.num(cost));
+  // Tek istek sınırını aşan metin kaç parçada seslendirilecek (canlı kipte gösterilir).
+  const parts = useMemo(() => (tool === "tts" ? splitForSpeech(text).length : 0), [tool, text]);
 
   return (
     <div className="px-4 pb-4 sm:px-6">
@@ -272,9 +280,12 @@ export function Composer({
               className="block max-h-60 w-full resize-none bg-transparent px-4 pb-1 pt-4 text-sm outline-none placeholder:text-muted-foreground/70"
             />
             {tool === "tts" && (
-              <p className="px-4 text-right text-[11px] text-muted-foreground">
-                {t.studio.chars(f.num([...text].length), f.num(MAX_TTS_CHARS))}
-              </p>
+              <div className="flex flex-wrap items-baseline justify-end gap-x-3 px-4 text-[11px] text-muted-foreground">
+                {ttsLive && parts > 1 && (
+                  <p className="mr-auto text-cyan">{t.studio.longNote(f.num(parts))}</p>
+                )}
+                <p>{t.studio.chars(f.num([...text].length), f.num(MAX_TTS_CHARS))}</p>
+              </div>
             )}
           </>
         )}

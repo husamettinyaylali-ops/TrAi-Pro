@@ -9,6 +9,7 @@ import {
 import { z } from "zod";
 
 import { resolveAppUrl } from "@/lib/app-url";
+import { MAX_TTS_CHARS } from "@/lib/credits";
 import { LIMITS } from "@/lib/rate-limit";
 import { clock } from "@/lib/clock";
 import type { Lang } from "@/lib/i18n";
@@ -319,7 +320,7 @@ const generationMeta = { projectId: id.optional(), title: z.string().max(200).op
 const generateSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("tts"),
-    text: z.string().max(10_000),
+    text: z.string().max(MAX_TTS_CHARS + 1_000),
     voiceId: z.string().max(80),
     // Aralık dışı değerler sunucuda kırpılır (normalizeVoiceSettings).
     settings: z
@@ -405,15 +406,16 @@ export const generate = createServerFn({ method: "POST" })
     return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
   });
 
-/** Hazırlanan videonun durumunu sağlayıcıdan sorar; stüdyo bekleyen video varken düzenli çağırır. */
-export const checkVideo = createServerFn({ method: "POST" })
+/**
+ * Bekleyen üretimin (video, uzun seslendirme) durumu; stüdyo bekleyen üretim
+ * varken düzenli çağırır. Başarısız iş iade edilmiş olarak döner.
+ */
+export const checkGeneration = createServerFn({ method: "POST" })
   .validator(parse(z.object({ id: z.string().max(80) })))
   .handler(async ({ data }) => {
     const user = await currentUser();
     if (!user) return { ok: false as const, error: "unauthorized" as const };
-    const deps = videoDeps();
-    if (!deps) return { ok: false as const, error: "notFound" as const };
-    const res = await svc.refreshVideo(await getDb(), deps, user.id, data.id, clock());
+    const res = await svc.refreshPending(await getDb(), videoDeps(), user.id, data.id, clock());
     if (!res.ok) return res;
     return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
   });
