@@ -8,7 +8,7 @@ import { useFormat, useI18n } from "@/lib/i18n";
 import { useApp, useHistory, type Generation } from "@/lib/store";
 
 import { SavedNotice } from "./saved-notice";
-import { smallBtn, useEditError, useSeconds } from "./utils";
+import { smallBtn, useAudioDurations, useEditError, useSeconds } from "./utils";
 
 /** Sunucudaki MERGE_GAPS ve MERGE_MAX_CLIPS ile aynı. */
 const GAPS = [0, 500, 1000, 2000] as const;
@@ -16,26 +16,6 @@ const MAX_CLIPS = 30;
 
 const iconBtn =
   "grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30";
-
-/** Seslerin süreleri oynatıcı üst verisinden (yalnız süre için küçük bir istek); liste sabit (memo) verilmeli. */
-function useDurations(items: Generation[]) {
-  const [durations, setDurations] = useState<Record<string, number>>({});
-  useEffect(() => {
-    const players = items.flatMap((g) => {
-      if (!g.audioUrl) return [];
-      const a = new Audio();
-      a.preload = "metadata";
-      a.onloadedmetadata = () => {
-        const ms = Math.round(a.duration * 1000);
-        if (Number.isFinite(ms)) setDurations((d) => ({ ...d, [g.id]: ms }));
-      };
-      a.src = g.audioUrl;
-      return [a];
-    });
-    return () => players.forEach((a) => a.removeAttribute("src"));
-  }, [items]);
-  return durations;
-}
 
 /**
  * Sesleri birleştir: projedeki (ya da tüm) gerçek seslendirmeler eskiden
@@ -55,7 +35,7 @@ export function MergeEditor({ projectId }: { projectId: string | undefined }) {
     () => history.items.filter((g) => g.audioUrl && !g.status).reverse(),
     [history.items],
   );
-  const durations = useDurations(clips);
+  const durations = useAudioDurations(clips);
   const [order, setOrder] = useState<string[]>([]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [gap, setGap] = useState<(typeof GAPS)[number]>(500);

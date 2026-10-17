@@ -162,7 +162,8 @@ function CardBody({ g, voice }: { g: Generation; voice: Voice | undefined }) {
   );
 
   if (g.status === "pending") {
-    const p = g.type === "tts" ? g.progress : undefined;
+    const p = g.progress;
+    const compose = g.edit === "compose";
     return (
       <div
         role="status"
@@ -174,13 +175,19 @@ function CardBody({ g, voice }: { g: Generation; voice: Voice | undefined }) {
             ? p
               ? t.labs.tts.longProgress(f.num(p.done), f.num(p.total))
               : t.labs.tts.longPending
-            : t.labs.video.pending}
+            : compose
+              ? t.editor.video.progress(f.num(p?.done ?? 0))
+              : t.labs.video.pending}
         </p>
         {p && (
           <progress
             value={p.done}
             max={p.total}
-            aria-label={t.labs.tts.longProgress(f.num(p.done), f.num(p.total))}
+            aria-label={
+              compose
+                ? t.editor.video.progress(f.num(p.done))
+                : t.labs.tts.longProgress(f.num(p.done), f.num(p.total))
+            }
             className="h-1.5 w-full overflow-hidden rounded-full bg-muted accent-violet [&::-moz-progress-bar]:bg-violet [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-violet"
           />
         )}
@@ -192,7 +199,9 @@ function CardBody({ g, voice }: { g: Generation; voice: Voice | undefined }) {
       <p className="rounded-2xl border border-destructive/40 p-4 text-sm text-destructive">
         {g.type === "tts"
           ? t.labs.tts.failedRefund(f.num(g.cost))
-          : t.labs.video.failedRefund(f.num(g.cost))}
+          : g.edit === "compose"
+            ? t.editor.video.failed
+            : t.labs.video.failedRefund(f.num(g.cost))}
       </p>
     );
   }
@@ -424,10 +433,13 @@ export function GenerationCard({
                 {t.studio.openEditor}
               </Link>
             ))}
-          <button type="button" onClick={() => onEdit(g)} className={actBtn}>
-            <Pencil className="h-4 w-4" aria-hidden />
-            {t.studio.editText[g.type]}
-          </button>
+          {/* Sesten oluşturulan videonun istemi yok: metin seslendirmenindir. */}
+          {g.edit !== "compose" && (
+            <button type="button" onClick={() => onEdit(g)} className={actBtn}>
+              <Pencil className="h-4 w-4" aria-hidden />
+              {t.studio.editText[g.type]}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void regenerate()}

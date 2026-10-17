@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Combine, Download, FolderOpen, NotebookPen, PanelLeft } from "lucide-react";
+import { Clapperboard, Combine, Download, FolderOpen, NotebookPen, PanelLeft } from "lucide-react";
 
 import { VoiceClone } from "@/components/labs/tools";
 import { VerifyBanner } from "@/components/site/verify-banner";
@@ -74,6 +74,17 @@ function TopBar({
           <Download className="h-4 w-4" aria-hidden />
           <span className="hidden sm:inline">{t.studio.downloadAll}</span>
         </a>
+      )}
+      {(!project || (project.counts.tts > 0 && project.counts.image > 0)) && (
+        <Link
+          to="/editor/video"
+          search={project ? { project: project.id } : {}}
+          aria-label={t.editor.video.open}
+          className={ghost}
+        >
+          <Clapperboard className="h-4 w-4" aria-hidden />
+          <span className="hidden xl:inline">{t.editor.video.open}</span>
+        </Link>
       )}
       {(!project || project.counts.tts > 1) && (
         <Link

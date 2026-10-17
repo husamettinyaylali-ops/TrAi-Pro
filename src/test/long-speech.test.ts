@@ -17,7 +17,7 @@ import {
   SPEECH_MAX_PENDING,
   createSession,
   demoTopUp,
-  failOrphanSpeech,
+  failOrphanJobs,
   generateSpeech,
   getGeneration,
   loadUserData,
@@ -204,7 +204,7 @@ describe("uzun metin seslendirme", () => {
     // Çalışırken bekler.
     const live = await refreshPending(db, null, id, res.generation.id, now);
     expect(live.ok && live.generation.status).toBe("pending");
-    expect(await failOrphanSpeech(db)).toBe(0);
+    expect(await failOrphanJobs(db)).toBe(0);
 
     // Yeniden başlatma: bu süreçteki iş listesi boşalır.
     (globalThis as { __traiSpeechJobs?: Map<string, unknown> }).__traiSpeechJobs!.clear();
@@ -224,7 +224,7 @@ describe("uzun metin seslendirme", () => {
     const res = await generateSpeech(db, deps(tts), id, { text: LONG, voiceId: "hazir-1" }, now);
     if (!res.ok) throw new Error(res.error);
     (globalThis as { __traiSpeechJobs?: Map<string, unknown> }).__traiSpeechJobs!.clear();
-    expect(await failOrphanSpeech(db)).toBe(1);
+    expect(await failOrphanJobs(db)).toBe(1);
     expect(await voiceCredits(id)).toBe(before);
     release();
   });

@@ -79,7 +79,7 @@ export interface Generation {
   /** Arka planda seslendirilen uzun metnin ilerlemesi (parça). */
   progress?: { done: number; total: number } | undefined;
   /** Düzenleyicide oluşturulan sürüm (ücretsiz): kırpma, birleştirme ya da görsel düzenleme. */
-  edit?: "trim" | "merge" | "image" | undefined;
+  edit?: "trim" | "merge" | "image" | "compose" | undefined;
   sourceId?: string | undefined;
   cost: number;
   createdAt: string;
@@ -97,7 +97,24 @@ export interface SubtitleCue {
   text: string;
 }
 
-export type EditErrorCode = "unauthorized" | "invalidInput" | "notFound";
+export type EditErrorCode =
+  | "unauthorized"
+  | "invalidInput"
+  | "notFound"
+  | "limit"
+  /** Sunucuda ffmpeg yok: video oluşturucu kapalı. */
+  | "unavailable";
+
+/** Kısa video oluşturucu isteği. */
+export interface ComposeRequest {
+  audioId: string;
+  images: { id: string; index: number }[];
+  format: "9:16" | "16:9" | "1:1";
+  captions: { show: boolean; position: "bottom" | "middle"; size: "s" | "m" | "l" };
+  motion: boolean;
+  projectId?: string | undefined;
+  title?: string | undefined;
+}
 
 /** Kullanıcının çalışma alanı; üretimler bir projede toplanır. */
 export interface Project {
@@ -138,6 +155,8 @@ export interface StudioConfig {
   video: "live" | "demo";
   /** Hazır sesler (live kipte sağlayıcıdan). */
   voices: { id: string; name: string; gender: "female" | "male" | null }[];
+  /** Kısa video oluşturucu: sunucuda ffmpeg var mı, altyazıyı videoya yazabiliyor mu. */
+  compose: { available: boolean; subtitles: boolean };
 }
 
 export interface UserData {
@@ -253,7 +272,7 @@ export type AdminErrorCode =
 
 /** Kurulum kontrolündeki bir servis ya da ayar grubu. */
 export type SetupId =
-  "site" | "email" | "tts" | "fal" | "google" | "usdt" | "binance" | "paypal" | "backup";
+  "site" | "email" | "tts" | "fal" | "google" | "usdt" | "binance" | "paypal" | "backup" | "ffmpeg";
 
 /** ready: çalışır; missing: gerekli anahtar eksik; warning: çalışır ama dikkat; optional: kullanılmıyor. */
 export type SetupState = "ready" | "missing" | "warning" | "optional";
@@ -265,7 +284,9 @@ export type SetupWarning =
   | "paypalSandbox"
   | "paypalWebhookMissing"
   | "backupMissing"
-  | "noPaymentMethod";
+  | "noPaymentMethod"
+  | "ffmpegMissing"
+  | "ffmpegNoSubtitles";
 
 /** Gizli olmayan bilgi (adres kısaltılmış); gizli anahtarların değeri hiç dönmez. */
 export interface SetupInfo {
@@ -285,7 +306,8 @@ export interface SetupInfo {
     | "webhook"
     | "admins"
     | "backupDir"
-    | "retention";
+    | "retention"
+    | "ffmpegVersion";
   value: string;
 }
 

@@ -192,6 +192,49 @@ describe("stüdyo üretim kartı", () => {
       screen.getByText("Seslendirme tamamlanamadı; 24.000 kredi iade edildi."),
     ).toBeInTheDocument();
   });
+
+  it("kısa video: yüzde ilerleme, başarısızlık; bitince istemi düzenlenmez ve yeniden üretilmez", () => {
+    const base = {
+      id: "k1",
+      type: "video" as const,
+      text: "Teknoloji Masası'na hoş geldiniz.",
+      edit: "compose" as const,
+      cost: 0,
+      createdAt: now,
+    };
+    const { unmount } = render(
+      <I18nProvider>
+        <GenerationCard
+          g={{ ...base, status: "pending", progress: { done: 40, total: 100 } }}
+          voices={[]}
+          showProject={false}
+          onEdit={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Video oluşturuluyor… %40");
+    unmount();
+    const failed = render(
+      <I18nProvider>
+        <GenerationCard
+          g={{ ...base, status: "failed" }}
+          voices={[]}
+          showProject={false}
+          onEdit={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.getByText(/Video oluşturulamadı/)).toBeInTheDocument();
+    failed.unmount();
+    renderCard({ ...base, fileUrls: ["/media/file/k1/0"] });
+    expect(screen.getByText(/Kısa video · 0 kr/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "İstemi düzenle" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Yeniden üret" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: "İndir" })).toHaveAttribute(
+      "href",
+      "/media/file/k1/0?download=1",
+    );
+  });
 });
 
 describe("yeniden üretim girdisi", () => {

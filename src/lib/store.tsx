@@ -16,6 +16,7 @@ import type {
   ActionErrorCode,
   AuthErrorCode,
   ClaimErrorCode,
+  ComposeRequest,
   EditErrorCode,
   EmailErrorCode,
   GenerateInput,
@@ -119,6 +120,10 @@ interface Store {
   /** Düzenleyici: düzenlenmiş görsel (FormData: sourceId, file); yeni sürüm, kredi harcanmaz. */
   saveImageEdit: (
     form: FormData,
+  ) => Promise<Outcome<{ generation: Generation }, EditErrorCode> | RateLimited>;
+  /** Kısa video oluşturucu: iş arka planda; kayıt "pending" döner, kredi harcanmaz. */
+  composeVideo: (
+    input: ComposeRequest,
   ) => Promise<Outcome<{ generation: Generation }, EditErrorCode> | RateLimited>;
   /** Üretimi projeye taşır ya da projeden çıkarır (null). */
   moveGeneration: (
@@ -324,6 +329,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       saveImageEdit: async (form) => {
         const res = await call(() => api.saveImageEdit({ data: form }));
+        if (res.ok && userId) {
+          upsertHistory(qc, userId, res.generation, true);
+          void qc.invalidateQueries({ queryKey: [PROJECTS] });
+        }
+        return res;
+      },
+      composeVideo: async (input) => {
+        const res = await call(() => api.composeVideo({ data: input }));
         if (res.ok && userId) {
           upsertHistory(qc, userId, res.generation, true);
           void qc.invalidateQueries({ queryKey: [PROJECTS] });

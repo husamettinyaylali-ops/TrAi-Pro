@@ -39,6 +39,7 @@ import { imageDeps, receiptContext, speechDeps, videoDeps } from "@/server/deps.
 import { getMailer } from "@/server/email.server";
 import { paypalConfig, sharedPaypal } from "@/server/paypal.server";
 import { env, isProduction } from "@/server/env.server";
+import { COMPOSE_MAX_IMAGES, detectFfmpeg, ffmpegRunner } from "@/server/compose.server";
 import * as editor from "@/server/editor.server";
 import * as projectSvc from "@/server/projects.server";
 import { setupStatus, testIntegration } from "@/server/setup-check.server";
@@ -352,8 +353,10 @@ export const getStudioConfig = createServerFn({ method: "GET" }).handler(
   async (): Promise<StudioConfig> => {
     const image = imageDeps() ? ("live" as const) : ("demo" as const);
     const video = videoDeps() ? ("live" as const) : ("demo" as const);
+    const ffmpeg = await detectFfmpeg();
+    const compose = { available: Boolean(ffmpeg), subtitles: Boolean(ffmpeg?.subtitles) };
     const deps = speechDeps();
-    if (!deps) return { tts: "demo", cloning: false, image, video, voices: [] };
+    if (!deps) return { tts: "demo", cloning: false, image, video, voices: [], compose };
     try {
       const voices = await deps.catalog();
       return {
@@ -362,10 +365,11 @@ export const getStudioConfig = createServerFn({ method: "GET" }).handler(
         image,
         video,
         voices: voices.map(({ id, name, gender }) => ({ id, name, gender })),
+        compose,
       };
     } catch (err) {
       console.error("[ses] ses listesi alınamadı:", err instanceof Error ? err.message : err);
-      return { tts: "live", cloning: true, image, video, voices: [] };
+      return { tts: "live", cloning: true, image, video, voices: [], compose };
     }
   },
 );
@@ -533,6 +537,46 @@ export const saveImageEdit = createServerFn({ method: "POST" })
       fileStorage(),
       user.id,
       { sourceId, type: file.type, data: new Uint8Array(await file.arrayBuffer()) },
+      clock(),
+    );
+  });
+
+/**
+ * Kısa video oluşturucu: seslendirme + görseller (+ altyazı) → MP4. İş arka
+ * planda sıraya girer; kayıt "pending" döner. Sunucuda ffmpeg yoksa kapalı.
+ */
+export const composeVideo = createServerFn({ method: "POST" })
+  .validator(
+    parse(
+      z.object({
+        audioId: id,
+        images: z
+          .array(z.object({ id, index: z.number().int().min(0).max(10) }))
+          .min(1)
+          .max(COMPOSE_MAX_IMAGES),
+        format: z.enum(["9:16", "16:9", "1:1"]),
+        captions: z.object({
+          show: z.boolean(),
+          position: z.enum(["bottom", "middle"]),
+          size: z.enum(["s", "m", "l"]),
+        }),
+        motion: z.boolean(),
+        projectId: id.optional(),
+        title: z.string().max(200).optional(),
+      }),
+    ),
+  )
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    const ffmpeg = await detectFfmpeg();
+    if (!ffmpeg) return { ok: false as const, error: "unavailable" as const };
+    return editor.startCompose(
+      await getDb(),
+      fileStorage(),
+      { run: ffmpegRunner(), subtitles: ffmpeg.subtitles },
+      user.id,
+      data,
       clock(),
     );
   });
@@ -768,7 +812,7 @@ export const adminSetup = createServerFn({ method: "POST" }).handler(async () =>
   return {
     ok: true as const,
     production: isProduction(),
-    items: setupStatus(new URL(getRequest().url).origin),
+    items: setupStatus(new URL(getRequest().url).origin, isProduction(), await detectFfmpeg()),
   };
 });
 

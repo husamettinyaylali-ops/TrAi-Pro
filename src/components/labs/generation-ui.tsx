@@ -169,9 +169,11 @@ export function GenerationMenu({
           keepFocus.current = false;
         }}
       >
-        <DropdownMenuItem className={item} disabled={pending} onSelect={focusElsewhere(onEdit)}>
-          <Pencil /> {t.labs.edit}
-        </DropdownMenuItem>
+        {g.edit !== "compose" && (
+          <DropdownMenuItem className={item} disabled={pending} onSelect={focusElsewhere(onEdit)}>
+            <Pencil /> {t.labs.edit}
+          </DropdownMenuItem>
+        )}
         {!editorBlock(g) && (
           <DropdownMenuItem asChild className={item}>
             <Link to="/editor/$id" params={{ id: g.id }}>

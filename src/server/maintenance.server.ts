@@ -3,7 +3,7 @@ import { and, inArray, isNotNull, lt, lte, sql } from "drizzle-orm";
 import { clock } from "@/lib/clock";
 
 import { startBackups } from "./backup.server";
-import { failOrphanSpeech } from "./services.server";
+import { failOrphanJobs } from "./services.server";
 import { getDb, type Db } from "./db.server";
 import { env, isProduction } from "./env.server";
 import {
@@ -106,9 +106,9 @@ export function startMaintenance(): void {
   const run = () =>
     getDb()
       .then(async (db) => {
-        const orphans = await failOrphanSpeech(db);
+        const orphans = await failOrphanJobs(db);
         if (orphans)
-          console.info(`[bakım] yarım kalan ${orphans} seslendirmenin kredisi iade edildi`);
+          console.info(`[bakım] yarım kalan ${orphans} iş kapatıldı, kredisi iade edildi`);
         return purgeExpired(db, clock(), years);
       })
       .then((r) => {

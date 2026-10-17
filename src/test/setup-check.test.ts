@@ -259,3 +259,29 @@ describe("bağlantı testleri", () => {
     });
   });
 });
+
+describe("video oluşturucu (ffmpeg)", () => {
+  it("bulunursa sürümüyle hazır; libass yoksa uyarılı; yoksa yayında uyarı, geliştirmede kullanılmıyor", () => {
+    expect(
+      byId(setupStatus(origin, true, { version: "6.1", subtitles: true }), "ffmpeg"),
+    ).toMatchObject({
+      state: "ready",
+      warnings: [],
+      info: [{ key: "ffmpegVersion", value: "6.1" }],
+    });
+    expect(
+      byId(setupStatus(origin, true, { version: "6.1", subtitles: false }), "ffmpeg"),
+    ).toMatchObject({
+      state: "warning",
+      warnings: ["ffmpegNoSubtitles"],
+    });
+    expect(byId(setupStatus(origin, true, null), "ffmpeg")).toMatchObject({
+      state: "warning",
+      warnings: ["ffmpegMissing"],
+    });
+    expect(byId(setupStatus(origin, false), "ffmpeg")).toMatchObject({
+      state: "optional",
+      warnings: [],
+    });
+  });
+});

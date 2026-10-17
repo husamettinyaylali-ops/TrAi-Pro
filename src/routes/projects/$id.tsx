@@ -2,6 +2,7 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import {
   ArrowLeft,
+  Clapperboard,
   Combine,
   Download,
   Film,
@@ -132,6 +133,12 @@ function ProjectActions({ project }: { project: Project }) {
           <Wand2 className="h-4 w-4" aria-hidden />
           {t.projects.openStudio}
         </Link>
+        {project.counts.tts > 0 && project.counts.image > 0 && (
+          <Link to="/editor/video" search={{ project: project.id }} className={btnOutline}>
+            <Clapperboard className="h-4 w-4" aria-hidden />
+            {t.editor.video.open}
+          </Link>
+        )}
         {project.counts.tts > 1 && (
           <Link to="/editor/merge" search={{ project: project.id }} className={btnOutline}>
             <Combine className="h-4 w-4" aria-hidden />

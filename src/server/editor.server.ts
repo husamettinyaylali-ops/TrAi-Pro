@@ -1,18 +1,34 @@
 import { randomUUID } from "node:crypto";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 
 import { LIMITS } from "@/lib/rate-limit";
 import type { Generation, RateLimited } from "@/lib/types";
 
 import { cleanCues, encodeCues, parseCues, shiftCues, type Cue } from "./captions.server";
+import {
+  COMPOSE_FORMATS,
+  COMPOSE_MAX_IMAGES,
+  COMPOSE_MAX_SECONDS,
+  assSubtitles,
+  ffmpegArgs,
+  imageDurations,
+  type CaptionStyle,
+  type ComposeFormat,
+  type FfmpegRun,
+} from "./compose.server";
 import type { Db } from "./db.server";
 import type { FileStorage } from "./file-storage.server";
+import { composeJobs, type ComposeJob } from "./jobs.server";
 import { concatBytes, mp3SampleRate, readMp3, silenceLike, sliceMp3 } from "./mp3.server";
 import { generations } from "./schema.server";
 import {
   blocked,
   chargeAndRecord,
+  failGeneration,
   recordAttempt,
   toGeneration,
   type GenerationRow,
@@ -25,7 +41,7 @@ import {
  * (cost 0). Dosyalar yalnız sahibinin kayıtlarından okunur.
  */
 
-export type EditErrorCode = "invalidInput" | "notFound";
+export type EditErrorCode = "invalidInput" | "notFound" | "limit";
 type EditResult = Result<{ generation: Generation }, EditErrorCode> | RateLimited;
 
 /** Kırpılan ses en az bu kadar sürer. */
@@ -303,4 +319,213 @@ export async function saveImageEdit(
     now,
   );
   return { ok: true, generation };
+}
+
+/** Kullanıcı başına aynı anda hazırlanabilecek kısa video sayısı. */
+export const COMPOSE_MAX_PENDING = 1;
+/** Takılan ffmpeg bu süre sonunda durdurulur. */
+const COMPOSE_TIMEOUT_MS = 20 * 60_000;
+
+export interface ComposeDeps {
+  run: FfmpegRun;
+  /** ffmpeg altyazıyı videoya yazabiliyor mu (libass). */
+  subtitles: boolean;
+}
+
+export interface ComposeInput {
+  audioId: string;
+  images: { id: string; index: number }[];
+  format: ComposeFormat;
+  captions: CaptionStyle;
+  motion: boolean;
+  projectId?: string | undefined;
+  title?: string | undefined;
+}
+
+// Sunucu aynı anda tek video kodlar (işlemci diğer isteklere kalsın); işler sıraya girer.
+let composeQueue: Promise<void> = Promise.resolve();
+
+/**
+ * Kısa video: seçilen seslendirme, görseller (verilen sırayla, ses süresine
+ * eşit bölünerek) ve isteğe bağlı videoya yazılan altyazıdan MP4. İş arka
+ * planda sıraya girer; kayıt hemen "pending" döner ve kartta yüzde görünür.
+ * Kredi harcanmaz; kaynaklar değişmez.
+ */
+export async function startCompose(
+  db: Db,
+  storage: FileStorage,
+  deps: ComposeDeps,
+  userId: string,
+  input: ComposeInput,
+  now: Date,
+): Promise<EditResult> {
+  const { images, format, captions } = input;
+  if (
+    !(format in COMPOSE_FORMATS) ||
+    images.length < 1 ||
+    images.length > COMPOSE_MAX_IMAGES ||
+    images.some((r) => !Number.isInteger(r.index) || r.index < 0) ||
+    !["bottom", "middle"].includes(captions.position) ||
+    !["s", "m", "l"].includes(captions.size)
+  ) {
+    return { ok: false, error: "invalidInput" };
+  }
+  const audio = await ownRow(db, userId, input.audioId);
+  if (!audio || audio.type !== "tts" || !audio.audioKey || audio.status) {
+    return { ok: false, error: "notFound" };
+  }
+  const ids = [...new Set(images.map((r) => r.id))];
+  const rows = await db
+    .select()
+    .from(generations)
+    .where(and(eq(generations.userId, userId), inArray(generations.id, ids)));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const keys = images.map((r) => {
+    const row = byId.get(r.id);
+    return row?.type === "image" && !row.status ? row.files?.[r.index] : undefined;
+  });
+  if (keys.some((k) => !k)) return { ok: false, error: "notFound" };
+
+  const pending = await db
+    .select({ n: count() })
+    .from(generations)
+    .where(
+      and(
+        eq(generations.userId, userId),
+        eq(generations.editKind, "compose"),
+        eq(generations.status, "pending"),
+      ),
+    )
+    .get();
+  if ((pending?.n ?? 0) >= COMPOSE_MAX_PENDING) return { ok: false, error: "limit" };
+
+  const audioData = await storage.read(audio.audioKey);
+  const seconds = audioData ? readMp3(audioData)?.seconds : undefined;
+  if (!audioData || !seconds) return { ok: false, error: "notFound" };
+  if (seconds > COMPOSE_MAX_SECONDS) return { ok: false, error: "invalidInput" };
+
+  const stop = await limited(db, userId, now);
+  if (stop) return stop;
+
+  const id = randomUUID();
+  const row: GenerationRow = {
+    id,
+    userId,
+    type: "video",
+    text: audio.text,
+    voiceId: null,
+    style: null,
+    images: null,
+    audioKey: null,
+    files: null,
+    status: "pending",
+    job: null,
+    charges: null,
+    projectId: input.projectId ?? null,
+    title: input.title ?? null,
+    voiceSettings: null,
+    captionsKey: null,
+    editKind: "compose",
+    sourceId: audio.id,
+    cost: 0,
+    createdAt: now.toISOString(),
+  };
+  // İş, kayıt görünür olmadan önce listeye girer: aradaki kontrol onu yarım sanmasın.
+  const ctrl = new AbortController();
+  const job: ComposeJob = {
+    percent: 0,
+    cancelled: false,
+    cancel: () => {
+      job.cancelled = true;
+      ctrl.abort();
+    },
+  };
+  composeJobs.set(id, job);
+  let generation: Generation;
+  try {
+    generation = await recordVersion(db, userId, row, now);
+  } catch (err) {
+    composeJobs.delete(id);
+    throw err;
+  }
+
+  const work = {
+    audio: audioData,
+    captionsKey: captions.show && deps.subtitles ? audio.captionsKey : null,
+    imageKeys: keys as string[],
+    seconds,
+  };
+  composeQueue = composeQueue.then(() =>
+    runCompose(db, storage, deps, row, job, ctrl.signal, input, work).catch((err: unknown) =>
+      console.error("[video] oluşturma işi:", err instanceof Error ? err.message : err),
+    ),
+  );
+  return { ok: true, generation };
+}
+
+async function runCompose(
+  db: Db,
+  storage: FileStorage,
+  deps: ComposeDeps,
+  row: GenerationRow,
+  job: ComposeJob,
+  signal: AbortSignal,
+  input: ComposeInput,
+  work: { audio: Uint8Array; captionsKey: string | null; imageKeys: string[]; seconds: number },
+): Promise<void> {
+  const dir = await mkdtemp(join(tmpdir(), "trai-compose-"));
+  try {
+    if (job.cancelled) throw new Error("üretim silindi");
+    await writeFile(join(dir, "audio.mp3"), work.audio);
+    const images: string[] = [];
+    for (const [i, key] of work.imageKeys.entries()) {
+      const data = await storage.read(key);
+      if (!data) throw new Error("görsel dosyası okunamadı");
+      const name = `img-${i}.${key.slice(key.lastIndexOf(".") + 1)}`;
+      await writeFile(join(dir, name), data);
+      images.push(name);
+    }
+    let subtitles: string | null = null;
+    if (work.captionsKey) {
+      const raw = await storage.read(work.captionsKey);
+      const cues = (raw && parseCues(raw)) || [];
+      if (cues.length) {
+        subtitles = "subs.ass";
+        await writeFile(join(dir, subtitles), assSubtitles(cues, input.format, input.captions));
+      }
+    }
+    const args = ffmpegArgs({
+      images,
+      durations: imageDurations(work.seconds, images.length),
+      audio: "audio.mp3",
+      subtitles,
+      format: input.format,
+      motion: input.motion,
+      output: "out.mp4",
+    });
+    await deps.run(
+      args,
+      dir,
+      (s) => {
+        job.percent = Math.min(99, Math.max(job.percent, Math.round((s / work.seconds) * 100)));
+      },
+      AbortSignal.any([signal, AbortSignal.timeout(COMPOSE_TIMEOUT_MS)]),
+    );
+    const video = new Uint8Array(await readFile(join(dir, "out.mp4")));
+    const key = `${row.userId}/${row.id}-0.mp4`;
+    await storage.put(key, video);
+    const res = await db
+      .update(generations)
+      .set({ status: null, files: [key] })
+      .where(and(eq(generations.id, row.id), eq(generations.status, "pending")));
+    if (res.rowsAffected === 0) await storage.remove(key);
+  } catch (err) {
+    if (!job.cancelled) {
+      console.error("[video] oluşturulamadı:", err instanceof Error ? err.message : err);
+    }
+    await failGeneration(db, row);
+  } finally {
+    composeJobs.delete(row.id);
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }

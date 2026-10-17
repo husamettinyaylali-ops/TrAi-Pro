@@ -13,6 +13,7 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 | `/projects`, `/projects/:id`                                                       | Projeler: not, projedeki üretimler, tümünü ZIP olarak indirme                   |
 | `/editor/:id`                                                                      | Düzenleyici: ses kırpma/altyazı ya da görsel kırpma/yazı (yeni sürüm, ücretsiz) |
 | `/editor/merge`                                                                    | Sesleri birleştir: seçilen sesler sırayla tek MP3'te (`?project=`)              |
+| `/editor/video`                                                                    | Kısa video oluştur: seslendirme + görseller + altyazı → MP4 (`?project=`)       |
 | `/payment`                                                                         | Paket ve ödeme yöntemi seçimi (`?package=`)                                     |
 | `/payment-history`                                                                 | Siparişler ve kalan krediler                                                    |
 | `/account`                                                                         | Hesabım: ad, şifre, Google bağlantısı, diğer oturumları kapatma, hesabı silme   |
@@ -183,6 +184,16 @@ Akış: `/auth/google` → Google onay ekranı → `/auth/google/callback`. PKCE
 - Şema: `src/server/schema.server.ts`. Değişiklikten sonra `npm run db:generate` ile migration üretilir ve `drizzle/` klasörüyle birlikte commit edilir. Migration'lar sunucu ilk veritabanı bağlantısında otomatik uygulanır.
 - Derleme hedefi Node sunucusudur (`vite.config.ts` → Nitro `node-server`): `npm run build` → `npm start` (`node .output/server/index.mjs`, port `PORT`, varsayılan 3000). Sunucu tek dosyada paketlenir; SQLite'ın yerel modülü `.output/server/node_modules` altına alınır, bu yüzden derleme hedef işletim sisteminde yapılmalıdır (Docker imajı bunu Linux'ta yapar). Migration'lar açılışta çalışma klasöründeki `drizzle/`'dan uygulanır.
 - Postgres'e geçişte şema `drizzle-orm/pg-core` ile yeniden tanımlanır; servis katmanı büyük ölçüde aynı kalır.
+
+## Kısa video oluşturucu
+
+`/editor/video` (stüdyo üst çubuğu ve proje sayfasından "Video oluştur"): projedeki bir gerçek seslendirme ve seçilen görsellerden MP4.
+
+- Biçim: dikey 9:16 (1080×1920), yatay 16:9 (1920×1080) ya da kare 1:1. Görseller seçim sırasıyla gösterilir, ses süresine eşit bölünür ve kadrajı dolduracak şekilde ortadan kırpılır; istenirse her görselde hafif yakınlaşma.
+- Altyazı, seslendirmenin altyazısından videoya yazılır (altta ya da ortada; küçük/orta/büyük; beyaz, siyah kenarlı). Önizleme ilk görseli ve altyazı stilini gösterir.
+- Ücretsizdir (kredi harcanmaz); sonuç projede "Kısa video" kartıdır, yeniden üretilmez. Ses en çok 10 dakika, en çok 30 görsel; kullanıcı başına aynı anda bir video.
+- İş sunucuda arka planda ffmpeg ile yapılır (H.264 + AAC, 30 fps); sunucu aynı anda tek video kodlar, diğerleri sıraya girer, kartta yüzde görünür. Sunucu iş sürerken yeniden başlarsa kayıt "başarısız" olur.
+- **Kurulum:** Docker imajında ffmpeg ve DejaVu yazı tipi kuruludur. Docker dışında `ffmpeg` PATH'te olmalı ya da `FFMPEG_PATH` verilmeli; altyazı için ffmpeg libass ile derlenmiş olmalı. Durum Yönetim > Kurulum durumu'nda "Video oluşturucu (ffmpeg)" olarak görünür; ffmpeg yoksa sayfa kapalı olduğunu söyler.
 
 ## Yayın (VPS)
 

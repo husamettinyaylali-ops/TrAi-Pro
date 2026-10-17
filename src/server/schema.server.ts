@@ -161,11 +161,15 @@ export const generations = sqliteTable(
     /** Seslendirmenin altyazısı (zamanlı satırlar, JSON) depodaki anahtarı; yoksa boş. */
     captionsKey: text("captions_key"),
     /**
-     * Düzenleyicide oluşturulan sürüm: kırpılmış ses, birleştirilmiş ses ya da
-     * düzenlenmiş görsel. Kredi harcanmaz (cost 0); kaynak kayıt değişmez.
+     * Düzenleyicide oluşturulan sürüm: kırpılmış ses, birleştirilmiş ses,
+     * düzenlenmiş görsel ya da sesten oluşturulan kısa video. Kredi harcanmaz
+     * (cost 0); kaynak kayıt değişmez.
      */
-    editKind: text("edit_kind", { enum: ["trim", "merge", "image"] }),
-    /** Düzenlenen kaynak üretim (birleştirmede boş). Kaynak silinse de bu kayıt kalır. */
+    editKind: text("edit_kind", { enum: ["trim", "merge", "image", "compose"] }),
+    /**
+     * Düzenlenen kaynak üretim (kısa videoda sesi; birleştirmede boş). Kaynak
+     * silinse de bu kayıt kalır.
+     */
     sourceId: text("source_id"),
   },
   (t) => [

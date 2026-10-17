@@ -10,6 +10,11 @@ RUN npm run build
 
 FROM node:22-bookworm-slim
 WORKDIR /app
+# Kısa video oluşturucu: ffmpeg (libass ile altyazıyı videoya yazar) ve Türkçe
+# karakterleri içeren yazı tipi.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core \
+ && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production \
     PORT=3000 \
     DATABASE_URL=file:/data/trai-pro.db \

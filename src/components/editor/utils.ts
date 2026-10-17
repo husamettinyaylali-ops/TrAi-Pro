@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import { useI18n } from "@/lib/i18n";
 import type { Generation } from "@/lib/types";
 
@@ -51,4 +53,24 @@ export function useEditError() {
           : res.error === "notFound"
             ? t.editor.errors.notFound
             : t.editor.errors.failed;
+}
+
+/** Seslerin süreleri oynatıcı üst verisinden (yalnız süre için küçük bir istek); liste sabit (memo) verilmeli. */
+export function useAudioDurations(items: Generation[]) {
+  const [durations, setDurations] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const players = items.flatMap((g) => {
+      if (!g.audioUrl) return [];
+      const a = new Audio();
+      a.preload = "metadata";
+      a.onloadedmetadata = () => {
+        const ms = Math.round(a.duration * 1000);
+        if (Number.isFinite(ms)) setDurations((d) => ({ ...d, [g.id]: ms }));
+      };
+      a.src = g.audioUrl;
+      return [a];
+    });
+    return () => players.forEach((a) => a.removeAttribute("src"));
+  }, [items]);
+  return durations;
 }

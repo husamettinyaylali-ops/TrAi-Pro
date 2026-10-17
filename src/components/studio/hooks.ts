@@ -99,13 +99,14 @@ function usePolling(ids: string, ms: number) {
  * edilir (bitince ya da iade olunca güncellenir).
  */
 export function usePendingPolling(items: Generation[]) {
-  const pending = (type: GenerationType) =>
+  // Sağlayıcıdaki video seyrek, bu sunucudaki işler (uzun seslendirme, kısa video) sık sorulur.
+  const pending = (local: boolean) =>
     items
-      .filter((g) => g.status === "pending" && g.type === type)
+      .filter((g) => g.status === "pending" && (g.type === "tts" || g.edit === "compose") === local)
       .map((g) => g.id)
       .join(",");
-  usePolling(pending("video"), VIDEO_POLL_MS);
-  usePolling(pending("tts"), SPEECH_POLL_MS);
+  usePolling(pending(false), VIDEO_POLL_MS);
+  usePolling(pending(true), SPEECH_POLL_MS);
 }
 
 /** Yerel takvim günü (akıştaki gün ayırıcıları için). */
@@ -131,8 +132,8 @@ export function useDayLabel() {
  * projede, aynı adla. Sesi bilinmeyen eski kayıt için null.
  */
 export function regenerateInput(g: Generation): GenerateInput | null {
-  // Birleştirilmiş ses tek bir metinden üretilmedi; yeniden üretilmez.
-  if (g.edit === "merge") return null;
+  // Birleştirilmiş ses ve sesten oluşturulan video tek bir istemden üretilmedi; yeniden üretilmez.
+  if (g.edit === "merge" || g.edit === "compose") return null;
   const meta = { projectId: g.projectId, title: g.title };
   if (g.type === "tts") {
     return g.voiceId

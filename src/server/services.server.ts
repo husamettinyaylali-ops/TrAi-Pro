@@ -128,6 +128,7 @@ import {
   type TtsProvider,
 } from "./tts.server";
 import { buildCues, encodeCues, type Cue, type SpeechAlignment } from "./captions.server";
+import { composeJobs } from "./jobs.server";
 import { concatBytes, readMp3 } from "./mp3.server";
 
 const DAY = 86_400_000;
@@ -418,7 +419,7 @@ export const toGeneration = (g: GenerationRow): Generation => ({
   projectId: g.projectId ?? undefined,
   voiceSettings: g.voiceSettings ?? undefined,
   subtitleUrl: g.captionsKey ? `/media/subtitle/${g.id}` : undefined,
-  progress: g.type === "tts" && g.status === "pending" ? speechProgress(g.id) : undefined,
+  progress: g.status === "pending" ? jobProgress(g) : undefined,
   edit: g.editKind ?? undefined,
   sourceId: g.sourceId ?? undefined,
 });
@@ -1327,9 +1328,10 @@ export async function removeGeneration(
     .get();
   if (!row) return;
   await db.delete(generations).where(and(eq(generations.id, id), eq(generations.userId, userId)));
-  // Arka planda süren uzun seslendirme kalan parçaları göndermez.
+  // Arka planda süren uzun seslendirme kalan parçaları göndermez; video oluşturma durur.
   const job = speechJobs.get(id);
   if (job) job.cancelled = true;
+  composeJobs.get(id)?.cancel();
   if (!storage) return;
   const keys = [
     ...(row.audioKey ? [row.audioKey] : []),
@@ -1518,7 +1520,7 @@ export async function startVideo(
 }
 
 /** Başarısız işi (video, uzun seslendirme) işaretler ve krediyi düşüldüğü paketlere iade eder (bir kez). */
-async function failGeneration(db: Db, row: GenerationRow): Promise<GenerationRow> {
+export async function failGeneration(db: Db, row: GenerationRow): Promise<GenerationRow> {
   return db.transaction(async (tx) => {
     const res = await tx
       .update(generations)
@@ -1935,9 +1937,24 @@ export async function generateSpeech(
   return { ok: true, generation: toGeneration(row) };
 }
 
-/** Bekleyen uzun seslendirme bu süreçte çalışmıyorsa yarım kalmıştır: kredi iade edilir. */
-async function settleSpeech(db: Db, row: GenerationRow): Promise<GenerationRow> {
-  if (row.status !== "pending" || speechJobs.has(row.id)) return row;
+/** Bu süreçte çalışan iş (uzun seslendirme ya da video oluşturma) listesi. */
+const localJobs = (row: GenerationRow): Map<string, unknown> | null =>
+  row.type === "tts" ? speechJobs : row.editKind === "compose" ? composeJobs : null;
+
+/** Bekleyen iş için ilerleme: seslendirmede parça, video oluşturmada yüzde (/100). */
+function jobProgress(g: GenerationRow): { done: number; total: number } | undefined {
+  if (g.type === "tts") return speechProgress(g.id);
+  const job = g.editKind === "compose" ? composeJobs.get(g.id) : undefined;
+  return job ? { done: job.percent, total: 100 } : undefined;
+}
+
+/**
+ * Bu süreçte çalışan iş (uzun seslendirme, video oluşturma) listede yoksa
+ * yarım kalmıştır (sunucu yeniden başladı): başarısız sayılır, kredi iade edilir.
+ */
+async function settleLocal(db: Db, row: GenerationRow): Promise<GenerationRow> {
+  const jobs = localJobs(row);
+  if (row.status !== "pending" || !jobs || jobs.has(row.id)) return row;
   return failGeneration(db, row);
 }
 
@@ -1958,27 +1975,25 @@ export async function refreshPending(
     .where(and(eq(generations.id, id), eq(generations.userId, userId)))
     .get();
   if (!row) return { ok: false, error: "notFound" };
-  const fresh =
-    row.type === "tts"
-      ? await settleSpeech(db, row)
-      : row.type === "video" && video
-        ? await settleVideo(db, video, row, now)
-        : row;
+  const fresh = localJobs(row)
+    ? await settleLocal(db, row)
+    : row.type === "video" && video
+      ? await settleVideo(db, video, row, now)
+      : row;
   return { ok: true, generation: toGeneration(fresh) };
 }
 
 /**
- * Sunucu yeniden başlayınca yarım kalan uzun seslendirmeler: kredi iade edilir
- * (günlük bakım çağırır). İade edilen kayıt sayısını döner.
+ * Sunucu yeniden başlayınca yarım kalan işler (uzun seslendirme, video
+ * oluşturma): başarısız sayılır, kredi iade edilir (günlük bakım çağırır).
+ * Kapatılan kayıt sayısını döner.
  */
-export async function failOrphanSpeech(db: Db): Promise<number> {
-  const rows = await db
-    .select()
-    .from(generations)
-    .where(and(eq(generations.type, "tts"), eq(generations.status, "pending")));
+export async function failOrphanJobs(db: Db): Promise<number> {
+  const rows = await db.select().from(generations).where(eq(generations.status, "pending"));
   let n = 0;
   for (const row of rows) {
-    if (speechJobs.has(row.id)) continue;
+    const jobs = localJobs(row);
+    if (!jobs || jobs.has(row.id)) continue;
     await failGeneration(db, row);
     n += 1;
   }

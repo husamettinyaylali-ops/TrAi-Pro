@@ -13,6 +13,7 @@ import { getMailer, smtpSettings } from "./email.server";
 import { env, isProduction } from "./env.server";
 import { GOOGLE_TOKEN_URL, googleConfig } from "./google.server";
 import { CALLBACK_PATH } from "./google-flow.server";
+import type { FfmpegInfo } from "./compose.server";
 import { DEFAULT_IMAGE_MODEL } from "./image.server";
 import { retentionYears } from "./maintenance.server";
 import { PAYPAL_API, paypalConfig } from "./paypal.server";
@@ -51,9 +52,14 @@ const withWarnings = (state: SetupState, warnings: SetupWarning[]): SetupState =
  * Hangi servislerin yapılandırıldığı. Yalnız eksik anahtarların adları ve
  * gizli olmayan bilgiler (gönderen adresi, model, kısaltılmış alıcı adresi)
  * döner; API anahtarlarının ve şifrelerin değeri hiçbir zaman dönmez.
- * `origin` PUBLIC_URL yoksa Google yönlendirme adresini göstermek içindir.
+ * `origin` PUBLIC_URL yoksa Google yönlendirme adresini göstermek içindir;
+ * `ffmpeg` çağıranın yaptığı ffmpeg kontrolünün sonucudur (yoksa null).
  */
-export function setupStatus(origin: string, production = isProduction()): SetupItem[] {
+export function setupStatus(
+  origin: string,
+  production = isProduction(),
+  ffmpeg: FfmpegInfo | null = null,
+): SetupItem[] {
   const items: SetupItem[] = [];
   const publicUrl = env("PUBLIC_URL");
   const base = (publicUrl ?? origin).replace(/\/+$/, "");
@@ -207,6 +213,25 @@ export function setupStatus(origin: string, production = isProduction()): SetupI
             warnings: production ? ["backupMissing"] : [],
             info: [retention],
           }),
+    );
+  }
+
+  // Kısa video oluşturucu: sunucuda ffmpeg (Docker imajında kurulu); altyazı için libass.
+  {
+    const warnings: SetupWarning[] = ffmpeg
+      ? ffmpeg.subtitles
+        ? []
+        : ["ffmpegNoSubtitles"]
+      : production
+        ? ["ffmpegMissing"]
+        : [];
+    items.push(
+      ffmpeg
+        ? item("ffmpeg", withWarnings("ready", warnings), {
+            warnings,
+            info: [{ key: "ffmpegVersion", value: ffmpeg.version }],
+          })
+        : item("ffmpeg", production ? "warning" : "optional", { warnings }),
     );
   }
   return items;
