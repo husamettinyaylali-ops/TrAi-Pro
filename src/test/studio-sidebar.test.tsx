@@ -7,7 +7,11 @@ import { I18nProvider } from "@/lib/i18n";
 import type { Project } from "@/lib/types";
 
 const createProject = vi.fn();
-const project = (id: string, name: string, counts = { tts: 0, image: 0, video: 0 }): Project => ({
+const project = (
+  id: string,
+  name: string,
+  counts = { tts: 0, stt: 0, image: 0, video: 0 },
+): Project => ({
   id,
   name,
   notes: "",
@@ -16,7 +20,7 @@ const project = (id: string, name: string, counts = { tts: 0, image: 0, video: 0
   counts,
 });
 const projects = [
-  project("p1", "Bölüm 12", { tts: 3, image: 0, video: 1 }),
+  project("p1", "Bölüm 12", { tts: 3, stt: 0, image: 0, video: 1 }),
   project("p2", "Kanal tanıtımı"),
 ];
 

@@ -10,10 +10,12 @@ import {
 } from "react";
 import {
   AudioLines,
+  Captions,
   Clapperboard,
   Copy,
   Film,
   ImageIcon,
+  Languages,
   Loader2,
   Mic,
   Sparkles,
@@ -22,7 +24,15 @@ import {
 
 import { EditBanner } from "@/components/labs/generation-ui";
 import { clock } from "@/lib/clock";
-import { IMAGE_COUNTS, MAX_TTS_CHARS, balance, mediaCost, ttsCost } from "@/lib/credits";
+import {
+  IMAGE_COUNTS,
+  MAX_TTS_CHARS,
+  STT_LANGUAGES,
+  balance,
+  mediaCost,
+  sttCost,
+  ttsCost,
+} from "@/lib/credits";
 import { useFormat, useI18n } from "@/lib/i18n";
 import { splitForSpeech } from "@/lib/speech-text";
 import { useApp, type Generation } from "@/lib/store";
@@ -37,6 +47,7 @@ import {
 import { speak, stockVoices, stopSpeaking, type Voice } from "@/lib/voices";
 
 import { TOOLS, useActionError, useVoices, type Tool } from "./hooks";
+import { TranscribePicker, type PickedRecording } from "./transcribe-picker";
 import { VoiceSettingsControl } from "./voice-settings";
 
 /** Son kullanılan ses ayarları bu tarayıcıda hatırlanır (yalnız kolaylık). */
@@ -53,7 +64,7 @@ function loadSettings(): VoiceSettings {
   }
 }
 
-const toolIcons = { tts: Mic, clone: AudioLines, image: ImageIcon, video: Film };
+const toolIcons = { tts: Mic, clone: AudioLines, stt: Captions, image: ImageIcon, video: Film };
 const MAX_PROMPT = 400;
 const chip =
   "inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-3 text-sm focus-within:ring-2 focus-within:ring-ring";
@@ -68,7 +79,7 @@ function fitHeight(el: HTMLTextAreaElement) {
  * Stüdyonun alttaki yazma kutusu: araç seçimi, metin/istem, araca göre seçenek
  * (ses, adet, stil), maliyet ve gönder. Ctrl/Cmd + Enter gönderir. Düzeltmede
  * kaydın girdisi kutuya gelir; üretilen yeni sürüm eski kaydın projesinde ve
- * adıyla kalır.
+ * adıyla kalır. Sesten yazıda metin yerine dosya seçilir.
  */
 export function Composer({
   tool,
@@ -90,7 +101,7 @@ export function Composer({
 }) {
   const { t } = useI18n();
   const f = useFormat();
-  const { data, generate } = useApp();
+  const { data, generate, transcribe } = useApp();
   const config = useStudioConfig();
   const { voices, live: ttsLive, loading } = useVoices();
   const actionError = useActionError();
@@ -99,6 +110,8 @@ export function Composer({
   const [count, setCount] = useState(2);
   const [style, setStyle] = useState(0);
   const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
+  const [recording, setRecording] = useState<PickedRecording | null>(null);
+  const [language, setLanguage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; packages?: boolean } | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -169,14 +182,25 @@ export function Composer({
 
   const media = tool === "image" || tool === "video";
   const hasPass = balance(data.grants, "media", clock()) > 0;
-  const live = tool === "tts" ? ttsLive : media ? config.data?.[tool] === "live" : false;
+  const live =
+    tool === "tts"
+      ? ttsLive
+      : tool === "stt"
+        ? config.data?.stt === true
+        : media
+          ? config.data?.[tool] === "live"
+          : false;
   const serviceDown = tool === "tts" && ttsLive && !loading && voices.length === 0;
   const cost =
     tool === "tts"
       ? ttsCost(text)
-      : tool === "image"
-        ? mediaCost("image", count)
-        : mediaCost("video", 1);
+      : tool === "stt"
+        ? recording
+          ? sttCost(recording.seconds)
+          : 0
+        : tool === "image"
+          ? mediaCost("image", count)
+          : mediaCost("video", 1);
 
   const voiceLabel = (v: Voice) => {
     const kind = v.cloned
@@ -206,9 +230,35 @@ export function Composer({
     );
   };
 
+  /** Sesten yazı: seçilen kaydı yükler; kredi süreye göre düşer, iş arka planda sürer. */
+  const submitRecording = async () => {
+    if (!recording) return setError({ text: t.studio.stt.pick });
+    setError(null);
+    setBusy(true);
+    onBusy("stt");
+    const form = new FormData();
+    // Büyük dosyanın yalnız sesi (WAV) gider; adı özgün dosyanınkidir.
+    const { file, upload } = recording;
+    form.append("file", upload, upload === file ? file.name : "kayit.wav");
+    form.append("name", file.name);
+    if (language) form.append("language", language);
+    if (projectId) form.append("projectId", projectId);
+    const res = await transcribe(form);
+    setBusy(false);
+    onBusy(null);
+    if (!res.ok) {
+      return setError({
+        text: actionError(res, "stt"),
+        packages: res.error === "insufficient",
+      });
+    }
+    setRecording(null);
+  };
+
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
     if (busy || tool === "clone") return;
+    if (tool === "stt") return submitRecording();
     const clean = text.trim();
     if (!clean) {
       setError({ text: tool === "tts" ? t.labs.tts.emptyText : t.auth.errors.required });
@@ -272,7 +322,11 @@ export function Composer({
           <p role="alert" className="mx-4 mt-3 text-sm text-destructive">
             {error.text}{" "}
             {error.packages && (
-              <Link to="/pricing" hash="media-packages" className="font-semibold underline">
+              <Link
+                to="/pricing"
+                hash={media ? "media-packages" : "voice-packages"}
+                className="font-semibold underline"
+              >
                 {t.labs.seePackages}
               </Link>
             )}
@@ -280,6 +334,8 @@ export function Composer({
         )}
         {tool === "clone" ? (
           <p className="px-4 pt-4 text-sm text-muted-foreground">{t.studio.cloneHint}</p>
+        ) : tool === "stt" ? (
+          <TranscribePicker value={recording} onChange={setRecording} disabled={busy} />
         ) : (
           <>
             <label htmlFor="studio-input" className="sr-only">
@@ -320,10 +376,14 @@ export function Composer({
                   type="button"
                   aria-pressed={tool === k}
                   onClick={() => onTool(k)}
-                  className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${tool === k ? "bg-gradient-brand text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  title={t.studio.tool[k]}
+                  className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2.5 sm:min-h-9 sm:min-w-9 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3 ${tool === k ? "bg-gradient-brand text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   <I className="h-4 w-4" aria-hidden />
-                  {t.studio.tool[k]}
+                  {/* Dar ekranda yalnız seçili aracın adı görünür; diğerleri simge (ad ekran okuyucuda). */}
+                  <span className={tool === k ? "" : "sr-only sm:not-sr-only"}>
+                    {t.studio.tool[k]}
+                  </span>
                 </button>
               );
             })}
@@ -367,6 +427,24 @@ export function Composer({
               </select>
             </label>
           )}
+          {tool === "stt" && (
+            <label className={chip}>
+              <Languages className="h-4 w-4 text-muted-foreground" aria-hidden />
+              <span className="sr-only">{t.studio.stt.language}</span>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="max-w-[10rem] bg-transparent outline-none [&>option]:bg-popover"
+              >
+                <option value="">{t.studio.stt.auto}</option>
+                {STT_LANGUAGES.map((code) => (
+                  <option key={code} value={code}>
+                    {f.language(code)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {tool === "video" && (
             <label className={chip}>
               <Clapperboard className="h-4 w-4 text-muted-foreground" aria-hidden />
@@ -386,10 +464,17 @@ export function Composer({
           )}
           {tool !== "clone" && (
             <>
-              <span className="ml-auto text-xs text-muted-foreground">{costText}</span>
+              <span className="ml-auto text-xs text-muted-foreground">
+                {tool === "stt" && !recording ? "" : costText}
+              </span>
               <button
                 type="submit"
-                disabled={busy || serviceDown || (tool === "tts" && !voiceId)}
+                disabled={
+                  busy ||
+                  serviceDown ||
+                  (tool === "tts" && !voiceId) ||
+                  (tool === "stt" && (!recording || !live))
+                }
                 title={t.studio.sendHint}
                 className="inline-flex min-h-11 items-center gap-2 rounded-full bg-gradient-brand px-5 font-semibold text-primary-foreground shadow-glow transition hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
               >
@@ -408,9 +493,11 @@ export function Composer({
             <p className="px-4 pb-3 text-xs text-muted-foreground">
               {serviceDown
                 ? t.labs.tts.serviceDown
-                : media && !hasPass
-                  ? t.studio.needsPass
-                  : t.labs.demoResult}
+                : tool === "stt"
+                  ? t.studio.stt.unavailable
+                  : media && !hasPass
+                    ? t.studio.needsPass
+                    : t.labs.demoResult}
             </p>
           )}
       </form>

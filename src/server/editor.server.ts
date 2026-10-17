@@ -8,7 +8,14 @@ import { and, count, eq, inArray } from "drizzle-orm";
 import { LIMITS } from "@/lib/rate-limit";
 import type { Generation, RateLimited } from "@/lib/types";
 
-import { cleanCues, encodeCues, parseCues, shiftCues, type Cue } from "./captions.server";
+import {
+  cleanCues,
+  cuesToText,
+  encodeCues,
+  parseCues,
+  shiftCues,
+  type Cue,
+} from "./captions.server";
 import {
   COMPOSE_FORMATS,
   COMPOSE_MAX_IMAGES,
@@ -47,6 +54,9 @@ type EditResult = Result<{ generation: Generation }, EditErrorCode> | RateLimite
 /** Kırpılan ses en az bu kadar sürer. */
 export const MIN_TRIM_MS = 500;
 
+/** Sesi ve metni olan kayıt: seslendirme ya da yazıya dökülen kayıt. */
+const isSpeech = (row: GenerationRow) => row.type === "tts" || row.type === "stt";
+
 async function ownRow(db: Db, userId: string, id: string) {
   return db
     .select()
@@ -65,7 +75,7 @@ async function limited(db: Db, userId: string, now: Date): Promise<RateLimited |
 
 /** Yeni sürümün kaydı: kaynaktan metin, ses ve ayarlar; proje ve ad sahiplik denetimiyle. */
 async function recordVersion(db: Db, userId: string, row: GenerationRow, now: Date) {
-  await chargeAndRecord(db, userId, row.type === "tts" ? "voice" : "media", 0, row, now, {
+  await chargeAndRecord(db, userId, isSpeech(row) ? "voice" : "media", 0, row, now, {
     projectId: row.projectId ?? undefined,
     title: row.title ?? undefined,
   });
@@ -86,7 +96,7 @@ export async function trimSpeech(
   now: Date,
 ): Promise<EditResult> {
   const src = await ownRow(db, userId, input.id);
-  if (!src || src.type !== "tts" || !src.audioKey || src.status) {
+  if (!src || !isSpeech(src) || !src.audioKey || src.status) {
     return { ok: false, error: "notFound" };
   }
   const { startMs, endMs } = input;
@@ -129,6 +139,8 @@ export async function trimSpeech(
     {
       ...src,
       id,
+      // Yazıya dökülen kaydın metni altyazının kendisidir: düzeltme ve kırpma metne de yansır.
+      text: src.type === "stt" && shifted.length ? cuesToText(shifted) : src.text,
       audioKey,
       captionsKey,
       status: null,
@@ -184,7 +196,7 @@ export async function mergeSpeech(
     .where(and(eq(generations.userId, userId), inArray(generations.id, ids)));
   const byId = new Map(rows.map((r) => [r.id, r]));
   const clips = ids.map((id) => byId.get(id));
-  if (clips.some((c) => !c || c.type !== "tts" || !c.audioKey || c.status)) {
+  if (clips.some((c) => !c || !isSpeech(c) || !c.audioKey || c.status)) {
     return { ok: false, error: "notFound" };
   }
   const stop = await limited(db, userId, now);
@@ -237,7 +249,8 @@ export async function mergeSpeech(
     {
       id,
       userId,
-      type: "tts",
+      // Hepsi yazıya dökülen kayıtsa sonuç da öyledir.
+      type: clips.every((c) => c!.type === "stt") ? "stt" : "tts",
       text: clips.map((c) => c!.text).join("\n\n"),
       voiceId: same((c) => c.voiceId) ? first.voiceId : null,
       style: null,
@@ -371,7 +384,7 @@ export async function startCompose(
     return { ok: false, error: "invalidInput" };
   }
   const audio = await ownRow(db, userId, input.audioId);
-  if (!audio || audio.type !== "tts" || !audio.audioKey || audio.status) {
+  if (!audio || !isSpeech(audio) || !audio.audioKey || audio.status) {
     return { ok: false, error: "notFound" };
   }
   const ids = [...new Set(images.map((r) => r.id))];

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { MAX_TTS_CHARS, balance } from "@/lib/credits";
+import { MAX_TTS_CHARS, STT_LANGUAGES, STT_MAX_UPLOAD_BYTES, balance } from "@/lib/credits";
 import { clock } from "@/lib/clock";
 import { LIMITS } from "@/lib/rate-limit";
 import type { ActionErrorCode, Generation, RateLimited } from "@/lib/types";
@@ -10,7 +10,7 @@ import { formatCents } from "@/lib/wallet";
 
 import { authenticateApiKey } from "./api-keys.server";
 import { getDb, type Db } from "./db.server";
-import { imageDeps, speechDeps, videoDeps } from "./deps.server";
+import { imageDeps, speechDeps, transcribeDeps, videoDeps } from "./deps.server";
 import { fileStorage, type FileStorage } from "./file-storage.server";
 import { ownedFileResponse, ownedSubtitleResponse, subtitleFormat } from "./media.server";
 import { voiceClones } from "./schema.server";
@@ -27,6 +27,7 @@ import {
   type SpeechDeps,
   type VideoDeps,
 } from "./services.server";
+import { startTranscription, type TranscribeDeps } from "./transcribe.server";
 
 export interface ApiDeps {
   db: () => Promise<Db>;
@@ -35,6 +36,8 @@ export interface ApiDeps {
   speech: SpeechDeps | null;
   image: ImageDeps | null;
   video: VideoDeps | null;
+  /** Sesten yazıya (ElevenLabs ve ffmpeg); yoksa kapalı. */
+  transcribe?: () => Promise<TranscribeDeps | null>;
 }
 
 function defaultDeps(): ApiDeps {
@@ -45,6 +48,7 @@ function defaultDeps(): ApiDeps {
     speech: speechDeps(),
     image: imageDeps(),
     video: videoDeps(),
+    transcribe: transcribeDeps,
   };
 }
 
@@ -57,9 +61,10 @@ const ERRORS = {
   insufficient_credits: [402, "Not enough credits. No credits were used."],
   limit: [
     409,
-    "Too many jobs in progress (max 3 videos, 2 long voiceovers). Wait for one to finish.",
+    "Too many jobs in progress (max 3 videos, 2 long voiceovers, 2 transcriptions). Wait for one to finish.",
   ],
   content_rejected: [422, "Blocked by the content filter. No credits were used."],
+  payload_too_large: [413, "The file is too large (max 125 MB)."],
   rate_limited: [429, "Too many requests."],
   provider_failed: [502, "The generation service failed. No credits were used."],
   service_unavailable: [503, "This service is not enabled on this server."],
@@ -120,12 +125,15 @@ const schemas = {
 
 /** Üretimin API görünümü; dosya adresleri API anahtarıyla indirilir. */
 function view(g: Generation, origin: string) {
-  const count = g.type === "tts" ? (g.audioUrl ? 1 : 0) : (g.fileUrls?.length ?? 0);
+  const count =
+    g.type === "tts" || g.type === "stt" ? (g.audioUrl ? 1 : 0) : (g.fileUrls?.length ?? 0);
   return {
     id: g.id,
     type: g.type,
     status: g.status === "pending" ? "pending" : g.status === "failed" ? "failed" : "completed",
-    prompt: g.text,
+    ...(g.type === "stt"
+      ? { transcript: g.text, ...(g.language && { language: g.language }) }
+      : { prompt: g.text }),
     cost: g.cost,
     ...(g.voiceSettings && { voice_settings: g.voiceSettings }),
     ...(g.progress && { progress: g.progress }),
@@ -282,6 +290,50 @@ export async function handleApi(
         deps.video,
         userId,
         { text: body.prompt, styleIndex: VIDEO_STYLES.indexOf(body.style) },
+        now,
+      );
+      if (!res.ok)
+        return res.error === "tooManyAttempts" ? rateLimited(res) : fail(fromAction(res.error));
+      return json(view(res.generation, origin), 202);
+    }
+
+    case "transcriptions": {
+      if (id) return fail("not_found");
+      const denied = only("POST");
+      if (denied) return denied;
+      const tdeps = (await deps.transcribe?.()) ?? null;
+      if (!tdeps) return fail("service_unavailable");
+      const length = Number(request.headers.get("content-length") ?? 0);
+      if (length > STT_MAX_UPLOAD_BYTES + 64 * 1024) return fail("payload_too_large");
+      let form: FormData;
+      try {
+        form = await request.formData();
+      } catch {
+        return fail("invalid_input");
+      }
+      const file = form.get("file");
+      const language = form.get("language") ?? undefined;
+      const title = form.get("title") ?? undefined;
+      if (!(file instanceof File)) return fail("invalid_input");
+      if (file.size > STT_MAX_UPLOAD_BYTES) return fail("payload_too_large");
+      if (
+        (language !== undefined &&
+          (typeof language !== "string" ||
+            !(STT_LANGUAGES as readonly string[]).includes(language))) ||
+        (title !== undefined && (typeof title !== "string" || title.length > 200))
+      ) {
+        return fail("invalid_input");
+      }
+      const res = await startTranscription(
+        db,
+        tdeps,
+        userId,
+        {
+          file: new Uint8Array(await file.arrayBuffer()),
+          name: file.name,
+          language,
+          title,
+        },
         now,
       );
       if (!res.ok)

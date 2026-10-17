@@ -7,6 +7,7 @@ import {
   Download,
   Film,
   ImageIcon,
+  Captions,
   Loader2,
   Mic,
   Trash2,
@@ -27,7 +28,7 @@ export const Route = createFileRoute("/projects/$id")({
   component: ProjectPage,
 });
 
-const typeIcons = { tts: Mic, image: ImageIcon, video: Film };
+const typeIcons = { tts: Mic, stt: Captions, image: ImageIcon, video: Film };
 const iconLink =
   "grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -118,7 +119,9 @@ function ProjectActions({ project }: { project: Project }) {
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const total = project.counts.tts + project.counts.image + project.counts.video;
+  const total = Object.values(project.counts).reduce((a, b) => a + b, 0);
+  // Seslendirme ve yazıya dökülen kayıtlar düzenleyicide birlikte kullanılır.
+  const audio = project.counts.tts + project.counts.stt;
 
   const remove = async () => {
     const res = await deleteProject(project.id);
@@ -133,13 +136,13 @@ function ProjectActions({ project }: { project: Project }) {
           <Wand2 className="h-4 w-4" aria-hidden />
           {t.projects.openStudio}
         </Link>
-        {project.counts.tts > 0 && project.counts.image > 0 && (
+        {audio > 0 && project.counts.image > 0 && (
           <Link to="/editor/video" search={{ project: project.id }} className={btnOutline}>
             <Clapperboard className="h-4 w-4" aria-hidden />
             {t.editor.video.open}
           </Link>
         )}
-        {project.counts.tts > 1 && (
+        {audio > 1 && (
           <Link to="/editor/merge" search={{ project: project.id }} className={btnOutline}>
             <Combine className="h-4 w-4" aria-hidden />
             {t.editor.merge.open}
@@ -309,7 +312,7 @@ function MaterialRow({
   );
 }
 
-const FILTERS = ["all", "tts", "image", "video"] as const;
+const FILTERS = ["all", "tts", "stt", "image", "video"] as const;
 
 function Materials({ projectId }: { projectId: string }) {
   const { t } = useI18n();
@@ -409,6 +412,7 @@ function ProjectDetail() {
             f.num(project.counts.tts),
             f.num(project.counts.image),
             f.num(project.counts.video),
+            project.counts.stt ? f.num(project.counts.stt) : undefined,
           )}{" "}
           · {t.projects.updated(f.dateTime(project.updatedAt))}
         </p>

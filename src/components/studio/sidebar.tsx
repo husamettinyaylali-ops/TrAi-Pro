@@ -23,7 +23,7 @@ function useCounts() {
   const { t } = useI18n();
   const f = useFormat();
   return (p: Project) => {
-    const parts = (["tts", "image", "video"] as const)
+    const parts = (["tts", "stt", "image", "video"] as const)
       .filter((k) => p.counts[k] > 0)
       .map((k) => t.studio.countParts[k](f.num(p.counts[k])));
     return parts.length ? parts.join(" · ") : t.studio.noItems;

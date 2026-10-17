@@ -19,8 +19,8 @@ type Row = typeof generations.$inferSelect;
 
 const COPY = {
   tr: {
-    folders: { tts: "ses", image: "gorsel", video: "video" },
-    types: { tts: "Ses", image: "Görsel", video: "Video" },
+    folders: { tts: "ses", stt: "yazi", image: "gorsel", video: "video" },
+    types: { tts: "Ses", stt: "Sesten yazı", image: "Görsel", video: "Video" },
     manifest: "icerik.txt",
     project: "Proje",
     exported: "Dışa aktarma",
@@ -36,8 +36,8 @@ const COPY = {
     truncated: (n: number) => `Arşive yalnız ilk ${n} üretim alındı.`,
   },
   en: {
-    folders: { tts: "audio", image: "images", video: "video" },
-    types: { tts: "Audio", image: "Image", video: "Video" },
+    folders: { tts: "audio", stt: "transcripts", image: "images", video: "video" },
+    types: { tts: "Audio", stt: "Transcript", image: "Image", video: "Video" },
     manifest: "contents.txt",
     project: "Project",
     exported: "Exported",
@@ -151,6 +151,12 @@ export async function serveProjectZip(
           return cues ? new TextEncoder().encode(toSrt(cues)) : null;
         },
       });
+    }
+    // Yazıya dökülen metin ayrıca düz metin dosyası olarak.
+    if (g.type === "stt" && g.text) {
+      const text = new TextEncoder().encode(`${g.text.replace(/\r?\n/g, "\r\n")}\r\n`);
+      names.push(`${base}.txt`);
+      entries.push({ name: `${base}.txt`, data: async () => text });
     }
     return { g, names, n: i + 1 };
   });

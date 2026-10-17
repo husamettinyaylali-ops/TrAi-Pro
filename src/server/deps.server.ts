@@ -1,5 +1,6 @@
 import { resolveAppUrl } from "@/lib/app-url";
 
+import { detectFfmpeg, ffmpegRunner } from "./compose.server";
 import { getDb } from "./db.server";
 import { getMailer } from "./email.server";
 import { env, isProduction } from "./env.server";
@@ -12,6 +13,7 @@ import {
   type SpeechDeps,
   type VideoDeps,
 } from "./services.server";
+import { sttProvider, type TranscribeDeps } from "./transcribe.server";
 import { cachedVoices, publicVoices, ttsProvider, voiceAllowList } from "./tts.server";
 import { videoProvider } from "./video.server";
 
@@ -35,6 +37,13 @@ export function speechDeps(): SpeechDeps | null {
         voiceAllowList(),
       ),
   };
+}
+
+/** ElevenLabs bağlı ve sunucuda ffmpeg varsa sesten yazıya bağımlılıkları. */
+export async function transcribeDeps(): Promise<TranscribeDeps | null> {
+  const stt = sttProvider();
+  if (!stt || !(await detectFfmpeg())) return null;
+  return { stt, storage: fileStorage(), run: ffmpegRunner() };
 }
 
 /** fal.ai bağlıysa gerçek görsel üretimi bağımlılıkları. */

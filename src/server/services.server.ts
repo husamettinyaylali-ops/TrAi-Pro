@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   gt,
+  inArray,
   isNotNull,
   isNull,
   lt,
@@ -58,7 +59,7 @@ import type {
   GoogleErrorCode,
   Generation,
   GenerationPage,
-  GenerationType,
+  HistoryType,
   Order,
   RateLimited,
   TokenErrorCode,
@@ -128,7 +129,7 @@ import {
   type TtsProvider,
 } from "./tts.server";
 import { buildCues, encodeCues, type Cue, type SpeechAlignment } from "./captions.server";
-import { composeJobs } from "./jobs.server";
+import { composeJobs, transcribeJobs } from "./jobs.server";
 import { concatBytes, readMp3 } from "./mp3.server";
 
 const DAY = 86_400_000;
@@ -408,7 +409,9 @@ export const toGeneration = (g: GenerationRow): Generation => ({
   type: g.type,
   text: g.text,
   voiceId: g.voiceId ?? undefined,
-  style: g.style ?? undefined,
+  // Yazıya dökmede "style" sütunu kaydın dilini tutar.
+  style: g.type === "stt" ? undefined : (g.style ?? undefined),
+  language: g.type === "stt" ? (g.style ?? undefined) : undefined,
   images: g.images ?? undefined,
   audioUrl: g.audioKey ? `/media/audio/${g.id}` : undefined,
   fileUrls: g.files?.map((_, i) => `/media/file/${g.id}/${i}`),
@@ -1229,14 +1232,15 @@ export async function listGenerations(
   db: Db,
   userId: string,
   input: {
-    type?: GenerationType | undefined;
+    type?: HistoryType | undefined;
     projectId?: string | undefined;
     cursor?: string | undefined;
   },
   limit = HISTORY_PAGE_SIZE,
 ): Promise<GenerationPage> {
   const where = [eq(generations.userId, userId)];
-  if (input.type) where.push(eq(generations.type, input.type));
+  if (input.type === "audio") where.push(inArray(generations.type, ["tts", "stt"]));
+  else if (input.type) where.push(eq(generations.type, input.type));
   if (input.projectId) where.push(eq(generations.projectId, input.projectId));
   if (input.cursor !== undefined) {
     if (!HISTORY_CURSOR_RE.test(input.cursor)) return { items: [], next: null };
@@ -1328,8 +1332,9 @@ export async function removeGeneration(
     .get();
   if (!row) return;
   await db.delete(generations).where(and(eq(generations.id, id), eq(generations.userId, userId)));
-  // Arka planda süren uzun seslendirme kalan parçaları göndermez; video oluşturma durur.
-  const job = speechJobs.get(id);
+  // Arka planda süren uzun seslendirme kalan parçaları göndermez, yazıya dökmenin
+  // sonucu yazılmaz; video oluşturma durur.
+  const job = speechJobs.get(id) ?? transcribeJobs.get(id);
   if (job) job.cancelled = true;
   composeJobs.get(id)?.cancel();
   if (!storage) return;
@@ -1937,9 +1942,15 @@ export async function generateSpeech(
   return { ok: true, generation: toGeneration(row) };
 }
 
-/** Bu süreçte çalışan iş (uzun seslendirme ya da video oluşturma) listesi. */
+/** Bu süreçte çalışan iş (uzun seslendirme, yazıya dökme ya da video oluşturma) listesi. */
 const localJobs = (row: GenerationRow): Map<string, unknown> | null =>
-  row.type === "tts" ? speechJobs : row.editKind === "compose" ? composeJobs : null;
+  row.type === "tts"
+    ? speechJobs
+    : row.type === "stt"
+      ? transcribeJobs
+      : row.editKind === "compose"
+        ? composeJobs
+        : null;
 
 /** Bekleyen iş için ilerleme: seslendirmede parça, video oluşturmada yüzde (/100). */
 function jobProgress(g: GenerationRow): { done: number; total: number } | undefined {
@@ -1949,7 +1960,7 @@ function jobProgress(g: GenerationRow): { done: number; total: number } | undefi
 }
 
 /**
- * Bu süreçte çalışan iş (uzun seslendirme, video oluşturma) listede yoksa
+ * Bu süreçte çalışan iş (uzun seslendirme, yazıya dökme, video oluşturma) listede yoksa
  * yarım kalmıştır (sunucu yeniden başladı): başarısız sayılır, kredi iade edilir.
  */
 async function settleLocal(db: Db, row: GenerationRow): Promise<GenerationRow> {
@@ -1984,7 +1995,7 @@ export async function refreshPending(
 }
 
 /**
- * Sunucu yeniden başlayınca yarım kalan işler (uzun seslendirme, video
+ * Sunucu yeniden başlayınca yarım kalan işler (uzun seslendirme, yazıya dökme, video
  * oluşturma): başarısız sayılır, kredi iade edilir (günlük bakım çağırır).
  * Kapatılan kayıt sayısını döner.
  */

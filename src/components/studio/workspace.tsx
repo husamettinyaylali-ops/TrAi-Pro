@@ -29,7 +29,9 @@ function TopBar({
 }) {
   const { t, lang } = useI18n();
   const f = useFormat();
-  const total = project ? project.counts.tts + project.counts.image + project.counts.video : 0;
+  const total = project ? Object.values(project.counts).reduce((a, b) => a + b, 0) : 0;
+  // Seslendirme ve yazıya dökülen kayıtlar düzenleyicide birlikte kullanılır.
+  const audio = project ? project.counts.tts + project.counts.stt : 0;
   return (
     <div className="flex items-center gap-2 border-b border-border px-4 py-2.5 sm:px-6">
       <button
@@ -47,7 +49,7 @@ function TopBar({
         </h1>
         <p className="truncate text-xs text-muted-foreground">
           {project
-            ? `${t.projects.counts(f.num(project.counts.tts), f.num(project.counts.image), f.num(project.counts.video))} · ${t.projects.updated(f.dateTime(project.updatedAt))}`
+            ? `${t.projects.counts(f.num(project.counts.tts), f.num(project.counts.image), f.num(project.counts.video), project.counts.stt ? f.num(project.counts.stt) : undefined)} · ${t.projects.updated(f.dateTime(project.updatedAt))}`
             : t.studio.allSub}
         </p>
       </div>
@@ -75,7 +77,7 @@ function TopBar({
           <span className="hidden sm:inline">{t.studio.downloadAll}</span>
         </a>
       )}
-      {(!project || (project.counts.tts > 0 && project.counts.image > 0)) && (
+      {(!project || (audio > 0 && project.counts.image > 0)) && (
         <Link
           to="/editor/video"
           search={project ? { project: project.id } : {}}
@@ -86,7 +88,7 @@ function TopBar({
           <span className="hidden xl:inline">{t.editor.video.open}</span>
         </Link>
       )}
-      {(!project || project.counts.tts > 1) && (
+      {(!project || audio > 1) && (
         <Link
           to="/editor/merge"
           search={project ? { project: project.id } : {}}

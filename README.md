@@ -33,6 +33,7 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 
 - Ödeme: her yöntem kendi anahtarları `.env`'e yazılınca açılır (aşağıdaki kurulumlar). Hiçbiri açık değilse geliştirmede yalnız demo bakiye vardır ve ödeme sayfası bunu belirtir.
 - Seslendirme ve ses klonlama: `ELEVENLABS_API_KEY` varsa gerçek; yoksa seslendirme tarayıcının konuşma sentezini kullanır, klonda yalnız ad kaydedilir.
+- Sesten yazı: `ELEVENLABS_API_KEY` ve sunucuda ffmpeg varsa açık; yoksa araç kapalı olduğunu söyler (demo sonucu yoktur).
 - Görsel: `FAL_KEY` varsa gerçek (fal.ai); yoksa örnek görseller.
 - Video: `FAL_KEY` varsa gerçek (fal.ai, Kling); yoksa örnek görseller. Stüdyo, hangi kısımların demo olduğunu belirtir.
 
@@ -92,13 +93,13 @@ Görselle aynı `FAL_KEY` kullanılır; model varsayılan olarak Kling 1.6 stand
 
 ## Stüdyo, projeler ve üretimlerin düzeltilmesi
 
-- **Stüdyo düzeni** (`/labs`), yapay zeka uygulamalarındaki gibi: solda projeler (yeni proje, arama, "Tüm üretimler", krediler; dar ekranda soldan açılan çekmece), ortada seçili projenin akışı (sohbet gibi en yenisi altta, gün ayırıcılı, en üstte daha eski üretimler), altta sabit yazma kutusu (araç: Ses, Klon, Görsel, Video; araca göre ses, adet ya da stil; maliyet; Ctrl/Cmd + Enter gönderir). Araç `?tab=`, proje `?project=` ile adreste tutulur. Klon aracında ana alanda ses klonları yönetilir.
+- **Stüdyo düzeni** (`/labs`), yapay zeka uygulamalarındaki gibi: solda projeler (yeni proje, arama, "Tüm üretimler", krediler; dar ekranda soldan açılan çekmece), ortada seçili projenin akışı (sohbet gibi en yenisi altta, gün ayırıcılı, en üstte daha eski üretimler), altta sabit yazma kutusu (araç: Ses, Klon, Sesten yazı, Görsel, Video; araca göre ses, dil, adet ya da stil; maliyet; Ctrl/Cmd + Enter gönderir). Araç `?tab=`, proje `?project=` ile adreste tutulur. Klon aracında ana alanda ses klonları yönetilir.
 - **Proje:** kullanıcının çalışma alanı (ad, serbest not; kullanıcı başına en fazla 100). Seçiliyken yeni üretimler o projeye kaydedilir ve akış yalnız onu gösterir; "Tüm üretimler" her kaydı projesiyle gösterir. Üst çubukta proje notu, tümünü indir (ZIP) ve projeyi aç vardır.
 - **Her üretim kartında** doğrudan: _İndir_ (demo üretimde nedenini söyleyerek kapalı), _Editörde aç_ (gerçek seslendirmede), _Metni düzenle_ / _İstemi düzenle_ (metin/istem, ses, adet ya da stil yazma kutusuna gelir; üretince yeni sürüm kaydedilir, eskisi silinmez ve kredi yeniden harcanır; yeni sürüm eski kaydın projesinde ve adıyla kalır), _Yeniden üret_ (aynı ayarlarla, tek tıkla), _Metni kopyala_, _Taşı_; menüde _Yeniden adlandır_ ve _Sil_.
 - **Düzenleyici** (`/editor/:id`): seslendirmeyi baştan ve sondan kırpma (dalga üzerinde, tarayıcıda çözülen sesten; 24 MB'ı aşan seste dalga çizilmez), sessiz başı ve sonu otomatik bulma, seçimi dinleme ve altyazı metnini düzeltme. Kırpma sunucuda MP3 çerçeve sınırında, yeniden kodlamadan yapılır (~26 ms hassasiyet, kalite kaybı yok); altyazı yeni başlangıca kayar. Sonuç projede yeni bir kart olarak açılır ("Kırpıldı"), kredi harcanmaz, kaynak kayıt değişmez. **Görsel düzenleyici** (aynı sayfa, gerçek görselde): kırpma oranı (özgün, 1:1, 16:9, 9:16, 4:5) ve yakınlaştırma; alan sürükleyerek ya da ok tuşlarıyla kaydırılır; sağa/sola döndürme, yatay çevirme ve kapak yazısı (boyut, üst/orta/alt). Önizleme kaydedilecek görselin aynısıdır; görsel tarayıcıda hazırlanır (en uzun kenar en çok 4096 px), JPEG ya da PNG olarak yüklenir ve sunucuda tür ilk baytlardan doğrulanır (en çok 15 MB). Sonuç ücretsiz yeni kayıttır ("Düzenlendi"). Video düzenleme yoktur (sunucuda video aracı gerektirir).
   **Sesleri birleştir** (`/editor/merge`, stüdyo üst çubuğu ve proje sayfasından): projedeki gerçek seslendirmeler eskiden yeniye listelenir; seçilenler gösterilen sırayla, araya istenirse 0,5–2 sn sessizlik konarak tek MP3'te birleşir (yeniden kodlamadan; sessizlik aynı biçimde sıfır çerçevelerdir), altyazılar da kayarak birleşir. En çok 30 ses ve toplam 150 MB; sonuç ücretsiz yeni kayıttır ("Birleştirildi"), yeniden üretilemez. Kullanıcı başına saatte 60 düzenleme.
 - **Proje sayfası** (`/projects/:id`): ad ve not düzenleme, projedeki üretimler (türe göre süzülür; dinleme, önizleme, indirme, menü), stüdyoda açma ve silme. Proje silinince üretimler silinmez, projesiz kalır.
-- **Tümünü indir (ZIP)** (`/media/project/:id`, yalnız sahibine): gerçek dosyalar tür klasörlerinde (`ses/`, `gorsel/`, `video/`; `?lang=en` ile İngilizce), sonda proje notu, metinler ve dosya listesini içeren `icerik.txt`. Dosyalar sıkıştırılmadan akış olarak eklenir (medya zaten sıkıştırılmıştır; bellekte bir anda tek dosya durur); en fazla 300 üretim, 4 GB'a yaklaşınca kalan dosyalar atlanıp listede belirtilir. Kullanıcı başına saatte 20 arşiv.
+- **Tümünü indir (ZIP)** (`/media/project/:id`, yalnız sahibine): gerçek dosyalar tür klasörlerinde (`ses/`, `yazi/`, `gorsel/`, `video/`; `?lang=en` ile İngilizce; yazıya dökülen kayıtta ses, `.srt` ve `.txt`), sonda proje notu, metinler ve dosya listesini içeren `icerik.txt`. Dosyalar sıkıştırılmadan akış olarak eklenir (medya zaten sıkıştırılmıştır; bellekte bir anda tek dosya durur); en fazla 300 üretim, 4 GB'a yaklaşınca kalan dosyalar atlanıp listede belirtilir. Kullanıcı başına saatte 20 arşiv.
 
 ## Ödeme makbuzları
 
@@ -112,7 +113,7 @@ Kripto yöntemlerde benzersizlik için eklenen kuruşlar kullanıcıda kalır: b
 
 Kullanıcılar Hesabım sayfasından API anahtarı oluşturur (en fazla 5 etkin anahtar, e-postası doğrulanmış hesap) ve `/api/v1` uç noktalarını `Authorization: Bearer trai_…` başlığıyla çağırır. Belgeler: `/api-docs`.
 
-- Uç noktalar: `GET me`, `GET voices`, `POST tts`, `POST images`, `POST videos` (202, kuyruk), `GET generations/:id`, `GET generations/:id/files/:sıra`.
+- Uç noktalar: `GET me`, `GET voices`, `POST tts`, `POST transcriptions` (multipart, 202), `POST images`, `POST videos` (202, kuyruk), `GET generations/:id`, `GET generations/:id/files/:sıra`, `GET generations/:id/subtitles`.
 - Kredi, fiyat, sınır ve "hata/redde kredi düşmez" kuralları stüdyoyla aynı servis fonksiyonlarından geçer. Ek olarak anahtar başına dakikada 120 istek.
 - Anahtarın kendisi saklanmaz (SHA-256 özeti); kullanıcı oluştururken bir kez görür. İptal edilen anahtar ve silinen hesabın anahtarları kabul edilmez.
 - Hatalar `{"error":{"code","message"}}` biçiminde, uygun HTTP durumuyla döner; ilgili servis bu sunucuda açık değilse 503.
@@ -145,6 +146,16 @@ Anahtar yokken Stüdyo demo kipinde çalışır: seslendirme tarayıcının konu
 - Ses klonu, kullanıcının yüklediği kayıtla (en fazla 10 MB) ElevenLabs'te açılır; izin onayı zamanıyla kaydedilir. Klon ya da hesap silinince ElevenLabs'teki ses ve kullanıcının ses dosyaları da silinir.
 - **Maliyet:** ElevenLabs karakter başına ücretlendirir; sitedeki kredi fiyatlarınız (`src/lib/packages.ts`) bu maliyeti karşılayacak şekilde ayarlanmalı.
 - Cloudflare gibi dosya sistemi olmayan bir ortamda `FileStorage` arayüzü bir nesne deposuyla (ör. R2/S3) değiştirilmelidir (`src/server/file-storage.server.ts`).
+
+## Sesten yazı
+
+Stüdyoda **Sesten yazı** aracı (API'de `POST /api/v1/transcriptions`): kullanıcı ses ya da video dosyası yükler; sonuç metin, dil, SRT/VTT altyazı ve kaydın sesidir.
+
+- **Tarayıcıda hazırlık:** dosyanın sesi tarayıcıda çözülüp süresi ölçülür; ücret göndermeden önce görünür. 50 MB'a kadar dosya olduğu gibi gider; daha büyüğünün (çoğu zaman video) yalnız sesi 16 kHz mono WAV olarak gider, yükleme onlarca kat küçülür. Kaynak dosya en çok 1 GB, kayıt en çok 1 saat; yükleme en çok 125 MB.
+- **Sunucuda:** dosya ffmpeg ile 44,1 kHz mono MP3'e (64 kbps) çevrilir; süre ve ücret bundan ölçülür, dosya okunamazsa, sesi yoksa ya da çok uzunsa kredi düşülmez. MP3 saklanır (dinleme, düzenleyici). Yazıya dökme ElevenLabs Scribe (`scribe_v2`, `ELEVENLABS_STT_MODEL`) ile arka planda yapılır; dil seçilmezse algılanır. Kelime zamanlarından seslendirmedeki kurallarla altyazı kurulur (ayrıca 1,5 sn'lik duraklamada yeni satır); metin uzun duraklamalarda paragraflara ayrılır.
+- **Ücret:** kaydın başlayan her saniyesi 1 Ses AI kredisi (dakikası 60; `sttCost`, `src/lib/credits.ts`). Kredi iş başlayınca düşer; servis hata verirse ya da kayıtta konuşma bulunamazsa iade edilir ve ses dosyası silinir. ElevenLabs'in yazıya dökme ücreti seslendirmeye göre düşüktür; fiyat yayından önce gözden geçirilmeli.
+- **Kart:** metin (uzunsa daraltılmış), dil, ses; indirme menüsünde metin (TXT), SRT, VTT ve MP3. _Editörde aç_ ile altyazı metni düzeltilip kayıt kırpılabilir; düzeltme metne de yansır. Yazıya dökülen kayıtlar seslendirmelerle birleştirilebilir ve kısa video oluşturucuda ses olarak seçilebilir.
+- **Sınırlar:** kullanıcı başına saatte 30 dosya, aynı anda 2 bekleyen iş. Sunucu iş sürerken yeniden başlarsa yarım kalan iş iade edilir.
 
 ## Görsel üretimi (fal.ai) kurulumu
 
@@ -187,13 +198,13 @@ Akış: `/auth/google` → Google onay ekranı → `/auth/google/callback`. PKCE
 
 ## Kısa video oluşturucu
 
-`/editor/video` (stüdyo üst çubuğu ve proje sayfasından "Video oluştur"): projedeki bir gerçek seslendirme ve seçilen görsellerden MP4.
+`/editor/video` (stüdyo üst çubuğu ve proje sayfasından "Video oluştur"): projedeki bir gerçek seslendirme (ya da yazıya dökülmüş kayıt) ve seçilen görsellerden MP4.
 
 - Biçim: dikey 9:16 (1080×1920), yatay 16:9 (1920×1080) ya da kare 1:1. Görseller seçim sırasıyla gösterilir, ses süresine eşit bölünür ve kadrajı dolduracak şekilde ortadan kırpılır; istenirse her görselde hafif yakınlaşma.
 - Altyazı, seslendirmenin altyazısından videoya yazılır (altta ya da ortada; küçük/orta/büyük; beyaz, siyah kenarlı). Önizleme ilk görseli ve altyazı stilini gösterir.
 - Ücretsizdir (kredi harcanmaz); sonuç projede "Kısa video" kartıdır, yeniden üretilmez. Ses en çok 10 dakika, en çok 30 görsel; kullanıcı başına aynı anda bir video.
 - İş sunucuda arka planda ffmpeg ile yapılır (H.264 + AAC, 30 fps); sunucu aynı anda tek video kodlar, diğerleri sıraya girer, kartta yüzde görünür. Sunucu iş sürerken yeniden başlarsa kayıt "başarısız" olur.
-- **Kurulum:** Docker imajında ffmpeg ve DejaVu yazı tipi kuruludur. Docker dışında `ffmpeg` PATH'te olmalı ya da `FFMPEG_PATH` verilmeli; altyazı için ffmpeg libass ile derlenmiş olmalı. Durum Yönetim > Kurulum durumu'nda "Video oluşturucu (ffmpeg)" olarak görünür; ffmpeg yoksa sayfa kapalı olduğunu söyler.
+- **Kurulum:** Docker imajında ffmpeg ve DejaVu yazı tipi kuruludur. Docker dışında `ffmpeg` PATH'te olmalı ya da `FFMPEG_PATH` verilmeli; altyazı için ffmpeg libass ile derlenmiş olmalı. Durum Yönetim > Kurulum durumu'nda "Video oluşturucu ve sesten yazı (ffmpeg)" olarak görünür; ffmpeg yoksa sayfa ve sesten yazı aracı kapalı olduğunu söyler.
 
 ## Yayın (VPS)
 

@@ -237,6 +237,66 @@ describe("stüdyo üretim kartı", () => {
   });
 });
 
+describe("yazıya dökülen kayıt kartı", () => {
+  const transcript: Generation = {
+    id: "t1",
+    type: "stt",
+    text: Array.from({ length: 8 }, (_, i) => `Paragraf ${i + 1}.`).join("\n\n"),
+    title: "Röportaj",
+    language: "tur",
+    audioUrl: "/media/audio/t1",
+    subtitleUrl: "/media/subtitle/t1",
+    cost: 62,
+    createdAt: now,
+  };
+
+  it("metin, dil ve ses; indirme menüsü önce metin ve altyazı; istem ve yeniden üretim yok", async () => {
+    renderCard(transcript);
+    expect(screen.getByText(/Sesten Yazı · Türkçe · 62 kr/)).toBeInTheDocument();
+    expect(screen.getByText(/Paragraf 8\./)).toBeInTheDocument();
+    const more = screen.getByRole("button", { name: "Tümünü göster" });
+    fireEvent.click(more);
+    expect(screen.getByRole("button", { name: "Daralt" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText(/Dinle: Röportaj/)).toHaveAttribute("src", "/media/audio/t1");
+    expect(screen.queryByRole("button", { name: "Metni düzenle" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Yeniden üret" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Editörde aç" })).toHaveAttribute("href", "/editor/t1");
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "İndir" }), { key: "Enter" });
+    const links = await screen.findAllByRole("menuitem");
+    expect(links.map((l) => l.textContent?.trim())).toEqual([
+      "Metin (TXT)",
+      "Altyazı (SRT)",
+      "Altyazı (VTT)",
+      "Ses (MP3)",
+    ]);
+    expect(links[0]).toHaveAttribute("download", "trai-pro-t1.txt");
+    expect(decodeURIComponent(links[0]!.getAttribute("href")!)).toBe(
+      `data:text/plain;charset=utf-8,${transcript.text}`,
+    );
+  });
+
+  it("hazırlanırken bekleme, başarısızsa iade söylenir", () => {
+    const { unmount } = render(
+      <I18nProvider>
+        <GenerationCard
+          g={{ ...transcript, text: "", status: "pending" }}
+          voices={[]}
+          showProject={false}
+          onEdit={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Kayıt yazıya dökülüyor");
+    unmount();
+    renderCard({ ...transcript, text: "", status: "failed", audioUrl: undefined });
+    expect(screen.getByText(/Yazıya dökülemedi .*62 kredi iade edildi\./)).toBeInTheDocument();
+    // Başarısız işte indirilecek dosya ve kopyalanacak metin yok.
+    expect(screen.queryByRole("button", { name: /İndir/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Metni kopyala" })).toBeNull();
+  });
+});
+
 describe("yeniden üretim girdisi", () => {
   it("ses, adet ve stil kayıttan; ses kimliği yoksa yeniden üretilemez", () => {
     expect(regenerateInput({ ...speech, voiceId: undefined })).toBeNull();

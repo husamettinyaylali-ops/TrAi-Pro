@@ -43,7 +43,7 @@ export function VideoComposer({ projectId }: { projectId: string | undefined }) 
   const editError = useEditError();
   const { composeVideo } = useApp();
   const config = useStudioConfig();
-  const audioHistory = useHistory("tts", projectId);
+  const audioHistory = useHistory("audio", projectId);
   const imageHistory = useHistory("image", projectId);
   const audios = useMemo(
     () => audioHistory.items.filter((g) => g.audioUrl && !g.status),

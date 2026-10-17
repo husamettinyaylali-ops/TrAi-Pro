@@ -3,7 +3,10 @@ import type { VoiceSettings } from "./voice-settings";
 
 /** Siparişin ödeme biçimi. "balance": bakiyeden; diğerleri demo dönemin kayıtları. */
 export type PaymentMethod = "card" | "crypto" | "bank" | "balance";
-export type GenerationType = "tts" | "image" | "video";
+/** "stt": sesten yazıya (yüklenen kaydın sesi, metni ve altyazısı). */
+export type GenerationType = "tts" | "stt" | "image" | "video";
+/** Geçmiş süzgeci: tür ya da "audio" (seslendirme ve yazıya dökülen kayıtlar birlikte). */
+export type HistoryType = GenerationType | "audio";
 
 /** Bakiye yükleme yöntemleri (genaipro.io'daki seçenekler) ve geliştirme için demo. */
 export type TopUpMethod = "usdt_bep20" | "binance_pay" | "paypal" | "demo";
@@ -72,14 +75,16 @@ export interface Generation {
   /** Altyazı adresi (`?format=srt|vtt`); demo üretimde ya da zamanlama yoksa yok. */
   subtitleUrl?: string | undefined;
   /**
-   * Video ya da uzun seslendirme hazırlanıyor veya başarısız oldu (kredisi iade
-   * edildi); boşsa tamamlandı.
+   * Video, uzun seslendirme ya da yazıya dökme hazırlanıyor veya başarısız oldu
+   * (kredisi iade edildi); boşsa tamamlandı.
    */
   status?: "pending" | "failed" | undefined;
   /** Arka planda seslendirilen uzun metnin ilerlemesi (parça). */
   progress?: { done: number; total: number } | undefined;
   /** Düzenleyicide oluşturulan sürüm (ücretsiz): kırpma, birleştirme ya da görsel düzenleme. */
   edit?: "trim" | "merge" | "image" | "compose" | undefined;
+  /** Yazıya dökülen kaydın dili (ISO 639; sağlayıcının algıladığı ya da seçilen). */
+  language?: string | undefined;
   sourceId?: string | undefined;
   cost: number;
   createdAt: string;
@@ -157,6 +162,8 @@ export interface StudioConfig {
   voices: { id: string; name: string; gender: "female" | "male" | null }[];
   /** Kısa video oluşturucu: sunucuda ffmpeg var mı, altyazıyı videoya yazabiliyor mu. */
   compose: { available: boolean; subtitles: boolean };
+  /** Sesten yazıya açık mı (ElevenLabs ve ffmpeg gerekir). */
+  stt: boolean;
 }
 
 export interface UserData {
@@ -218,6 +225,9 @@ export type ActionErrorCode =
   | "insufficientBalance"
   /** İstek ya da çıktı sağlayıcının güvenlik filtresine takıldı; kredi düşülmez. */
   | "contentRejected";
+
+/** Sesten yazıya: üretim hataları ve sunucuda kapalı servis (ElevenLabs ya da ffmpeg yok). */
+export type TranscribeErrorCode = ActionErrorCode | "unavailable";
 
 export type TopUpErrorCode =
   | "unauthorized"
@@ -296,6 +306,8 @@ export interface SetupInfo {
     | "from"
     | "smtpHost"
     | "model"
+    | "sttModel"
+    | "apiUrl"
     | "imageModel"
     | "videoModel"
     | "callback"

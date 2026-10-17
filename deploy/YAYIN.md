@@ -74,7 +74,7 @@ Sağlık, HTTPS yönlendirmesi, güvenlik başlıkları, herkese açık sayfalar
 
 ```sh
 node deploy/duman-testi.mjs https://ALANADI --anahtar trai_…          # krediler, ses listesi
-node deploy/duman-testi.mjs https://ALANADI --anahtar trai_… --uret   # gerçek seslendirme + görsel (~8 + 1 kredi)
+node deploy/duman-testi.mjs https://ALANADI --anahtar trai_… --uret   # gerçek seslendirme, sesten yazı ve görsel (~10 + 1 kredi)
 node deploy/duman-testi.mjs https://ALANADI --anahtar trai_… --video  # ayrıca bir video (15 kredi, birkaç dakika)
 ```
 
@@ -86,7 +86,7 @@ Başarısız kontrol varsa yanında nedeni yazar; sunucuda `docker compose logs 
 - [ ] Kurulum durumunda kırmızı madde yok; **Yedek** hazır.
 - [ ] Yeni hesap: doğrulama e-postası geliyor, deneme kredisi tanımlanıyor; şifre sıfırlama e-postası geliyor.
 - [ ] Google ile giriş (kullanılıyorsa).
-- [ ] Stüdyo: seslendirme ve altyazı, uzun metin, ses klonu, görsel, video, düzenleyici, kısa video oluşturucu.
+- [ ] Stüdyo: seslendirme ve altyazı, uzun metin, ses klonu, sesten yazı (kısa bir video dosyasıyla), görsel, video, düzenleyici, kısa video oluşturucu.
 - [ ] Her ödeme yöntemiyle küçük gerçek bir ödeme (ör. 1 $): bakiyeye yazılıyor, makbuz e-postası geliyor, paket alınabiliyor.
 - [ ] `DEMO_PAYMENTS` boş; PayPal `live`.
 - [ ] Fiyatlar (`src/lib/packages.ts`) servis maliyetlerini karşılıyor.

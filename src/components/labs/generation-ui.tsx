@@ -38,24 +38,27 @@ const shortName = (g: Generation) =>
 
 /**
  * Üretimin adı (yoksa metni); yeniden adlandırılırken ad alanı. Ad verilmişse
- * metin altında soluk gösterilir.
+ * metin altında soluk gösterilir (`textLine` kapalıysa gösterilmez: metin
+ * zaten kartın gövdesindedir).
  */
 export function GenerationTitle({
   g,
   renaming,
   onDone,
   onError,
+  textLine = true,
 }: {
   g: Generation;
   renaming: boolean;
   onDone: () => void;
   onError: (text: string) => void;
+  textLine?: boolean;
 }) {
   if (renaming) return <RenameInput g={g} onDone={onDone} onError={onError} />;
   return (
     <>
       <p className="truncate text-sm font-medium">{g.title ?? g.text}</p>
-      {g.title && <p className="truncate text-xs text-muted-foreground">{g.text}</p>}
+      {g.title && textLine && <p className="truncate text-xs text-muted-foreground">{g.text}</p>}
     </>
   );
 }
@@ -169,7 +172,7 @@ export function GenerationMenu({
           keepFocus.current = false;
         }}
       >
-        {g.edit !== "compose" && (
+        {g.edit !== "compose" && g.type !== "stt" && (
           <DropdownMenuItem className={item} disabled={pending} onSelect={focusElsewhere(onEdit)}>
             <Pencil /> {t.labs.edit}
           </DropdownMenuItem>

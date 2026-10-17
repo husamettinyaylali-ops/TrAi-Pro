@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 
 import { resolveAppUrl } from "@/lib/app-url";
-import { MAX_TTS_CHARS } from "@/lib/credits";
+import { MAX_TTS_CHARS, STT_MAX_UPLOAD_BYTES } from "@/lib/credits";
 import { LIMITS } from "@/lib/rate-limit";
 import { clock } from "@/lib/clock";
 import type { Lang } from "@/lib/i18n";
@@ -35,7 +35,13 @@ import {
   revokeApiKey as revokeUserApiKey,
 } from "@/server/api-keys.server";
 import { getDb } from "@/server/db.server";
-import { imageDeps, receiptContext, speechDeps, videoDeps } from "@/server/deps.server";
+import {
+  imageDeps,
+  receiptContext,
+  speechDeps,
+  transcribeDeps,
+  videoDeps,
+} from "@/server/deps.server";
 import { getMailer } from "@/server/email.server";
 import { paypalConfig, sharedPaypal } from "@/server/paypal.server";
 import { env, isProduction } from "@/server/env.server";
@@ -43,6 +49,7 @@ import { COMPOSE_MAX_IMAGES, detectFfmpeg, ffmpegRunner } from "@/server/compose
 import * as editor from "@/server/editor.server";
 import * as projectSvc from "@/server/projects.server";
 import { setupStatus, testIntegration } from "@/server/setup-check.server";
+import { startTranscription } from "@/server/transcribe.server";
 import * as svc from "@/server/services.server";
 import { SESSION_COOKIE } from "@/server/session.server";
 import { ttsProvider } from "@/server/tts.server";
@@ -356,7 +363,8 @@ export const getStudioConfig = createServerFn({ method: "GET" }).handler(
     const ffmpeg = await detectFfmpeg();
     const compose = { available: Boolean(ffmpeg), subtitles: Boolean(ffmpeg?.subtitles) };
     const deps = speechDeps();
-    if (!deps) return { tts: "demo", cloning: false, image, video, voices: [], compose };
+    const stt = Boolean(deps && ffmpeg);
+    if (!deps) return { tts: "demo", cloning: false, image, video, voices: [], compose, stt };
     try {
       const voices = await deps.catalog();
       return {
@@ -366,10 +374,11 @@ export const getStudioConfig = createServerFn({ method: "GET" }).handler(
         video,
         voices: voices.map(({ id, name, gender }) => ({ id, name, gender })),
         compose,
+        stt,
       };
     } catch (err) {
       console.error("[ses] ses listesi alınamadı:", err instanceof Error ? err.message : err);
-      return { tts: "live", cloning: true, image, video, voices: [], compose };
+      return { tts: "live", cloning: true, image, video, voices: [], compose, stt };
     }
   },
 );
@@ -439,7 +448,7 @@ export const listGenerations = createServerFn({ method: "POST" })
   .validator(
     parse(
       z.object({
-        type: z.enum(["tts", "image", "video"]).optional(),
+        type: z.enum(["tts", "stt", "image", "video", "audio"]).optional(),
         projectId: id.optional(),
         cursor: z.string().max(120).regex(svc.HISTORY_CURSOR_RE).optional(),
       }),
@@ -579,6 +588,46 @@ export const composeVideo = createServerFn({ method: "POST" })
       data,
       clock(),
     );
+  });
+
+/**
+ * Sesten yazıya (FormData: file, isteğe bağlı language, projectId, title).
+ * Dosya sunucuda MP3'e çevrilip ölçülür, kredi düşer; yazıya dökme arka
+ * planda sürer ve kayıt "pending" döner. ElevenLabs ya da ffmpeg yoksa kapalı.
+ */
+export const transcribe = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    if (!(input instanceof FormData)) throw new Error("FormData bekleniyor");
+    return input;
+  })
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    const deps = await transcribeDeps();
+    if (!deps) return { ok: false as const, error: "unavailable" as const };
+    const file = data.get("file");
+    const field = (k: string) => {
+      const v = data.get(k);
+      return typeof v === "string" && v ? v.slice(0, 200) : undefined;
+    };
+    if (!(file instanceof File) || file.size > STT_MAX_UPLOAD_BYTES) {
+      return { ok: false as const, error: "invalidInput" as const };
+    }
+    const res = await startTranscription(
+      await getDb(),
+      deps,
+      user.id,
+      {
+        file: new Uint8Array(await file.arrayBuffer()),
+        name: field("name") ?? file.name,
+        language: field("language"),
+        projectId: field("projectId"),
+        title: field("title"),
+      },
+      clock(),
+    );
+    if (!res.ok) return res;
+    return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
   });
 
 /** Üretime ad verir; boş ad adı kaldırır. */

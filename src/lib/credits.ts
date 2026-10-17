@@ -20,6 +20,25 @@ export const MAX_TTS_CHARS = 50_000;
  */
 export const TTS_CHUNK_CHARS = 5_000;
 export const MAX_CLONES = 5;
+/** Sesten yazıya: en uzun kayıt (saniye) ve yüklenebilecek en büyük dosya. */
+export const STT_MAX_SECONDS = 60 * 60;
+export const STT_MIN_SECONDS = 1;
+export const STT_MAX_UPLOAD_BYTES = 125 * 1024 * 1024;
+/** Yazıya dökme dilleri (ISO 639-1); boş seçim dili otomatik algılatır. */
+export const STT_LANGUAGES = [
+  "tr",
+  "en",
+  "de",
+  "fr",
+  "es",
+  "it",
+  "pt",
+  "nl",
+  "ru",
+  "ar",
+  "az",
+  "ja",
+] as const;
 export const MEDIA_COST = { image: 1, video: 15 } as const;
 /** Tek istekte üretilebilecek görsel sayıları. */
 export const IMAGE_COUNTS = [1, 2, 4] as const;
@@ -90,6 +109,14 @@ export function spend(
 /** Metinden ses: boşluklar dahil, baştaki ve sondaki boşluk hariç her karakter 1 kredi. */
 export function ttsCost(text: string): number {
   return [...text.trim()].length;
+}
+
+/**
+ * Sesten yazıya: kaydın her başlayan saniyesi 1 Ses AI kredisi (dakikası 60).
+ * Süre sunucuda, dönüştürülen sesten ölçülür.
+ */
+export function sttCost(seconds: number): number {
+  return Math.max(1, Math.ceil(seconds - 1e-6));
 }
 
 export function mediaCost(type: MediaType, count: number): number {

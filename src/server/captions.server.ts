@@ -1,7 +1,8 @@
 /**
- * Seslendirmeden altyazı: sağlayıcının karakter zamanlarından kelimeler,
- * kelimelerden okunabilir altyazılar (en çok 2 × 42 karakter ve 6 sn; cümle
- * sonunda yeni altyazı), sonra SRT ya da WebVTT. Zamanlar milisaniyedir.
+ * Altyazı: seslendirmede sağlayıcının karakter zamanlarından, yazıya dökmede
+ * kelime zamanlarından okunabilir altyazılar (en çok 2 × 42 karakter ve 6 sn;
+ * cümle sonunda ve uzun duraklamada yeni altyazı), sonra SRT ya da WebVTT.
+ * Zamanlar milisaniyedir.
  */
 
 /** Sağlayıcının karakter bazlı zamanlaması (saniye). */
@@ -18,18 +19,21 @@ export interface Cue {
   text: string;
 }
 
-interface Word {
+/** Zamanlı kelime (ms). */
+export interface TimedWord {
   text: string;
   start: number;
   end: number;
   /** Metinde satır sonundan sonra geliyor: yeni altyazı başlatır. */
-  breakBefore: boolean;
+  breakBefore?: boolean | undefined;
 }
 
 export const CAPTION_LINE = 42;
 const CAPTION_MAX = CAPTION_LINE * 2;
 const CAPTION_MAX_MS = 6_000;
 const CAPTION_MIN_MS = 1_000;
+/** Kelimeler arasında bu kadar sessizlik varsa yeni altyazı başlar. */
+const CAPTION_GAP_MS = 1_500;
 // Rakamdan sonraki nokta ("3. bölüm") cümle sonu sayılmaz.
 const SENTENCE_END = /(?:[!?…]|(?<!\d)\.)["'”’»)\]]*$/u;
 const CLAUSE_END = /(?:[,;:]["'”’»)\]]*|[–—])$/u;
@@ -37,8 +41,8 @@ const CLAUSE_END = /(?:[,;:]["'”’»)\]]*|[–—])$/u;
 const len = (s: string) => [...s].length;
 const ms = (seconds: number) => Math.max(0, Math.round(seconds * 1000));
 
-function words(a: SpeechAlignment, offsetSeconds: number): Word[] {
-  const out: Word[] = [];
+function words(a: SpeechAlignment, offsetSeconds: number): TimedWord[] {
+  const out: TimedWord[] = [];
   let text = "";
   let start = 0;
   let end = 0;
@@ -79,9 +83,13 @@ function splitLines(text: string): string {
  * dosyadaki başlangıcı (`offset`, saniye) kadar kaydırılır.
  */
 export function buildCues(parts: { alignment: SpeechAlignment; offset: number }[]): Cue[] {
-  const all = parts.flatMap((p) => words(p.alignment, p.offset));
+  return cuesFromWords(parts.flatMap((p) => words(p.alignment, p.offset)));
+}
+
+/** Zamanlı kelimelerden (sırayla) altyazılar. */
+export function cuesFromWords(all: TimedWord[]): Cue[] {
   const raw: Cue[] = [];
-  let cur: Word[] = [];
+  let cur: TimedWord[] = [];
   const joined = () => cur.map((w) => w.text).join(" ");
   const flush = () => {
     if (cur.length) raw.push({ start: cur[0]!.start, end: cur.at(-1)!.end, text: joined() });
@@ -91,6 +99,7 @@ export function buildCues(parts: { alignment: SpeechAlignment; offset: number }[
     if (
       cur.length &&
       (w.breakBefore ||
+        w.start - cur.at(-1)!.end >= CAPTION_GAP_MS ||
         len(joined()) + 1 + len(w.text) > CAPTION_MAX ||
         w.end - cur[0]!.start > CAPTION_MAX_MS)
     ) {
@@ -111,6 +120,32 @@ export function buildCues(parts: { alignment: SpeechAlignment; offset: number }[
       text: splitLines(c.text),
     };
   });
+}
+
+/**
+ * Altyazılardan düz metin: satırlar birleşir; uzun duraklamada (2 sn) ya da
+ * paragraf uzadıktan sonraki cümle sonunda yeni paragraf başlar.
+ */
+export function cuesToText(cues: Cue[]): string {
+  const paragraphs: string[] = [];
+  let cur = "";
+  let prev: Cue | undefined;
+  for (const c of cues) {
+    const text = c.text.replace(/\s*\n\s*/g, " ").trim();
+    if (!text) continue;
+    if (
+      cur &&
+      prev &&
+      (c.start - prev.end >= 2_000 || (len(cur) >= 500 && SENTENCE_END.test(cur)))
+    ) {
+      paragraphs.push(cur);
+      cur = "";
+    }
+    cur = cur ? `${cur} ${text}` : text;
+    prev = c;
+  }
+  if (cur) paragraphs.push(cur);
+  return paragraphs.join("\n\n");
 }
 
 function stamp(t: number, sep: "," | "."): string {

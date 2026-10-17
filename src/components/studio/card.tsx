@@ -1,10 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
+  Captions,
   Check,
   ChevronDown,
   Copy,
   Download,
+  FileText,
   Film,
   FolderInput,
   ImageIcon,
@@ -44,7 +46,7 @@ import { regenerateInput, useActionError } from "./hooks";
 const actBtn =
   "inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40";
 const item = "min-h-11";
-const icons = { tts: Mic, image: ImageIcon, video: Film };
+const icons = { tts: Mic, stt: Captions, image: ImageIcon, video: Film };
 
 /** Panoya kopyalar; Clipboard API yoksa ya da izin vermezse seçip kopyalama yoluna düşer. */
 async function copyText(text: string): Promise<boolean> {
@@ -69,24 +71,46 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/** İndir: tek dosya bağlantı; çok görsel ya da altyazılı ses menü; demo üretimde nedeniyle kapalı. */
+/**
+ * İndir: tek dosya bağlantı; çok görsel, altyazılı ses ya da yazıya dökülen
+ * kayıt (metin, altyazı, ses) menü; demo üretimde nedeniyle kapalı.
+ */
 function DownloadAction({ g }: { g: Generation }) {
   const { t } = useI18n();
   const files = g.audioUrl ? [g.audioUrl] : (g.fileUrls ?? []);
-  if (g.audioUrl && g.subtitleUrl) {
-    const links = [
-      { href: `${g.audioUrl}?download=1`, label: t.studio.downloadAudio, Icon: Download },
-      {
-        href: `${g.subtitleUrl}?format=srt&download=1`,
-        label: t.studio.downloadSrt,
-        Icon: Subtitles,
-      },
-      {
-        href: `${g.subtitleUrl}?format=vtt&download=1`,
-        label: t.studio.downloadVtt,
-        Icon: Subtitles,
-      },
-    ];
+  if (g.audioUrl && (g.subtitleUrl || g.type === "stt")) {
+    const audio = {
+      href: `${g.audioUrl}?download=1`,
+      label: t.studio.downloadAudio,
+      Icon: Download,
+    };
+    const subtitles = g.subtitleUrl
+      ? [
+          {
+            href: `${g.subtitleUrl}?format=srt&download=1`,
+            label: t.studio.downloadSrt,
+            Icon: Subtitles,
+          },
+          {
+            href: `${g.subtitleUrl}?format=vtt&download=1`,
+            label: t.studio.downloadVtt,
+            Icon: Subtitles,
+          },
+        ]
+      : [];
+    // Yazıya dökülen metin tarayıcıda dosyaya çevrilir (sunucuya yeniden gidilmez).
+    const text = g.text
+      ? [
+          {
+            href: `data:text/plain;charset=utf-8,${encodeURIComponent(g.text)}`,
+            label: t.studio.downloadTxt,
+            Icon: FileText,
+            name: `trai-pro-${g.id.slice(0, 8)}.txt`,
+          },
+        ]
+      : [];
+    const links: { href: string; label: string; Icon: typeof Download; name?: string }[] =
+      g.type === "stt" ? [...text, ...subtitles, audio] : [audio, ...subtitles];
     return (
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger className={`${actBtn} text-cyan`}>
@@ -95,9 +119,9 @@ function DownloadAction({ g }: { g: Generation }) {
           <ChevronDown className="h-3.5 w-3.5" aria-hidden />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
-          {links.map(({ href, label, Icon }) => (
-            <DropdownMenuItem key={href} asChild className={item}>
-              <a href={href} download>
+          {links.map(({ href, label, Icon, name }) => (
+            <DropdownMenuItem key={label} asChild className={item}>
+              <a href={href} download={name ?? true}>
                 <Icon /> {label}
               </a>
             </DropdownMenuItem>
@@ -148,6 +172,50 @@ function DownloadAction({ g }: { g: Generation }) {
   );
 }
 
+/** Yazıya dökülen kayıt: metin (uzunsa daraltılmış) ve kaydın sesi. */
+function TranscriptBody({ g }: { g: Generation }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const long = g.text.length > 480 || g.text.split("\n").length > 6;
+  const id = `transcript-${g.id}`;
+  return (
+    <div className="space-y-2">
+      {g.text ? (
+        <div className="rounded-2xl bg-muted/50 p-3">
+          <p
+            id={id}
+            className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${long && !open ? "line-clamp-6" : ""}`}
+          >
+            {g.text}
+          </p>
+          {long && (
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={id}
+              onClick={() => setOpen((v) => !v)}
+              className="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {open ? t.studio.stt.showLess : t.studio.stt.showAll}
+            </button>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">{t.studio.stt.noText}</p>
+      )}
+      {g.audioUrl && (
+        <audio
+          controls
+          preload="none"
+          src={g.audioUrl}
+          className="w-full"
+          aria-label={`${t.labs.tts.play}: ${g.title ?? g.text.slice(0, 60)}`}
+        />
+      )}
+    </div>
+  );
+}
+
 /** Üretimin içeriği: ses oynatıcı, görsel ızgarası, video ya da bekleme durumu. */
 function CardBody({ g, voice }: { g: Generation; voice: Voice | undefined }) {
   const { t } = useI18n();
@@ -175,9 +243,11 @@ function CardBody({ g, voice }: { g: Generation; voice: Voice | undefined }) {
             ? p
               ? t.labs.tts.longProgress(f.num(p.done), f.num(p.total))
               : t.labs.tts.longPending
-            : compose
-              ? t.editor.video.progress(f.num(p?.done ?? 0))
-              : t.labs.video.pending}
+            : g.type === "stt"
+              ? t.studio.stt.pending
+              : compose
+                ? t.editor.video.progress(f.num(p?.done ?? 0))
+                : t.labs.video.pending}
         </p>
         {p && (
           <progress
@@ -199,12 +269,15 @@ function CardBody({ g, voice }: { g: Generation; voice: Voice | undefined }) {
       <p className="rounded-2xl border border-destructive/40 p-4 text-sm text-destructive">
         {g.type === "tts"
           ? t.labs.tts.failedRefund(f.num(g.cost))
-          : g.edit === "compose"
-            ? t.editor.video.failed
-            : t.labs.video.failedRefund(f.num(g.cost))}
+          : g.type === "stt"
+            ? t.studio.stt.failedRefund(f.num(g.cost))
+            : g.edit === "compose"
+              ? t.editor.video.failed
+              : t.labs.video.failedRefund(f.num(g.cost))}
       </p>
     );
   }
+  if (g.type === "stt") return <TranscriptBody g={g} />;
   if (g.type === "tts") {
     if (g.audioUrl) {
       return (
@@ -353,9 +426,11 @@ export function GenerationCard({
   const kind =
     g.type === "tts"
       ? [voice?.name ?? t.labs.tts.unknownVoice, tuned].filter(Boolean).join(" · ")
-      : g.type === "image"
-        ? t.studio.images(f.num(g.fileUrls?.length || g.images?.length || 1))
-        : (t.labs.video.styles[Number(g.style)] ?? t.studio.tool.video);
+      : g.type === "stt"
+        ? [t.labs.tabs.stt, g.language && f.language(g.language)].filter(Boolean).join(" · ")
+        : g.type === "image"
+          ? t.studio.images(f.num(g.fileUrls?.length || g.images?.length || 1))
+          : (t.labs.video.styles[Number(g.style)] ?? t.studio.tool.video);
   const meta = g.edit ? `${kind} · ${t.studio.editTag[g.edit]}` : kind;
 
   const regenerate = async () => {
@@ -396,6 +471,7 @@ export function GenerationCard({
             renaming={renaming}
             onDone={() => setRenaming(false)}
             onError={setError}
+            textLine={g.type !== "stt"}
           />
           <p className="truncate text-xs text-muted-foreground">
             {meta} · {f.num(g.cost)} {t.labs.creditsShort}
@@ -413,7 +489,8 @@ export function GenerationCard({
 
       {g.status !== "pending" && (
         <div className="mt-2 flex flex-wrap items-center gap-0.5">
-          <DownloadAction g={g} />
+          {/* Başarısız işin indirilecek dosyası yoktur (demo nedeni de yanlış olurdu). */}
+          {g.status !== "failed" && <DownloadAction g={g} />}
           {g.type !== "video" &&
             g.status !== "failed" &&
             (editorBlock(g) ? (
@@ -433,35 +510,39 @@ export function GenerationCard({
                 {t.studio.openEditor}
               </Link>
             ))}
-          {/* Sesten oluşturulan videonun istemi yok: metin seslendirmenindir. */}
-          {g.edit !== "compose" && (
+          {/* Sesten oluşturulan videonun ve yazıya dökülen kaydın istemi yok. */}
+          {g.edit !== "compose" && g.type !== "stt" && (
             <button type="button" onClick={() => onEdit(g)} className={actBtn}>
               <Pencil className="h-4 w-4" aria-hidden />
               {t.studio.editText[g.type]}
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => void regenerate()}
-            disabled={busy || !again}
-            title={t.studio.againHint(f.num(g.cost))}
-            className={actBtn}
-          >
-            {busy ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            ) : (
-              <RefreshCw className="h-4 w-4" aria-hidden />
-            )}
-            {t.studio.again}
-          </button>
-          <button type="button" onClick={() => void copy()} className={actBtn}>
-            {copied ? (
-              <Check className="h-4 w-4 text-cyan" aria-hidden />
-            ) : (
-              <Copy className="h-4 w-4" aria-hidden />
-            )}
-            <span aria-live="polite">{copied ? t.studio.copied : t.studio.copy}</span>
-          </button>
+          {g.type !== "stt" && (
+            <button
+              type="button"
+              onClick={() => void regenerate()}
+              disabled={busy || !again}
+              title={t.studio.againHint(f.num(g.cost))}
+              className={actBtn}
+            >
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <RefreshCw className="h-4 w-4" aria-hidden />
+              )}
+              {t.studio.again}
+            </button>
+          )}
+          {g.text && (
+            <button type="button" onClick={() => void copy()} className={actBtn}>
+              {copied ? (
+                <Check className="h-4 w-4 text-cyan" aria-hidden />
+              ) : (
+                <Copy className="h-4 w-4" aria-hidden />
+              )}
+              <span aria-live="polite">{copied ? t.studio.copied : t.studio.copy}</span>
+            </button>
+          )}
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger className={actBtn}>
               <FolderInput className="h-4 w-4" aria-hidden />

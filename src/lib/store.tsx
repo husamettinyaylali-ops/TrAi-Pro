@@ -22,7 +22,7 @@ import type {
   GenerateInput,
   Generation,
   GenerationPage,
-  GenerationType,
+  HistoryType,
   Order,
   Project,
   ProjectErrorCode,
@@ -33,6 +33,7 @@ import type {
   TopUpErrorCode,
   TopUpIntent,
   TopUpMethod,
+  TranscribeErrorCode,
   UserData,
 } from "./types";
 
@@ -121,6 +122,13 @@ interface Store {
   saveImageEdit: (
     form: FormData,
   ) => Promise<Outcome<{ generation: Generation }, EditErrorCode> | RateLimited>;
+  /**
+   * Sesten yazıya (FormData: file, isteğe bağlı language, projectId, title).
+   * Kredi süreye göre düşer; yazıya dökme arka planda sürer ve kayıt "pending" döner.
+   */
+  transcribe: (
+    form: FormData,
+  ) => Promise<Outcome<{ generation: Generation }, TranscribeErrorCode> | RateLimited>;
   /** Kısa video oluşturucu: iş arka planda; kayıt "pending" döner, kredi harcanmaz. */
   composeVideo: (
     input: ComposeRequest,
@@ -192,13 +200,16 @@ const Ctx = createContext<Store | null>(null);
 const HISTORY = "generations";
 const PROJECTS = "projects";
 /** Geçmiş anahtarı: kullanıcı, tür ve proje süzgeci ("all" = süzgeçsiz). */
-const historyKey = (userId: string, type?: GenerationType, projectId?: string) =>
+const historyKey = (userId: string, type?: HistoryType, projectId?: string) =>
   [HISTORY, userId, type ?? "all", projectId ?? "all"] as const;
 type HistoryData = InfiniteData<GenerationPage, string | undefined>;
 
 /** Üretim bu geçmiş listesine girer mi (tür ve proje süzgeci). */
 const belongs = (key: readonly unknown[], g: Generation) =>
-  (key[2] === "all" || key[2] === g.type) && (key[3] === "all" || key[3] === g.projectId);
+  (key[2] === "all" ||
+    key[2] === g.type ||
+    (key[2] === "audio" && (g.type === "tts" || g.type === "stt"))) &&
+  (key[3] === "all" || key[3] === g.projectId);
 
 /**
  * Üretimi önbellekteki geçmişlerde günceller: artık ait olmadığı listeden
@@ -335,6 +346,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return res;
       },
+      transcribe: async (form) => {
+        const res = await call(() => api.transcribe({ data: form }));
+        if (res.ok && userId) {
+          upsertHistory(qc, userId, res.generation, true);
+          if (res.generation.projectId) void qc.invalidateQueries({ queryKey: [PROJECTS] });
+        }
+        return res;
+      },
       composeVideo: async (input) => {
         const res = await call(() => api.composeVideo({ data: input }));
         if (res.ok && userId) {
@@ -423,7 +442,7 @@ export interface History {
  * "daha fazla" ile gelir. Tür ve proje verilmezse süzgeç yoktur. Üretme,
  * silme, taşıma, adlandırma ve video kontrolü önbelleği günceller.
  */
-export function useHistory(type?: GenerationType, projectId?: string): History {
+export function useHistory(type?: HistoryType, projectId?: string): History {
   const qc = useQueryClient();
   const { user } = useApp();
   const q = useInfiniteQuery({

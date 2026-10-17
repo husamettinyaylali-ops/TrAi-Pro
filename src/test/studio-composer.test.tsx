@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
@@ -8,6 +8,8 @@ import { I18nProvider } from "@/lib/i18n";
 import type { Generation } from "@/lib/types";
 
 const generate = vi.fn();
+const transcribe = vi.fn();
+const prepareUpload = vi.fn();
 const mediaGrant = {
   id: "g1",
   kind: "media" as const,
@@ -19,12 +21,17 @@ const mediaGrant = {
 };
 let grants: (typeof mediaGrant)[] = [];
 let ttsMode: "demo" | "live" = "demo";
+let sttOn = true;
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => <a href={to}>{children}</a>,
 }));
 vi.mock("@/lib/store", () => ({
-  useApp: () => ({ data: { grants, clones: [] }, generate }),
+  useApp: () => ({ data: { grants, clones: [] }, generate, transcribe }),
+}));
+vi.mock("@/lib/audio-upload", async (orig) => ({
+  ...(await orig<typeof import("@/lib/audio-upload")>()),
+  prepareUpload: (file: Blob) => prepareUpload(file),
 }));
 vi.mock("@/lib/studio-config", () => ({
   useStudioConfig: () => ({
@@ -35,6 +42,7 @@ vi.mock("@/lib/studio-config", () => ({
       image: "demo",
       video: "demo",
       voices: ttsMode === "live" ? [{ id: "v1", name: "Ayla", gender: "female" }] : [],
+      stt: sttOn,
     },
   }),
 }));
@@ -62,8 +70,11 @@ const box = () => screen.getByRole("textbox", { name: /Seslendirmek|Görseli anl
 describe("stüdyo yazma kutusu", () => {
   beforeEach(() => {
     generate.mockReset();
+    transcribe.mockReset();
+    prepareUpload.mockReset();
     grants = [];
     ttsMode = "demo";
+    sttOn = true;
     window.localStorage.clear();
   });
 
@@ -203,6 +214,61 @@ describe("stüdyo yazma kutusu", () => {
     fireEvent.keyDown(box(), { key: "Enter", ctrlKey: true });
     expect(await screen.findByRole("alert")).toHaveTextContent(/servis/i);
     expect(box()).toHaveValue("Deneme");
+  });
+
+  it("sesten yazı: dosya hazırlanır, süreye göre ücret; dil ve projeyle yüklenir", async () => {
+    const file = new File([new Uint8Array(10)], "roportaj.mp4", { type: "video/mp4" });
+    const wav = new Blob([new Uint8Array(4)], { type: "audio/wav" });
+    prepareUpload.mockResolvedValueOnce({ upload: wav, seconds: 61.2 });
+    transcribe.mockResolvedValueOnce({
+      ok: true,
+      generation: { id: "t1", type: "stt", text: "", status: "pending", cost: 62, createdAt: "" },
+    });
+    const { onBusy } = renderComposer({ tool: "stt", projectId: "p1" });
+    expect(screen.queryByRole("textbox")).toBeNull();
+    const send = screen.getByRole("button", { name: "Yazıya dök" });
+    expect(send).toBeDisabled();
+
+    fireEvent.change(document.getElementById("stt-file")!, { target: { files: [file] } });
+    expect(await screen.findByText("roportaj.mp4")).toBeInTheDocument();
+    expect(prepareUpload).toHaveBeenCalledWith(file);
+    expect(screen.getByText("62 kredi")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Kaydın dili" }), {
+      target: { value: "en" },
+    });
+    fireEvent.click(send);
+    await waitFor(() => expect(transcribe).toHaveBeenCalledTimes(1));
+    const form = transcribe.mock.calls[0]![0] as FormData;
+    // Büyük dosyanın yalnız sesi gider; kayıt adı özgün dosyadan.
+    expect((form.get("file") as File).name).toBe("kayit.wav");
+    expect(form.get("name")).toBe("roportaj.mp4");
+    expect(form.get("language")).toBe("en");
+    expect(form.get("projectId")).toBe("p1");
+    expect(onBusy).toHaveBeenCalledWith("stt");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Ses ya da video dosyası seç" })).toBeVisible(),
+    );
+  });
+
+  it("sesten yazı: okunamayan dosya nedeniyle; kapalı sunucuda gönderilmez", async () => {
+    const { PrepareFailure } = await import("@/lib/audio-upload");
+    prepareUpload.mockRejectedValueOnce(new PrepareFailure("tooLong"));
+    renderComposer({ tool: "stt" });
+    fireEvent.change(document.getElementById("stt-file")!, {
+      target: { files: [new File([new Uint8Array(4)], "uzun.mp3")] },
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("en çok 1 saat");
+    cleanup();
+
+    sttOn = false;
+    prepareUpload.mockResolvedValueOnce({ upload: new Blob([]), seconds: 3 });
+    renderComposer({ tool: "stt" });
+    expect(screen.getByText("Sesten yazıya bu sunucuda şu an kapalı.")).toBeInTheDocument();
+    fireEvent.change(document.getElementById("stt-file")!, {
+      target: { files: [new File([new Uint8Array(4)], "a.mp3")] },
+    });
+    expect(await screen.findByText("a.mp3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Yazıya dök" })).toBeDisabled();
   });
 
   it("araç seçimi bildirilir; klon aracında metin alanı yoktur", () => {

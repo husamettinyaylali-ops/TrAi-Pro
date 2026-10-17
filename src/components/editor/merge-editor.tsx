@@ -29,7 +29,7 @@ export function MergeEditor({ projectId }: { projectId: string | undefined }) {
   const secs = useSeconds();
   const editError = useEditError();
   const { mergeSpeech } = useApp();
-  const history = useHistory("tts", projectId);
+  const history = useHistory("audio", projectId);
   // Birleştirme doğal sırayla (eskiden yeniye) yapılır.
   const clips = useMemo(
     () => history.items.filter((g) => g.audioUrl && !g.status).reverse(),

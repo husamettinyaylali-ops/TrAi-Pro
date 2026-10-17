@@ -7,6 +7,7 @@ import {
   mediaCost,
   nextExpiry,
   spend,
+  sttCost,
   ttsCost,
 } from "@/lib/credits";
 import { safeRedirect } from "@/lib/redirect";
@@ -67,6 +68,13 @@ describe("maliyet", () => {
   it("metinden seste karakter başına 1 kredi, kenar boşlukları sayılmaz", () => {
     expect(ttsCost("  Merhaba dünya  ")).toBe(13);
     expect(ttsCost("")).toBe(0);
+  });
+
+  it("sesten yazıda kaydın başlayan her saniyesi 1 kredi, en az 1", () => {
+    expect(sttCost(0.4)).toBe(1);
+    expect(sttCost(60)).toBe(60);
+    expect(sttCost(60.2)).toBe(61);
+    expect(sttCost(3600)).toBe(3600);
   });
 
   it("görsel 1, video 15 kredi", () => {

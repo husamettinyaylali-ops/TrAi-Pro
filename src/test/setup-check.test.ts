@@ -32,6 +32,8 @@ const KEYS = [
   "PAYPAL_WEBHOOK_ID",
   "BACKUP_DIR",
   "RETENTION_YEARS",
+  "ELEVENLABS_STT_MODEL",
+  "ELEVENLABS_API_URL",
 ];
 const saved = new Map<string, string | undefined>();
 const origin = "https://studio.example";
@@ -128,6 +130,23 @@ describe("kurulum durumu", () => {
       expect(dump).not.toContain(secret);
     }
     expect(byId(items, "usdt").warnings).toEqual([]);
+  });
+
+  it("ses: seslendirme ve sesten yazı modeli; varsayılan dışı API adresi gösterilir", async () => {
+    process.env["ELEVENLABS_API_KEY"] = SECRETS.el;
+    expect(byId(setupStatus(origin, true), "tts").info).toEqual([
+      { key: "model", value: "eleven_multilingual_v2" },
+      { key: "sttModel", value: "scribe_v2" },
+    ]);
+    process.env["ELEVENLABS_API_URL"] = "https://api.eu.residency.elevenlabs.io/";
+    expect(byId(setupStatus(origin, true), "tts").info).toContainEqual({
+      key: "apiUrl",
+      value: "https://api.eu.residency.elevenlabs.io",
+    });
+    // Bağlantı testi de aynı adrese gider.
+    const { impl, calls } = fakeFetch(() => Response.json({ voices: [] }));
+    await testIntegration("tts", { adminEmail: "admin@example.com", now, fetchImpl: impl });
+    expect(calls[0]!.url).toBe("https://api.eu.residency.elevenlabs.io/v1/voices");
   });
 
   it("geçersiz USDT adresi ve eksik Binance anahtarı açıkça söylenir", () => {

@@ -4,6 +4,15 @@ import type { SpeechAlignment } from "./captions.server";
 import { env } from "./env.server";
 
 export const ELEVENLABS_API = "https://api.elevenlabs.io";
+
+/**
+ * ElevenLabs API adresi: ELEVENLABS_API_URL (ör. veri yerleşimi için
+ * https://api.eu.residency.elevenlabs.io) ya da varsayılan adres.
+ */
+export function elevenLabsBaseUrl(): string {
+  const raw = env("ELEVENLABS_API_URL")?.trim().replace(/\/+$/, "");
+  return raw && /^https?:\/\/[^/]+/.test(raw) ? raw : ELEVENLABS_API;
+}
 export const DEFAULT_TTS_MODEL = "eleven_multilingual_v2";
 
 export interface ProviderVoice {
@@ -90,9 +99,11 @@ function readAlignment(
 export function elevenLabsProvider(opts: {
   apiKey: string;
   model?: string | undefined;
+  baseUrl?: string | undefined;
   fetchImpl?: typeof fetch;
 }): TtsProvider {
   const f = opts.fetchImpl ?? fetch;
+  const api = opts.baseUrl ?? ELEVENLABS_API;
   const model = opts.model ?? DEFAULT_TTS_MODEL;
   const stitching = !model.startsWith("eleven_v3");
   const headers = { "xi-api-key": opts.apiKey };
@@ -105,7 +116,7 @@ export function elevenLabsProvider(opts: {
 
   return {
     async listVoices() {
-      const res = await f(`${ELEVENLABS_API}/v1/voices`, { headers });
+      const res = await f(`${api}/v1/voices`, { headers });
       await check(res, "ses listesi");
       const body = (await res.json()) as {
         voices?: {
@@ -126,7 +137,7 @@ export function elevenLabsProvider(opts: {
 
     async synthesize(voiceId, text, settings, context) {
       const res = await f(
-        `${ELEVENLABS_API}/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps?output_format=mp3_44100_128`,
+        `${api}/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps?output_format=mp3_44100_128`,
         {
           method: "POST",
           headers: { ...headers, "content-type": "application/json" },
@@ -174,7 +185,7 @@ export function elevenLabsProvider(opts: {
       form.append("remove_background_noise", "true");
       // Kopya: Blob, SharedArrayBuffer'a bağlı olabilecek bir görünümü kabul etmez.
       form.append("files", new Blob([new Uint8Array(file.data)], { type: file.type }), file.name);
-      const res = await f(`${ELEVENLABS_API}/v1/voices/add`, {
+      const res = await f(`${api}/v1/voices/add`, {
         method: "POST",
         headers,
         body: form,
@@ -186,7 +197,7 @@ export function elevenLabsProvider(opts: {
     },
 
     async deleteVoice(voiceId) {
-      const res = await f(`${ELEVENLABS_API}/v1/voices/${encodeURIComponent(voiceId)}`, {
+      const res = await f(`${api}/v1/voices/${encodeURIComponent(voiceId)}`, {
         method: "DELETE",
         headers,
       });
@@ -199,7 +210,9 @@ export function elevenLabsProvider(opts: {
 /** ELEVENLABS_API_KEY yoksa null: Stüdyo demo modunda çalışır. */
 export function ttsProvider(): TtsProvider | null {
   const apiKey = env("ELEVENLABS_API_KEY");
-  return apiKey ? elevenLabsProvider({ apiKey, model: env("ELEVENLABS_MODEL") }) : null;
+  return apiKey
+    ? elevenLabsProvider({ apiKey, model: env("ELEVENLABS_MODEL"), baseUrl: elevenLabsBaseUrl() })
+    : null;
 }
 
 /**

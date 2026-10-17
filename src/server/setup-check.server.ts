@@ -17,7 +17,14 @@ import type { FfmpegInfo } from "./compose.server";
 import { DEFAULT_IMAGE_MODEL } from "./image.server";
 import { retentionYears } from "./maintenance.server";
 import { PAYPAL_API, paypalConfig } from "./paypal.server";
-import { DEFAULT_TTS_MODEL, TtsError, elevenLabsProvider } from "./tts.server";
+import { DEFAULT_STT_MODEL } from "./transcribe.server";
+import {
+  DEFAULT_TTS_MODEL,
+  ELEVENLABS_API,
+  TtsError,
+  elevenLabsBaseUrl,
+  elevenLabsProvider,
+} from "./tts.server";
 import { DEFAULT_VIDEO_MODEL } from "./video.server";
 
 /** Bağlantı testinin bekleme sınırı. */
@@ -106,7 +113,14 @@ export function setupStatus(
   items.push(
     env("ELEVENLABS_API_KEY")
       ? item("tts", "ready", {
-          info: [{ key: "model", value: env("ELEVENLABS_MODEL") ?? DEFAULT_TTS_MODEL }],
+          info: [
+            { key: "model", value: env("ELEVENLABS_MODEL") ?? DEFAULT_TTS_MODEL },
+            { key: "sttModel", value: env("ELEVENLABS_STT_MODEL") ?? DEFAULT_STT_MODEL },
+            // Varsayılan dışı adres (ör. veri yerleşimi) gösterilir; gizli değildir.
+            ...(elevenLabsBaseUrl() !== ELEVENLABS_API
+              ? [{ key: "apiUrl" as const, value: elevenLabsBaseUrl() }]
+              : []),
+          ],
           testable: true,
         })
       : item("tts", "missing", { missing: ["ELEVENLABS_API_KEY"] }),
@@ -269,7 +283,12 @@ export async function testIntegration(id: SetupId, deps: SetupTestDeps): Promise
       case "tts": {
         const apiKey = env("ELEVENLABS_API_KEY");
         if (!apiKey) return result(false, "notConfigured");
-        const provider = elevenLabsProvider({ apiKey, model: env("ELEVENLABS_MODEL"), fetchImpl });
+        const provider = elevenLabsProvider({
+          apiKey,
+          model: env("ELEVENLABS_MODEL"),
+          baseUrl: elevenLabsBaseUrl(),
+          fetchImpl,
+        });
         try {
           const voices = await provider.listVoices();
           return result(true, "voices", String(voices.length));

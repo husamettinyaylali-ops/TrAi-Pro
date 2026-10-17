@@ -65,6 +65,7 @@ const tr = {
     costTitle: "Krediler nasıl harcanır?",
     costRows: [
       ["Metinden ses", "1 karakter = 1 kredi"],
+      ["Sesten yazı (altyazı)", "Kaydın 1 saniyesi = 1 kredi (dakikası 60)"],
       ["Görsel üretimi", "Görsel başına 1 kredi"],
       ["Video üretimi", "Video başına 15 kredi (5 saniye)"],
       ["Ses klonlama", "Ücretsiz, hesap başına 5 ses"],
@@ -151,13 +152,24 @@ const tr = {
     emptyTitle: (name: string) => `${name} için ilk üretimi yap`,
     emptyAllTitle: "İlk üretimini yap",
     emptySub: "Aşağıya yaz; üretimler burada birikir.",
-    suggest: { tts: "Seslendirme yap", image: "Kapak görseli üret", video: "Kısa video üret" },
+    suggest: {
+      tts: "Seslendirme yap",
+      stt: "Kaydını yazıya dök",
+      image: "Kapak görseli üret",
+      video: "Kısa video üret",
+    },
     download: "İndir",
     downloadImage: (n: number) => `Görsel ${n}`,
     downloadAudio: "Ses (MP3)",
     downloadSrt: "Altyazı (SRT)",
     downloadVtt: "Altyazı (VTT)",
-    editText: { tts: "Metni düzenle", image: "İstemi düzenle", video: "İstemi düzenle" },
+    downloadTxt: "Metin (TXT)",
+    editText: {
+      tts: "Metni düzenle",
+      stt: "Metni düzenle",
+      image: "İstemi düzenle",
+      video: "İstemi düzenle",
+    },
     openEditor: "Editörde aç",
     editorUnavailable: "Demo üretimde düzenlenecek dosya yok",
     editTag: {
@@ -173,13 +185,13 @@ const tr = {
     move: "Taşı",
     more: "Diğer işlemler",
     tools: "Araç",
-    tool: { tts: "Ses", clone: "Klon", image: "Görsel", video: "Video" },
+    tool: { tts: "Ses", clone: "Klon", stt: "Sesten yazı", image: "Görsel", video: "Video" },
     placeholder: {
       tts: "Seslendirmek istediğin metni yaz…",
       image: "Görseli anlat: neon İstanbul, gün batımı, sinematik",
       video: "Videoyu anlat: drone ile Boğaz üzerinde gün doğumu",
     },
-    send: { tts: "Seslendir", image: "Görsel üret", video: "Video üret" },
+    send: { tts: "Seslendir", stt: "Yazıya dök", image: "Görsel üret", video: "Video üret" },
     sendHint: "Göndermek için Ctrl + Enter",
     cloneHint: "Ses klonlarını yukarıda yönet; hazır klonlar Ses aracında listelenir.",
     images: (n: string) => `${n} görsel`,
@@ -190,10 +202,39 @@ const tr = {
     working: "Üretiliyor…",
     countParts: {
       tts: (n: string) => `${n} ses`,
+      stt: (n: string) => `${n} yazı`,
       image: (n: string) => `${n} görsel`,
       video: (n: string) => `${n} video`,
     },
     noItems: "Henüz üretim yok",
+    stt: {
+      pick: "Ses ya da video dosyası seç",
+      drop: "ya da buraya sürükle",
+      formats: "MP3, WAV, M4A, MP4, MOV, WEBM… En çok 1 saat; dosya en çok 1 GB.",
+      preparing: "Dosyanın sesi hazırlanıyor…",
+      ready: (len: string, size: string) => `${len} · ${size}`,
+      change: "Başka dosya",
+      language: "Kaydın dili",
+      auto: "Dili algıla",
+      cost: "Kaydın her saniyesi 1 Ses AI kredisi.",
+      unavailable: "Sesten yazıya bu sunucuda şu an kapalı.",
+      pending:
+        "Kayıt yazıya dökülüyor; uzun kayıtlar birkaç dakika sürebilir. Bu sayfadan ayrılabilirsin.",
+      failedRefund: (n: string) =>
+        `Yazıya dökülemedi (kayıtta konuşma bulunamadı ya da servis yanıt vermedi); ${n} kredi iade edildi.`,
+      tooMany: "Aynı anda en fazla 2 kayıt yazıya dökülebilir; birinin bitmesini bekle.",
+      invalid: "Dosya işlenemedi: sesi yok, bozuk ya da 1 saatten uzun.",
+      showAll: "Tümünü göster",
+      showLess: "Daralt",
+      noText: "Kayıtta konuşma bulunamadı.",
+      errors: {
+        tooLarge: "Dosya çok büyük (en çok 1 GB).",
+        unreadable:
+          "Bu dosyanın sesi tarayıcıda açılamadı. MP3, WAV, M4A, MP4, MOV ya da WEBM dene.",
+        tooShort: "Kayıt en az 1 saniye olmalı.",
+        tooLong: "Kayıt en çok 1 saat olabilir; daha kısa parçalara böl.",
+      },
+    },
     voiceSettings: {
       open: "Ses ayarları",
       speed: "Hız",
@@ -378,7 +419,7 @@ const tr = {
       },
       tts: {
         title: "Ses üretimi (ElevenLabs)",
-        desc: "Gerçek seslendirme, MP3 indirme ve ses klonlama. Yoksa stüdyo demo kipte çalışır.",
+        desc: "Gerçek seslendirme, MP3 indirme, ses klonlama ve sesten yazıya. Yoksa stüdyo demo kipte çalışır.",
         docs: "Ses üretimi (ElevenLabs) kurulumu",
       },
       fal: {
@@ -412,8 +453,8 @@ const tr = {
         docs: "Yayın (VPS)",
       },
       ffmpeg: {
-        title: "Video oluşturucu (ffmpeg)",
-        desc: "Seslendirme ve görsellerden kısa video oluşturmak için sunucudaki ffmpeg. Docker imajında kuruludur.",
+        title: "Video oluşturucu ve sesten yazı (ffmpeg)",
+        desc: "Seslendirme ve görsellerden kısa video oluşturmak ve yüklenen ses ya da videoyu yazıya dökmeden önce dönüştürmek için sunucudaki ffmpeg. Docker imajında kuruludur.",
         docs: "Kısa video oluşturucu",
       },
     },
@@ -423,6 +464,8 @@ const tr = {
       from: "Gönderen",
       smtpHost: "Sunucu",
       model: "Model",
+      sttModel: "Sesten yazı modeli",
+      apiUrl: "API adresi",
       imageModel: "Görsel modeli",
       videoModel: "Video modeli",
       callback: "Yönlendirme adresi",
@@ -485,8 +528,8 @@ const tr = {
     sub: "Üretimlerini projelerde topla. Stüdyoda bir proje seçince yeni üretimler oraya kaydedilir.",
     empty: "Henüz proje yok. İlk projeni oluştur.",
     loadError: "Projeler yüklenemedi.",
-    counts: (tts: string, image: string, video: string) =>
-      `${tts} ses · ${image} görsel · ${video} video`,
+    counts: (tts: string, image: string, video: string, stt?: string) =>
+      `${tts} ses · ${image} görsel · ${video} video${stt ? ` · ${stt} yazı` : ""}`,
     updated: (d: string) => `Son etkinlik: ${d}`,
     openStudio: "Stüdyoda aç",
     back: "Tüm projeler",
@@ -519,7 +562,13 @@ const tr = {
   labs: {
     title: "Stüdyo",
     sub: "Seslendir, sesini klonla, görsel ve video üret.",
-    tabs: { tts: "Metinden Ses", clone: "Ses Klonlama", image: "Görsel", video: "Video" },
+    tabs: {
+      tts: "Metinden Ses",
+      clone: "Ses Klonlama",
+      stt: "Sesten Yazı",
+      image: "Görsel",
+      video: "Video",
+    },
     voiceBalance: "Ses AI kredisi",
     mediaBalance: "Video & Görsel kredisi",
     expires: (d: string) => `Son kullanma: ${d}`,
@@ -859,7 +908,7 @@ const tr = {
 
   apiDocs: {
     title: "API Belgeleri",
-    sub: "Seslendirme, görsel ve video üretimini kendi uygulamandan kullan.",
+    sub: "Seslendirme, sesten yazı, görsel ve video üretimini kendi uygulamandan kullan.",
     introTitle: "Başlarken",
     intro:
       "API, stüdyodaki krediler ve fiyatlarla çalışır. Hesabım sayfasından bir API anahtarı oluştur ve her istekte gönder. Yanıtlar JSON'dur.",
@@ -872,6 +921,8 @@ const tr = {
       me: "Kredilerin (ses ve video/görsel) ve USD bakiyen.",
       voices: "Seslendirmede kullanabileceğin hazır sesler ve kendi ses klonların.",
       tts: 'Metni sese çevirir (MP3) ve altyazısını hazırlar. Boşluklar dahil karakter başına 1 Ses AI kredisi. 5.000 karaktere kadar metin hemen döner (201); daha uzunu arka planda seslendirilir ve 202 ile "pending" döner.',
+      transcriptions:
+        'Ses ya da video dosyasını (multipart/form-data) yazıya döker: metin, dil, SRT/VTT altyazı ve kaydın MP3 sesi. Kaydın her saniyesi 1 Ses AI kredisi; en çok 1 saat, dosya en çok 125 MB. 202 ile "pending" döner; metin yanıttaki transcript alanına gelir.',
       images:
         "Metinden görsel üretir: 1, 2 ya da 4 adet, 1024×1024 JPEG. Görsel başına 1 Video & Görsel kredisi.",
       videos:
@@ -880,7 +931,7 @@ const tr = {
         "Üretimin durumu, dosya ve altyazı adresleri. Bekleyen video bu istekte sağlayıcıdan da kontrol edilir; uzun seslendirmede progress kaç parçanın bittiğini gösterir.",
       file: "Üretimin dosyasını indirir (MP3, JPEG ya da MP4). Anahtar başlığı burada da gerekir.",
       subtitles:
-        "Seslendirmenin altyazısını indirir: format=srt (varsayılan) ya da format=vtt. Yalnız altyazısı olan seslendirmede vardır (yanıttaki subtitles alanı).",
+        "Seslendirmenin ya da yazıya dökülen kaydın altyazısını indirir: format=srt (varsayılan) ya da format=vtt. Yalnız altyazısı olan kayıtta vardır (yanıttaki subtitles alanı).",
     },
     fieldsTitle: "Gövde alanları",
     fields: {
@@ -891,11 +942,15 @@ const tr = {
       prompt: "Üretim açıklaması, en çok 400 karakter.",
       count: "Görsel sayısı: 1, 2 ya da 4 (varsayılan 1).",
       style: "Video stili: cinematic, anime, 3d ya da documentary (varsayılan cinematic).",
+      file: "Ses ya da video dosyası (MP3, WAV, M4A, MP4, MOV, WEBM…). Videonun yalnız sesi kullanılır.",
+      language:
+        "İsteğe bağlı kayıt dili (ISO 639-1): tr, en, de, fr, es, it, pt, nl, ru, ar, az, ja. Verilmezse algılanır.",
+      title: "İsteğe bağlı kayıt adı; verilmezse dosya adı kullanılır.",
     },
     responseTitle: "Örnek yanıt",
-    videoFlowTitle: "Video ve uzun seslendirme akışı",
+    videoFlowTitle: "Video, uzun seslendirme ve yazıya dökme akışı",
     videoFlow:
-      'Video ve uzun seslendirme birkaç dakika sürer. Dönen kimlikle GET /generations/:id\'yi 10–15 saniyede bir sorgula. status "completed" olunca files\'taki adresten (seslendirmede subtitles\'taki altyazıyla birlikte) indir. İş başarısız olursa ("failed") kredi iade edilir.',
+      'Video, uzun seslendirme ve yazıya dökme birkaç dakika sürebilir. Dönen kimlikle GET /generations/:id\'yi 10–15 saniyede bir sorgula. status "completed" olunca files\'taki adresten (seslendirmede ve yazıya dökmede subtitles\'taki altyazıyla birlikte) indir; yazıya dökülen metin transcript alanındadır. İş başarısız olursa ("failed") kredi iade edilir.',
     errorsTitle: "Hatalar",
     errorsIntro: "Başarısız istekler HTTP durum koduyla birlikte şu biçimde döner:",
     errorCols: { code: "Kod", status: "Durum", meaning: "Anlamı" },
@@ -905,7 +960,12 @@ const tr = {
       ["insufficient_credits", "402", "Yeterli kredi yok; kredi düşülmedi."],
       ["not_found", "404", "Uç nokta ya da üretim bulunamadı."],
       ["method_not_allowed", "405", "Bu uç nokta bu HTTP yöntemini kabul etmiyor."],
-      ["limit", "409", "Aynı anda en fazla 3 video ya da 2 uzun seslendirme hazırlanabilir."],
+      [
+        "limit",
+        "409",
+        "Aynı anda en fazla 3 video, 2 uzun seslendirme ya da 2 yazıya dökme hazırlanabilir.",
+      ],
+      ["payload_too_large", "413", "Dosya çok büyük (en çok 125 MB)."],
       ["content_rejected", "422", "İçerik filtresine takıldı; kredi düşülmedi."],
       ["rate_limited", "429", "Çok fazla istek; Retry-After başlığındaki saniye kadar bekle."],
       ["provider_failed", "502", "Üretim servisi hata verdi; kredi düşülmedi."],
@@ -917,11 +977,12 @@ const tr = {
       "Seslendirme: dakikada 20 istek; aynı anda en fazla 2 uzun metin.",
       "Görsel: 10 dakikada 30 istek.",
       "Video: saatte 10 istek; aynı anda en fazla 3 video.",
+      "Sesten yazı: saatte 30 istek; aynı anda en fazla 2 kayıt.",
       "Sınır aşılınca 429 ve Retry-After (saniye) döner.",
     ],
     creditsTitle: "Krediler",
     credits:
-      "Kısa seslendirme ve görselde kredi yalnız başarılı üretimde düşer. Video ve uzun seslendirmede kredi iş başlayınca düşer, iş başarısız olursa iade edilir. Kredi almak için fiyatlandırma sayfasına bak.",
+      "Kısa seslendirme ve görselde kredi yalnız başarılı üretimde düşer. Video, uzun seslendirme ve yazıya dökmede kredi iş başlayınca düşer, iş başarısız olursa iade edilir. Kredi almak için fiyatlandırma sayfasına bak.",
     seePricing: "Fiyatlandırma",
   },
 
@@ -1139,6 +1200,7 @@ const en: Dict = {
     costTitle: "How are credits spent?",
     costRows: [
       ["Text to speech", "1 character = 1 credit"],
+      ["Speech to text (subtitles)", "1 second of recording = 1 credit (60 per minute)"],
       ["Image generation", "1 credit per image"],
       ["Video generation", "15 credits per video (5 seconds)"],
       ["Voice cloning", "Free, up to 5 voices per account"],
@@ -1225,13 +1287,19 @@ const en: Dict = {
     emptyTitle: (name) => `Create the first result for ${name}`,
     emptyAllTitle: "Create your first result",
     emptySub: "Type below; your results collect here.",
-    suggest: { tts: "Generate speech", image: "Make a cover image", video: "Make a short video" },
+    suggest: {
+      tts: "Generate speech",
+      stt: "Transcribe a recording",
+      image: "Make a cover image",
+      video: "Make a short video",
+    },
     download: "Download",
     downloadImage: (n) => `Image ${n}`,
     downloadAudio: "Audio (MP3)",
     downloadSrt: "Subtitles (SRT)",
     downloadVtt: "Subtitles (VTT)",
-    editText: { tts: "Edit text", image: "Edit prompt", video: "Edit prompt" },
+    downloadTxt: "Text (TXT)",
+    editText: { tts: "Edit text", stt: "Edit text", image: "Edit prompt", video: "Edit prompt" },
     openEditor: "Open in editor",
     editorUnavailable: "Demo results have no file to edit",
     editTag: { trim: "Trimmed", merge: "Merged", image: "Edited", compose: "Short video" },
@@ -1242,13 +1310,18 @@ const en: Dict = {
     move: "Move",
     more: "More actions",
     tools: "Tool",
-    tool: { tts: "Voice", clone: "Clone", image: "Image", video: "Video" },
+    tool: { tts: "Voice", clone: "Clone", stt: "Transcribe", image: "Image", video: "Video" },
     placeholder: {
       tts: "Type the text you want spoken…",
       image: "Describe the image: neon Istanbul, sunset, cinematic",
       video: "Describe the video: drone sunrise over the Bosphorus",
     },
-    send: { tts: "Generate speech", image: "Generate image", video: "Generate video" },
+    send: {
+      tts: "Generate speech",
+      stt: "Transcribe file",
+      image: "Generate image",
+      video: "Generate video",
+    },
     sendHint: "Ctrl + Enter to send",
     cloneHint: "Manage your voice clones above; ready clones appear in the Voice tool.",
     images: (n) => `${n} images`,
@@ -1259,10 +1332,40 @@ const en: Dict = {
     working: "Generating…",
     countParts: {
       tts: (n) => `${n} audio`,
+      stt: (n) => `${n} transcripts`,
       image: (n) => `${n} images`,
       video: (n) => `${n} videos`,
     },
     noItems: "No results yet",
+    stt: {
+      pick: "Choose an audio or video file",
+      drop: "or drop it here",
+      formats: "MP3, WAV, M4A, MP4, MOV, WEBM… Up to 1 hour; files up to 1 GB.",
+      preparing: "Preparing the file's audio…",
+      ready: (len, size) => `${len} · ${size}`,
+      change: "Another file",
+      language: "Recording language",
+      auto: "Detect language",
+      cost: "Each second of the recording uses 1 Voice AI credit.",
+      unavailable: "Speech to text is currently off on this server.",
+      pending:
+        "Transcribing the recording; long recordings can take a few minutes. You can leave this page.",
+      failedRefund: (n) =>
+        `Couldn't transcribe (no speech found in the recording or the service didn't respond); ${n} credits were refunded.`,
+      tooMany: "Up to 2 recordings can be transcribed at a time; wait for one to finish.",
+      invalid:
+        "The file couldn't be processed: it has no audio, is damaged or is longer than 1 hour.",
+      showAll: "Show all",
+      showLess: "Show less",
+      noText: "No speech was found in the recording.",
+      errors: {
+        tooLarge: "The file is too large (up to 1 GB).",
+        unreadable:
+          "Your browser couldn't open this file's audio. Try MP3, WAV, M4A, MP4, MOV or WEBM.",
+        tooShort: "The recording must be at least 1 second long.",
+        tooLong: "Recordings can be up to 1 hour; split it into shorter parts.",
+      },
+    },
     voiceSettings: {
       open: "Voice settings",
       speed: "Speed",
@@ -1447,7 +1550,7 @@ const en: Dict = {
       },
       tts: {
         title: "Speech (ElevenLabs)",
-        desc: "Real speech, MP3 downloads and voice cloning. Without it the studio runs in demo mode.",
+        desc: "Real speech, MP3 downloads, voice cloning and speech to text. Without it the studio runs in demo mode.",
         docs: "Ses üretimi (ElevenLabs) kurulumu",
       },
       fal: {
@@ -1481,8 +1584,8 @@ const en: Dict = {
         docs: "Yayın (VPS)",
       },
       ffmpeg: {
-        title: "Video maker (ffmpeg)",
-        desc: "ffmpeg on the server, used to build short videos from voiceovers and images. It's included in the Docker image.",
+        title: "Video maker and speech to text (ffmpeg)",
+        desc: "ffmpeg on the server, used to build short videos from voiceovers and images and to convert uploaded audio or video before transcription. It's included in the Docker image.",
         docs: "Kısa video oluşturucu",
       },
     },
@@ -1492,6 +1595,8 @@ const en: Dict = {
       from: "Sender",
       smtpHost: "Server",
       model: "Model",
+      sttModel: "Speech-to-text model",
+      apiUrl: "API address",
       imageModel: "Image model",
       videoModel: "Video model",
       callback: "Redirect address",
@@ -1552,7 +1657,8 @@ const en: Dict = {
     sub: "Group your results into projects. Pick a project in the studio and new results are saved there.",
     empty: "No projects yet. Create your first one.",
     loadError: "Couldn't load your projects.",
-    counts: (tts, image, video) => `${tts} audio · ${image} images · ${video} videos`,
+    counts: (tts, image, video, stt) =>
+      `${tts} audio · ${image} images · ${video} videos${stt ? ` · ${stt} transcripts` : ""}`,
     updated: (d) => `Last activity: ${d}`,
     openStudio: "Open in studio",
     back: "All projects",
@@ -1585,7 +1691,13 @@ const en: Dict = {
   labs: {
     title: "Studio",
     sub: "Voice it, clone your voice, generate images and video.",
-    tabs: { tts: "Text to Speech", clone: "Voice Cloning", image: "Image", video: "Video" },
+    tabs: {
+      tts: "Text to Speech",
+      clone: "Voice Cloning",
+      stt: "Speech to Text",
+      image: "Image",
+      video: "Video",
+    },
     voiceBalance: "Voice AI credits",
     mediaBalance: "Video & Image credits",
     expires: (d) => `Expires: ${d}`,
@@ -1929,7 +2041,7 @@ const en: Dict = {
 
   apiDocs: {
     title: "API Docs",
-    sub: "Use voice, image and video generation from your own app.",
+    sub: "Use voice, speech to text, image and video generation from your own app.",
     introTitle: "Getting started",
     intro:
       "The API uses the same credits and prices as the Studio. Create an API key on the My Account page and send it with every request. Responses are JSON.",
@@ -1942,6 +2054,8 @@ const en: Dict = {
       me: "Your credits (voice and video/image) and USD balance.",
       voices: "Stock voices and your own voice clones available for speech.",
       tts: 'Turns text into speech (MP3) and prepares its subtitles. 1 Voice AI credit per character, spaces included. Texts up to 5,000 characters return right away (201); longer ones are voiced in the background and return 202 with "pending".',
+      transcriptions:
+        'Transcribes an audio or video file (multipart/form-data): text, language, SRT/VTT subtitles and the recording as MP3. 1 Voice AI credit per second of recording; up to 1 hour, files up to 125 MB. Returns 202 with "pending"; the text arrives in the transcript field.',
       images:
         "Generates images from text: 1, 2 or 4, 1024×1024 JPEG. 1 Video & Image credit per image.",
       videos:
@@ -1950,7 +2064,7 @@ const en: Dict = {
         "A generation's status, file and subtitle URLs. A pending video is also checked with the provider on this request; for long speech, progress shows how many parts are done.",
       file: "Downloads a generation's file (MP3, JPEG or MP4). The key header is required here too.",
       subtitles:
-        "Downloads a voiceover's subtitles: format=srt (default) or format=vtt. Only available when the voiceover has subtitles (the subtitles field in the response).",
+        "Downloads the subtitles of a voiceover or a transcribed recording: format=srt (default) or format=vtt. Only available when it has subtitles (the subtitles field in the response).",
     },
     fieldsTitle: "Body fields",
     fields: {
@@ -1961,11 +2075,15 @@ const en: Dict = {
       prompt: "Generation prompt, up to 400 characters.",
       count: "Number of images: 1, 2 or 4 (default 1).",
       style: "Video style: cinematic, anime, 3d or documentary (default cinematic).",
+      file: "An audio or video file (MP3, WAV, M4A, MP4, MOV, WEBM…). Only a video's audio is used.",
+      language:
+        "Optional recording language (ISO 639-1): tr, en, de, fr, es, it, pt, nl, ru, ar, az, ja. Detected if omitted.",
+      title: "Optional name for the recording; the file name is used if omitted.",
     },
     responseTitle: "Example response",
-    videoFlowTitle: "Video and long speech flow",
+    videoFlowTitle: "Video, long speech and transcription flow",
     videoFlow:
-      'Videos and long voiceovers take a few minutes. Poll GET /generations/:id with the returned ID every 10–15 seconds. When status is "completed", download from the URL in files (for speech, together with the subtitles in subtitles). If the job fails ("failed"), the credits are refunded.',
+      'Videos, long voiceovers and transcriptions can take a few minutes. Poll GET /generations/:id with the returned ID every 10–15 seconds. When status is "completed", download from the URL in files (for speech and transcriptions, together with the subtitles in subtitles); transcribed text is in the transcript field. If the job fails ("failed"), the credits are refunded.',
     errorsTitle: "Errors",
     errorsIntro: "Failed requests return this shape along with the HTTP status code:",
     errorCols: { code: "Code", status: "Status", meaning: "Meaning" },
@@ -1975,7 +2093,12 @@ const en: Dict = {
       ["insufficient_credits", "402", "Not enough credits; none were used."],
       ["not_found", "404", "Endpoint or generation not found."],
       ["method_not_allowed", "405", "This endpoint doesn't accept this HTTP method."],
-      ["limit", "409", "At most 3 videos or 2 long voiceovers can be prepared at once."],
+      [
+        "limit",
+        "409",
+        "At most 3 videos, 2 long voiceovers or 2 transcriptions can be prepared at once.",
+      ],
+      ["payload_too_large", "413", "The file is too large (up to 125 MB)."],
       ["content_rejected", "422", "Blocked by the content filter; no credits were used."],
       ["rate_limited", "429", "Too many requests; wait for the seconds in Retry-After."],
       ["provider_failed", "502", "The generation service failed; no credits were used."],
@@ -1987,11 +2110,12 @@ const en: Dict = {
       "Speech: 20 requests per minute; at most 2 long texts at once.",
       "Images: 30 requests per 10 minutes.",
       "Video: 10 requests per hour; at most 3 videos at once.",
+      "Speech to text: 30 requests per hour; at most 2 recordings at once.",
       "When a limit is hit you get 429 and Retry-After (seconds).",
     ],
     creditsTitle: "Credits",
     credits:
-      "For short speech and images, credits are used only on success. For video and long speech, credits are used when the job starts and refunded if it fails. See the pricing page to buy credits.",
+      "For short speech and images, credits are used only on success. For video, long speech and transcription, credits are used when the job starts and refunded if it fails. See the pricing page to buy credits.",
     seePricing: "Pricing",
   },
 
@@ -2207,5 +2331,18 @@ export function useFormat() {
       ),
     time: (iso: string) =>
       new Intl.DateTimeFormat(locale, { timeStyle: "short" }).format(new Date(iso)),
+    /** Dil adı (ISO 639 kodundan, ör. "tur" → "Türkçe"); tanınmazsa kodun kendisi. */
+    language: (code: string) => {
+      try {
+        return new Intl.DisplayNames([locale], { type: "language" }).of(code) ?? code;
+      } catch {
+        return code;
+      }
+    },
+    /** Dosya boyutu: KB ya da MB, bir ondalıkla. */
+    bytes: (n: number) =>
+      n < 1024 * 1024
+        ? `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(Math.max(1, n / 1024))} KB`
+        : `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(n / 1024 / 1024)} MB`,
   };
 }

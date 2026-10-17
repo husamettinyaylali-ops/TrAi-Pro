@@ -122,9 +122,11 @@ export const generations = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    type: text("type", { enum: ["tts", "image", "video"] }).notNull(),
+    /** "stt": sesten yazıya; metin, yazıya dökülen konuşmadır. */
+    type: text("type", { enum: ["tts", "stt", "image", "video"] }).notNull(),
     text: text("text").notNull(),
     voiceId: text("voice_id"),
+    /** Videoda stil sırası; yazıya dökmede kaydın dili (ISO 639). */
     style: text("style"),
     images: text("images", { mode: "json" }).$type<number[]>(),
     /** Gerçek seslendirmede ses dosyasının depodaki anahtarı; demo üretimde boş. */

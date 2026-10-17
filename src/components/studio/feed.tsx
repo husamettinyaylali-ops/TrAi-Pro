@@ -1,5 +1,5 @@
 import { Fragment, useLayoutEffect, useRef } from "react";
-import { Film, FolderOpen, ImageIcon, Loader2, Mic } from "lucide-react";
+import { Captions, Film, FolderOpen, ImageIcon, Loader2, Mic } from "lucide-react";
 
 import { btnOutline } from "@/components/site/shell";
 import { useI18n } from "@/lib/i18n";
@@ -12,6 +12,7 @@ import { dayKey, useDayLabel, usePendingPolling } from "./hooks";
 
 const suggestions: { type: GenerationType; icon: typeof Mic }[] = [
   { type: "tts", icon: Mic },
+  { type: "stt", icon: Captions },
   { type: "image", icon: ImageIcon },
   { type: "video", icon: Film },
 ];

@@ -7,7 +7,8 @@
  *   node deploy/duman-testi.mjs https://alanadiniz.com --anahtar trai_… --uret   (gerçek üretim, kredi harcar)
  *
  * Anahtar TRAI_KEY ortam değişkeninden de okunur; Hesabım > API anahtarları'ndan oluşturulur.
- * --uret ~8 Ses AI kredisi (kısa seslendirme) ve 1 Video & Görsel kredisi (bir görsel) harcar;
+ * --uret ~10 Ses AI kredisi (kısa seslendirme ve onun yazıya dökülmesi) ve 1 Video & Görsel
+ * kredisi (bir görsel) harcar;
  * --video ayrıca 15 kredilik bir video üretip bitmesini bekler (birkaç dakika).
  * Bağımlılığı yoktur (Node 18+). Başarısız kontrol varsa çıkış kodu 1'dir.
  */
@@ -48,6 +49,11 @@ async function check(name, fn) {
 
 function expect(cond, message) {
   if (!cond) throw new Error(message);
+}
+
+/** Beklenmeyen durumda hata, yanıt gövdesiyle; beklenen durumda gövde okunmaz (sonra JSON okunur). */
+async function expectStatus(r, expected) {
+  if (r.status !== expected) throw new Error(`HTTP ${r.status} ${await r.text()}`);
 }
 
 const request = (path, init = {}) =>
@@ -166,17 +172,21 @@ if (!key) {
       throw new Skip("--uret verilmedi (kredi harcamamak için)");
     });
   } else {
-    /** Üretimin ilk dosyasını API anahtarıyla indirir; türünü ve boyutunu döner. */
-    const download = async (url) => {
+    /** Üretimin dosyasını API anahtarıyla indirir; içeriği ve türü döner. */
+    const fetchFile = async (url) => {
       const r = await request(url, {
         headers: { authorization: `Bearer ${key}` },
         timeout: 120_000,
       });
       expect(r.status === 200, `dosya ${status(r)}`);
-      const size = (await r.arrayBuffer()).byteLength;
-      expect(size > 0, "dosya boş");
-      return `${r.headers.get("content-type")}, ${Math.round(size / 1024)} KB`;
+      const data = new Uint8Array(await r.arrayBuffer());
+      expect(data.byteLength > 0, "dosya boş");
+      return { data, type: r.headers.get("content-type") };
     };
+    const describe = ({ data, type }) => `${type}, ${Math.round(data.byteLength / 1024)} KB`;
+    const download = async (url) => describe(await fetchFile(url));
+    /** Seslendirmenin sesi: sesten yazı adımında yeniden kullanılır. */
+    let speech = null;
 
     await check("Seslendirme ve altyazı (~8 kredi)", async () => {
       if (!voiceId) throw new Skip("ses servisi kapalı");
@@ -185,14 +195,43 @@ if (!key) {
         body: JSON.stringify({ text: "Merhaba.", voice_id: voiceId }),
         timeout: 120_000,
       });
-      expect(r.status === 201, `${status(r)} ${await r.text()}`);
+      await expectStatus(r, 201);
       const g = await r.json();
-      const file = await download(g.files[0]);
+      speech = await fetchFile(g.files[0]);
+      const file = describe(speech);
       if (g.subtitles) {
         const s = await request(g.subtitles.srt, { headers: { authorization: `Bearer ${key}` } });
         expect(s.status === 200, `altyazı ${status(s)}`);
       }
       return `${file}${g.subtitles ? ", altyazılı" : ", altyazı yok"}`;
+    });
+
+    await check("Sesten yazı (~1–2 kredi)", async () => {
+      if (!speech) throw new Skip("seslendirme dosyası yok");
+      const form = new FormData();
+      form.append("file", new Blob([speech.data], { type: "audio/mpeg" }), "duman-testi.mp3");
+      form.append("language", "tr");
+      // Gövde FormData: içerik türünü (sınırıyla) fetch kendisi koyar.
+      const r = await request("/api/v1/transcriptions", {
+        method: "POST",
+        body: form,
+        headers: { authorization: `Bearer ${key}` },
+        timeout: 120_000,
+      });
+      if (r.status === 503) throw new Skip("bu sunucuda kapalı (ElevenLabs ya da ffmpeg yok)");
+      await expectStatus(r, 202);
+      const { id } = await r.json();
+      const until = Date.now() + 3 * 60_000;
+      while (Date.now() < until) {
+        await new Promise((res) => setTimeout(res, 3_000));
+        const g = await (await api(`/generations/${id}`)).json();
+        if (g.status === "failed") throw new Error("yazıya dökülemedi (kredi iade edildi)");
+        if (g.status === "completed") {
+          expect(g.transcript, "metin boş");
+          return `"${g.transcript.slice(0, 40)}"${g.subtitles ? ", altyazılı" : ""}`;
+        }
+      }
+      throw new Error("3 dakikada bitmedi");
     });
 
     await check("Görsel (1 kredi)", async () => {
@@ -202,7 +241,7 @@ if (!key) {
         timeout: 180_000,
       });
       if (r.status === 503) throw new Skip("bu sunucuda kapalı (FAL_KEY yok)");
-      expect(r.status === 201, `${status(r)} ${await r.text()}`);
+      await expectStatus(r, 201);
       return download((await r.json()).files[0]);
     });
 
@@ -216,7 +255,7 @@ if (!key) {
           }),
         });
         if (r.status === 503) throw new Skip("bu sunucuda kapalı (FAL_KEY yok)");
-        expect(r.status === 202, `${status(r)} ${await r.text()}`);
+        await expectStatus(r, 202);
         const { id } = await r.json();
         const until = Date.now() + 10 * 60_000;
         while (Date.now() < until) {

@@ -10,7 +10,16 @@ export const Route = createFileRoute("/api-docs")({
   component: ApiDocsPage,
 });
 
-type FieldKey = "text" | "voiceId" | "voiceSettings" | "prompt" | "count" | "style";
+type FieldKey =
+  | "text"
+  | "voiceId"
+  | "voiceSettings"
+  | "prompt"
+  | "count"
+  | "style"
+  | "file"
+  | "language"
+  | "title";
 const FIELD_NAMES: Record<FieldKey, string> = {
   text: "text",
   voiceId: "voice_id",
@@ -18,10 +27,22 @@ const FIELD_NAMES: Record<FieldKey, string> = {
   prompt: "prompt",
   count: "count",
   style: "style",
+  file: "file",
+  language: "language",
+  title: "title",
 };
 
 interface Endpoint {
-  key: "me" | "voices" | "tts" | "images" | "videos" | "generation" | "file" | "subtitles";
+  key:
+    | "me"
+    | "voices"
+    | "tts"
+    | "transcriptions"
+    | "images"
+    | "videos"
+    | "generation"
+    | "file"
+    | "subtitles";
   method: "GET" | "POST";
   path: string;
   fields?: FieldKey[];
@@ -69,6 +90,28 @@ const ENDPOINTS: Endpoint[] = [
     fields: ["text", "voiceId", "voiceSettings"],
     curl: (b) =>
       `curl -X POST ${b}/tts \\\n  ${jsonBody('{"text":"Merhaba dünya","voice_id":"VOICE_ID","voice_settings":{"speed":1.1}}')}`,
+  },
+  {
+    key: "transcriptions",
+    method: "POST",
+    path: "/transcriptions",
+    fields: ["file", "language", "title"],
+    curl: (b) =>
+      `curl -X POST ${b}/transcriptions \\\n  ${auth} \\\n  -F "file=@roportaj.mp4" \\\n  -F "language=tr"`,
+    response: JSON.stringify(
+      {
+        id: "8a1d…",
+        type: "stt",
+        status: "pending",
+        transcript: "",
+        language: "tr",
+        cost: 62,
+        created_at: "2026-10-16T09:00:00.000Z",
+        files: ["…/api/v1/generations/8a1d…/files/0"],
+      },
+      null,
+      2,
+    ),
   },
   {
     key: "images",

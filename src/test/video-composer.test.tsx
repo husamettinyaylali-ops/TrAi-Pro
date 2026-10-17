@@ -20,7 +20,7 @@ vi.mock("@/lib/studio-config", () => ({
 vi.mock("@/lib/store", () => ({
   useApp: () => ({ composeVideo }),
   useHistory: (type: string) => ({
-    items: type === "tts" ? audios : images,
+    items: type === "audio" ? audios : images,
     loading: false,
     error: false,
     retry: () => {},

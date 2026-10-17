@@ -27,6 +27,8 @@ export const LIMITS = {
   videoPerUser: { max: 10, windowMs: 60 * MINUTE },
   /** Bir API anahtarıyla dakikada en fazla 120 istek (üretim sınırları ayrıca geçerlidir). */
   apiPerKey: { max: 120, windowMs: MINUTE },
+  /** Aynı kullanıcı saatte en fazla 30 kayıt yazıya döktürür (dosya dönüştürme ve ücretli servis). */
+  sttPerUser: { max: 30, windowMs: 60 * MINUTE },
   /** Aynı kullanıcı saatte en fazla 5 ses klonlama denemesi. */
   clonePerUser: { max: 5, windowMs: 60 * MINUTE },
   /**
