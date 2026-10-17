@@ -1,3 +1,5 @@
+import type { VoiceSettings } from "@/lib/voice-settings";
+
 import { env } from "./env.server";
 
 export const ELEVENLABS_API = "https://api.elevenlabs.io";
@@ -20,8 +22,8 @@ export interface CloneFile {
 /** Ses üretim servisi. Testlerde sahte uygulama verilir. */
 export interface TtsProvider {
   listVoices(): Promise<ProviderVoice[]>;
-  /** MP3 döner. */
-  synthesize(voiceId: string, text: string): Promise<Uint8Array>;
+  /** MP3 döner. Ayar verilmezse sağlayıcının ses için kayıtlı ayarları kullanılır. */
+  synthesize(voiceId: string, text: string, settings?: VoiceSettings): Promise<Uint8Array>;
   /** Sağlayıcıdaki yeni sesin kimliğini döner. */
   cloneVoice(input: { name: string; description: string; file: CloneFile }): Promise<string>;
   deleteVoice(voiceId: string): Promise<void>;
@@ -73,13 +75,25 @@ export function elevenLabsProvider(opts: {
       }));
     },
 
-    async synthesize(voiceId, text) {
+    async synthesize(voiceId, text, settings) {
       const res = await f(
         `${ELEVENLABS_API}/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
         {
           method: "POST",
           headers: { ...headers, "content-type": "application/json", accept: "audio/mpeg" },
-          body: JSON.stringify({ text, model_id: model }),
+          body: JSON.stringify({
+            text,
+            model_id: model,
+            ...(settings && {
+              voice_settings: {
+                stability: settings.stability,
+                similarity_boost: settings.similarity,
+                style: settings.style,
+                speed: settings.speed,
+                use_speaker_boost: true,
+              },
+            }),
+          }),
         },
       );
       await check(res, "seslendirme");

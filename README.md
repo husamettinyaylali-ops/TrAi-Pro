@@ -133,6 +133,7 @@ Kullanıcılar Hesabım sayfasından API anahtarı oluşturur (en fazla 5 etkin 
 Anahtar yokken Stüdyo demo kipinde çalışır: seslendirme tarayıcının konuşma sentezini kullanır. Anahtar varken:
 
 - Ses `eleven_multilingual_v2` ile üretilir, MP3 olarak `data/media/<kullanıcı>/` altında saklanır ve `/media/audio/:id` adresinden yalnız sahibine sunulur (dinleme ve indirme).
+- **Ses ayarları** (yazma kutusunda "Ses ayarları"): hız (0,7–1,2), kararlılık, benzerlik ve stil (0–1); ElevenLabs `voice_settings` olarak gider ve kayda yazılır, "Yeniden üret" ve "Düzenle" aynı ayarları kullanır. Varsayılan ayarla üretimde gönderilmez (sesin ElevenLabs'teki ayarı geçerli olur). Kredi maliyetini değiştirmez. Demo önizlemede yalnız hız uygulanır. Son seçim tarayıcıda hatırlanır. API'de `voice_settings` alanıyla verilir.
 - Kredi yalnız başarıda düşer; servis hata verirse kredi düşülmez. Bir kullanıcı dakikada en fazla 20 seslendirme yapabilir.
 - Ses klonu, kullanıcının yüklediği kayıtla (en fazla 10 MB) ElevenLabs'te açılır; izin onayı zamanıyla kaydedilir. Klon ya da hesap silinince ElevenLabs'teki ses ve kullanıcının ses dosyaları da silinir.
 - **Maliyet:** ElevenLabs karakter başına ücretlendirir; sitedeki kredi fiyatlarınız (`src/lib/packages.ts`) bu maliyeti karşılayacak şekilde ayarlanmalı.

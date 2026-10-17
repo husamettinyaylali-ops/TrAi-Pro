@@ -232,6 +232,20 @@ describe("geliştirici API'si", () => {
     expect(g.cost).toBe(7);
     const file = await call(`generations/${g.id}/files/0`, { key });
     expect(file.headers.get("content-type")).toBe("audio/mpeg");
+
+    // İsteğe bağlı ses ayarları: verilmeyenler varsayılan, aralık dışı kırpılır.
+    const tuned = await call("tts", {
+      key,
+      method: "POST",
+      body: { text: "Merhaba", voice_id: "hazir-1", voice_settings: { speed: 3 } },
+    });
+    expect(tuned.status).toBe(201);
+    expect(((await tuned.json()) as { voice_settings: unknown }).voice_settings).toEqual({
+      speed: 1.2,
+      stability: 0.5,
+      similarity: 0.75,
+      style: 0,
+    });
   });
 
   it("video kuyruğa alınır (202); durum sorgusu sağlayıcıyı kontrol eder", async () => {

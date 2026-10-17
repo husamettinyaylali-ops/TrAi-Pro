@@ -21,14 +21,18 @@ export function canSpeak(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-/** Tarayıcının konuşma sentezi ile önizleme çalar. Gerçek üretim için API bağlanmalı. */
-export function speak(text: string, voice: Voice, onEnd: () => void): void {
+/**
+ * Tarayıcının konuşma sentezi ile önizleme çalar (`rate` ses ayarındaki hız).
+ * Gerçek üretim için API bağlanmalı.
+ */
+export function speak(text: string, voice: Voice, onEnd: () => void, rate = 1): void {
   if (!canSpeak()) return onEnd();
   const synth = window.speechSynthesis;
   synth.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = voice.lang;
   u.pitch = voice.gender === "male" ? 0.8 : voice.gender === "female" ? 1.15 : 1;
+  u.rate = rate;
   const all = synth.getVoices();
   const norm = (l: string) => l.replace("_", "-").toLowerCase();
   u.voice =

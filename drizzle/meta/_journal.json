@@ -99,6 +99,13 @@
       "when": 1792157964645,
       "tag": "0013_projeler",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1792216298437,
+      "tag": "0014_ses_ayarlari",
+      "breakpoints": true
     }
   ]
 }

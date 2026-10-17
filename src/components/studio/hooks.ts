@@ -122,7 +122,9 @@ export function useDayLabel() {
 export function regenerateInput(g: Generation): GenerateInput | null {
   const meta = { projectId: g.projectId, title: g.title };
   if (g.type === "tts") {
-    return g.voiceId ? { type: "tts", text: g.text, voiceId: g.voiceId, ...meta } : null;
+    return g.voiceId
+      ? { type: "tts", text: g.text, voiceId: g.voiceId, settings: g.voiceSettings, ...meta }
+      : null;
   }
   if (g.type === "image") {
     const n = g.fileUrls?.length || g.images?.length || 1;

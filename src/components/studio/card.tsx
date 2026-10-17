@@ -162,10 +162,15 @@ function CardBody({ g, voice }: { g: Generation; voice: Voice | undefined }) {
       }
       playingRef.current = true;
       setPlaying(true);
-      speak(g.text, voice ?? stockVoices[0]!, () => {
-        playingRef.current = false;
-        setPlaying(false);
-      });
+      speak(
+        g.text,
+        voice ?? stockVoices[0]!,
+        () => {
+          playingRef.current = false;
+          setPlaying(false);
+        },
+        g.voiceSettings?.speed ?? 1,
+      );
     };
     return (
       <div className="flex items-center gap-3 rounded-2xl bg-muted/50 p-2 pr-4">
@@ -274,9 +279,16 @@ export function GenerationCard({
   const Icon = icons[g.type];
   const voice = voices.find((v) => v.id === g.voiceId);
   const again = regenerateInput(g);
+  // Özel ses ayarı: hız farklıysa hız, değilse "Özel ayar".
+  const vs = g.voiceSettings;
+  const tuned = vs
+    ? vs.speed !== 1
+      ? `${f.num(vs.speed)}x`
+      : t.studio.voiceSettings.custom
+    : null;
   const meta =
     g.type === "tts"
-      ? (voice?.name ?? t.labs.tts.unknownVoice)
+      ? [voice?.name ?? t.labs.tts.unknownVoice, tuned].filter(Boolean).join(" · ")
       : g.type === "image"
         ? t.studio.images(f.num(g.fileUrls?.length || g.images?.length || 1))
         : (t.labs.video.styles[Number(g.style)] ?? t.studio.tool.video);

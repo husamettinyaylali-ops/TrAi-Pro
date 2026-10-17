@@ -182,6 +182,20 @@ const tr = {
       video: (n: string) => `${n} video`,
     },
     noItems: "Henüz üretim yok",
+    voiceSettings: {
+      open: "Ses ayarları",
+      speed: "Hız",
+      speedHint: "1,0x normal hız.",
+      stability: "Kararlılık",
+      stabilityHint: "Düşük: daha duygulu ve değişken. Yüksek: daha düz ve tutarlı.",
+      similarity: "Benzerlik",
+      similarityHint: "Sesin özgün tınısına ne kadar yakın kalacağı.",
+      style: "Stil",
+      styleHint: "Konuşmacının üslubunu güçlendirir; yüksek değer tutarlılığı azaltabilir.",
+      reset: "Varsayılana dön",
+      demoNote: "Demo önizlemede yalnız hız uygulanır.",
+      custom: "Özel ayar",
+    },
   },
   setup: {
     title: "Kurulum durumu",
@@ -703,6 +717,8 @@ const tr = {
     fields: {
       text: "Seslendirilecek metin, en çok 5.000 karakter.",
       voiceId: "GET /voices'tan bir ses kimliği.",
+      voiceSettings:
+        "İsteğe bağlı ses ayarları: speed (0,7–1,2), stability, similarity ve style (0–1). Verilmeyen değer varsayılan kalır; aralık dışı değer kırpılır.",
       prompt: "Üretim açıklaması, en çok 400 karakter.",
       count: "Görsel sayısı: 1, 2 ya da 4 (varsayılan 1).",
       style: "Video stili: cinematic, anime, 3d ya da documentary (varsayılan cinematic).",
@@ -1071,6 +1087,20 @@ const en: Dict = {
       video: (n) => `${n} videos`,
     },
     noItems: "No results yet",
+    voiceSettings: {
+      open: "Voice settings",
+      speed: "Speed",
+      speedHint: "1.0x is normal speed.",
+      stability: "Stability",
+      stabilityHint: "Low: more expressive and varied. High: flatter and more consistent.",
+      similarity: "Similarity",
+      similarityHint: "How closely the voice keeps its original timbre.",
+      style: "Style",
+      styleHint: "Amplifies the speaker's style; high values can reduce consistency.",
+      reset: "Reset to default",
+      demoNote: "Demo preview applies only the speed.",
+      custom: "Custom settings",
+    },
   },
   setup: {
     title: "Setup status",
@@ -1593,6 +1623,8 @@ const en: Dict = {
     fields: {
       text: "Text to speak, up to 5,000 characters.",
       voiceId: "A voice ID from GET /voices.",
+      voiceSettings:
+        "Optional voice settings: speed (0.7–1.2), stability, similarity and style (0–1). Omitted values stay at the default; out-of-range values are clamped.",
       prompt: "Generation prompt, up to 400 characters.",
       count: "Number of images: 1, 2 or 4 (default 1).",
       style: "Video style: cinematic, anime, 3d or documentary (default cinematic).",

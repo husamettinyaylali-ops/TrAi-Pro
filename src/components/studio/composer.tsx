@@ -26,9 +26,30 @@ import { useFormat, useI18n } from "@/lib/i18n";
 import { useApp, type Generation } from "@/lib/store";
 import { useStudioConfig } from "@/lib/studio-config";
 import type { GenerateInput } from "@/lib/types";
+import {
+  DEFAULT_VOICE_SETTINGS,
+  isDefaultVoiceSettings,
+  normalizeVoiceSettings,
+  type VoiceSettings,
+} from "@/lib/voice-settings";
 import { speak, stockVoices, stopSpeaking, type Voice } from "@/lib/voices";
 
 import { TOOLS, useActionError, useVoices, type Tool } from "./hooks";
+import { VoiceSettingsControl } from "./voice-settings";
+
+/** Son kullanılan ses ayarları bu tarayıcıda hatırlanır (yalnız kolaylık). */
+const SETTINGS_KEY = "trai.voice-settings";
+
+function loadSettings(): VoiceSettings {
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    return raw
+      ? normalizeVoiceSettings(JSON.parse(raw) as Partial<VoiceSettings>)
+      : DEFAULT_VOICE_SETTINGS;
+  } catch {
+    return DEFAULT_VOICE_SETTINGS;
+  }
+}
 
 const toolIcons = { tts: Mic, clone: AudioLines, image: ImageIcon, video: Film };
 const MAX_PROMPT = 400;
@@ -69,6 +90,7 @@ export function Composer({
   const [voiceId, setVoiceId] = useState("");
   const [count, setCount] = useState(2);
   const [style, setStyle] = useState(0);
+  const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; packages?: boolean } | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -82,6 +104,16 @@ export function Composer({
     [],
   );
 
+  useEffect(() => setSettings(loadSettings()), []);
+  const changeSettings = (next: VoiceSettings) => {
+    setSettings(next);
+    try {
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+    } catch {
+      // Depolama kapalıysa ayar yalnız bu sayfada kalır.
+    }
+  };
+
   // Seçili ses listede yoksa (ilk yükleme, kip değişimi, silinen klon) ilk sese geçilir.
   useEffect(() => {
     if (voices.length && !voices.some((v) => v.id === voiceId)) setVoiceId(voices[0]!.id);
@@ -91,7 +123,10 @@ export function Composer({
   useEffect(() => {
     if (!editing) return;
     setText(editing.text);
-    if (editing.type === "tts" && editing.voiceId) setVoiceId(editing.voiceId);
+    if (editing.type === "tts") {
+      if (editing.voiceId) setVoiceId(editing.voiceId);
+      setSettings(normalizeVoiceSettings(editing.voiceSettings));
+    }
     if (editing.type === "image") {
       const n = editing.fileUrls?.length || editing.images?.length;
       if (n && (IMAGE_COUNTS as readonly number[]).includes(n)) setCount(n);
@@ -144,7 +179,12 @@ export function Composer({
       void audioRef.current.play().catch(() => undefined);
       return;
     }
-    speak(g.text, voices.find((v) => v.id === g.voiceId) ?? stockVoices[0]!, () => undefined);
+    speak(
+      g.text,
+      voices.find((v) => v.id === g.voiceId) ?? stockVoices[0]!,
+      () => undefined,
+      g.voiceSettings?.speed ?? 1,
+    );
   };
 
   const submit = async (e?: FormEvent) => {
@@ -162,7 +202,13 @@ export function Composer({
     const meta = { projectId: editing ? editing.projectId : projectId, title: editing?.title };
     const input: GenerateInput =
       tool === "tts"
-        ? { type: "tts", text: clean, voiceId, ...meta }
+        ? {
+            type: "tts",
+            text: clean,
+            voiceId,
+            settings: isDefaultVoiceSettings(settings) ? undefined : settings,
+            ...meta,
+          }
         : tool === "image"
           ? { type: "image", text: clean, count, ...meta }
           : { type: "video", text: clean, styleIndex: style, ...meta };
@@ -184,10 +230,7 @@ export function Composer({
     }
   };
 
-  const costText =
-    tool === "tts"
-      ? `${t.studio.chars(f.num([...text].length), f.num(MAX_TTS_CHARS))} · ${t.studio.credits(f.num(cost))}`
-      : t.studio.credits(f.num(cost));
+  const costText = t.studio.credits(f.num(cost));
 
   return (
     <div className="px-4 pb-4 sm:px-6">
@@ -228,6 +271,11 @@ export function Composer({
               onKeyDown={onKey}
               className="block max-h-60 w-full resize-none bg-transparent px-4 pb-1 pt-4 text-sm outline-none placeholder:text-muted-foreground/70"
             />
+            {tool === "tts" && (
+              <p className="px-4 text-right text-[11px] text-muted-foreground">
+                {t.studio.chars(f.num([...text].length), f.num(MAX_TTS_CHARS))}
+              </p>
+            )}
           </>
         )}
         <div className="flex flex-wrap items-center gap-2 p-2.5">
@@ -260,7 +308,7 @@ export function Composer({
                 value={voiceId}
                 disabled={loading || serviceDown}
                 onChange={(e) => setVoiceId(e.target.value)}
-                className="max-w-[13rem] bg-transparent outline-none [&>option]:bg-popover"
+                className="max-w-[10rem] bg-transparent outline-none [&>option]:bg-popover"
               >
                 {loading && <option value="">{t.loading}</option>}
                 {voices.map((v) => (
@@ -270,6 +318,9 @@ export function Composer({
                 ))}
               </select>
             </label>
+          )}
+          {tool === "tts" && (
+            <VoiceSettingsControl value={settings} onChange={changeSettings} live={ttsLive} />
           )}
           {tool === "image" && (
             <label className={chip}>

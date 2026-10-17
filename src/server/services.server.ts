@@ -32,6 +32,11 @@ import {
 import { clock } from "@/lib/clock";
 import { findPackage, signupBonus } from "@/lib/packages";
 import { GENERATION_TITLE_MAX } from "@/lib/projects";
+import {
+  isDefaultVoiceSettings,
+  normalizeVoiceSettings,
+  type VoiceSettings,
+} from "@/lib/voice-settings";
 import { LIMITS, checkLimit, retryMinutes, type Limit } from "@/lib/rate-limit";
 import {
   MAX_TOPUP_CENTS,
@@ -402,7 +407,15 @@ const toGeneration = (g: GenerationRow): Generation => ({
   createdAt: g.createdAt,
   title: g.title ?? undefined,
   projectId: g.projectId ?? undefined,
+  voiceSettings: g.voiceSettings ?? undefined,
 });
+
+/** Kayda yazılacak ses ayarları: aralığa kırpılır; varsayılansa boş. */
+function storedSettings(raw: Partial<VoiceSettings> | undefined): VoiceSettings | null {
+  if (!raw) return null;
+  const s = normalizeVoiceSettings(raw);
+  return isDefaultVoiceSettings(s) ? null : s;
+}
 
 /** Kullanıcının verdiği ad: kırpılır; boşsa null, sınırı aşarsa geçersiz (undefined). */
 export function cleanTitle(raw: string | null | undefined): string | null | undefined {
@@ -1037,6 +1050,7 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           charges: null,
           projectId: null,
           title: null,
+          voiceSettings: storedSettings(input.settings),
         },
       };
     }
@@ -1058,6 +1072,7 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           charges: null,
           projectId: null,
           title: null,
+          voiceSettings: null,
         },
       };
     }
@@ -1085,6 +1100,7 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
           charges: null,
           projectId: null,
           title: null,
+          voiceSettings: null,
         },
       };
     }
@@ -1354,6 +1370,7 @@ export async function generateImages(
     charges: null,
     projectId: null,
     title: null,
+    voiceSettings: null,
     cost,
     createdAt: now.toISOString(),
   };
@@ -1444,6 +1461,7 @@ export async function startVideo(
     charges: null,
     projectId: null,
     title: null,
+    voiceSettings: null,
     cost,
     createdAt: now.toISOString(),
   };
@@ -1593,11 +1611,16 @@ export async function generateSpeech(
   db: Db,
   deps: SpeechDeps,
   userId: string,
-  input: { text: string; voiceId: string } & GenerationMeta,
+  input: {
+    text: string;
+    voiceId: string;
+    settings?: Partial<VoiceSettings> | undefined;
+  } & GenerationMeta,
   now: Date,
 ): Promise<Result<{ generation: Generation }, ActionErrorCode> | RateLimited> {
   const text = input.text.trim();
   if (!text || [...text].length > MAX_TTS_CHARS) return { ok: false, error: "invalidInput" };
+  const settings = storedSettings(input.settings);
   let providerVoiceId: string | null;
   try {
     providerVoiceId = await resolveVoice(db, deps, userId, input.voiceId);
@@ -1621,7 +1644,7 @@ export async function generateSpeech(
 
   let audio: Uint8Array;
   try {
-    audio = await deps.tts.synthesize(providerVoiceId, text);
+    audio = await deps.tts.synthesize(providerVoiceId, text, settings ?? undefined);
   } catch (err) {
     console.error("[ses] seslendirme başarısız:", err instanceof Error ? err.message : err);
     return { ok: false, error: "providerFailed" };
@@ -1645,6 +1668,7 @@ export async function generateSpeech(
     charges: null,
     projectId: null,
     title: null,
+    voiceSettings: settings,
     cost,
     createdAt: now.toISOString(),
   };

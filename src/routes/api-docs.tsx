@@ -10,10 +10,11 @@ export const Route = createFileRoute("/api-docs")({
   component: ApiDocsPage,
 });
 
-type FieldKey = "text" | "voiceId" | "prompt" | "count" | "style";
+type FieldKey = "text" | "voiceId" | "voiceSettings" | "prompt" | "count" | "style";
 const FIELD_NAMES: Record<FieldKey, string> = {
   text: "text",
   voiceId: "voice_id",
+  voiceSettings: "voice_settings",
   prompt: "prompt",
   count: "count",
   style: "style",
@@ -65,9 +66,9 @@ const ENDPOINTS: Endpoint[] = [
     key: "tts",
     method: "POST",
     path: "/tts",
-    fields: ["text", "voiceId"],
+    fields: ["text", "voiceId", "voiceSettings"],
     curl: (b) =>
-      `curl -X POST ${b}/tts \\\n  ${jsonBody('{"text":"Merhaba dünya","voice_id":"VOICE_ID"}')}`,
+      `curl -X POST ${b}/tts \\\n  ${jsonBody('{"text":"Merhaba dünya","voice_id":"VOICE_ID","voice_settings":{"speed":1.1}}')}`,
   },
   {
     key: "images",

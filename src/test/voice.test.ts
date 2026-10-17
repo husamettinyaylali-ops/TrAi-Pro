@@ -47,6 +47,7 @@ const catalog: ProviderVoice[] = [
 function fakeTts(opts: { fail?: boolean } = {}) {
   const calls = {
     synth: [] as [string, string][],
+    settings: [] as unknown[],
     cloned: [] as string[],
     deleted: [] as string[],
   };
@@ -54,8 +55,9 @@ function fakeTts(opts: { fail?: boolean } = {}) {
     async listVoices() {
       return catalog;
     },
-    async synthesize(voiceId, text) {
+    async synthesize(voiceId, text, settings) {
       calls.synth.push([voiceId, text]);
+      calls.settings.push(settings);
       if (opts.fail) throw new Error("ElevenLabs 500");
       return new Uint8Array([0x49, 0x44, 0x33, 1, 2, 3]);
     },
@@ -124,6 +126,23 @@ describe("ElevenLabs istemcisi", () => {
     expect(JSON.parse(String(seen[0]!.init!.body))).toEqual({
       text: "Merhaba",
       model_id: "eleven_multilingual_v2",
+    });
+  });
+
+  it("ses ayarları ElevenLabs alan adlarıyla gider", async () => {
+    const { seen, f } = recorder(() => new Response(new Uint8Array([1])));
+    await elevenLabsProvider({ apiKey: "x", fetchImpl: f }).synthesize("ses-1", "Merhaba", {
+      speed: 1.1,
+      stability: 0.3,
+      similarity: 0.8,
+      style: 0.2,
+    });
+    expect(JSON.parse(String(seen[0]!.init!.body)).voice_settings).toEqual({
+      stability: 0.3,
+      similarity_boost: 0.8,
+      style: 0.2,
+      speed: 1.1,
+      use_speaker_boost: true,
     });
   });
 
@@ -206,6 +225,43 @@ describe("gerçek seslendirme", () => {
     expect(res.generation.audioUrl).toBe(`/media/audio/${res.generation.id}`);
     expect(await storage.read(`${id}/${res.generation.id}.mp3`)).not.toBeNull();
     expect(balance((await loadUserData(db, id)).grants, "voice", now)).toBe(5_000 - 13);
+  });
+
+  it("ses ayarları kırpılıp sağlayıcıya gider ve kayda yazılır; varsayılan ayar yazılmaz", async () => {
+    const id = await newUser();
+    const { tts, calls } = fakeTts();
+    const tuned = await generateSpeech(
+      db,
+      deps(tts),
+      id,
+      {
+        text: "Merhaba",
+        voiceId: "hazir-1",
+        settings: { speed: 1.13, stability: 0.3, similarity: 0.75, style: 2 },
+      },
+      now,
+    );
+    if (!tuned.ok) throw new Error(tuned.error);
+    const expected = { speed: 1.15, stability: 0.3, similarity: 0.75, style: 1 };
+    expect(calls.settings[0]).toEqual(expected);
+    expect(tuned.generation.voiceSettings).toEqual(expected);
+    // Kredi ayardan etkilenmez.
+    expect(tuned.generation.cost).toBe(7);
+
+    const plain = await generateSpeech(
+      db,
+      deps(tts),
+      id,
+      {
+        text: "Merhaba",
+        voiceId: "hazir-1",
+        settings: { speed: 1, stability: 0.5, similarity: 0.75, style: 0 },
+      },
+      now,
+    );
+    if (!plain.ok) throw new Error(plain.error);
+    expect(calls.settings[1]).toBeUndefined();
+    expect(plain.generation.voiceSettings).toBeUndefined();
   });
 
   it("servis hata verirse kredi düşmez, kayıt ve dosya oluşmaz", async () => {

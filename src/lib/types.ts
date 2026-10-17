@@ -1,4 +1,5 @@
 import type { CreditKind, Grant } from "./credits";
+import type { VoiceSettings } from "./voice-settings";
 
 /** Siparişin ödeme biçimi. "balance": bakiyeden; diğerleri demo dönemin kayıtları. */
 export type PaymentMethod = "card" | "crypto" | "bank" | "balance";
@@ -75,6 +76,8 @@ export interface Generation {
   /** Kullanıcının verdiği ad; yoksa metin/istem gösterilir. */
   title?: string | undefined;
   projectId?: string | undefined;
+  /** Seslendirmede kullanılan ayarlar; varsayılan ayarlarla üretildiyse yok. */
+  voiceSettings?: VoiceSettings | undefined;
 }
 
 /** Kullanıcının çalışma alanı; üretimler bir projede toplanır. */
@@ -139,7 +142,7 @@ export interface SessionPayload {
  * eski kaydın adını taşır.
  */
 export type GenerateInput = (
-  | { type: "tts"; text: string; voiceId: string }
+  | { type: "tts"; text: string; voiceId: string; settings?: VoiceSettings | undefined }
   | { type: "image"; text: string; count: number }
   | { type: "video"; text: string; styleIndex: number }
 ) & { projectId?: string | undefined; title?: string | undefined };

@@ -1,0 +1,1 @@
+ALTER TABLE `generations` ADD `voice_settings` text;

@@ -321,6 +321,15 @@ const generateSchema = z.discriminatedUnion("type", [
     type: z.literal("tts"),
     text: z.string().max(10_000),
     voiceId: z.string().max(80),
+    // Aralık dışı değerler sunucuda kırpılır (normalizeVoiceSettings).
+    settings: z
+      .object({
+        speed: z.number().finite(),
+        stability: z.number().finite(),
+        similarity: z.number().finite(),
+        style: z.number().finite(),
+      })
+      .optional(),
     ...generationMeta,
   }),
   z.object({

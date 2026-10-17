@@ -56,6 +56,7 @@ describe("stüdyo yazma kutusu", () => {
   beforeEach(() => {
     generate.mockReset();
     grants = [];
+    window.localStorage.clear();
   });
 
   it("Ctrl+Enter ile seçili projeye seslendirir; başarıda kutu temizlenir", async () => {
@@ -72,7 +73,8 @@ describe("stüdyo yazma kutusu", () => {
     });
     const { onBusy } = renderComposer({ projectId: "p1" });
     fireEvent.change(box(), { target: { value: "Merhaba" } });
-    expect(screen.getByText(/7 \/ 5\.000 karakter · 7 kredi/)).toBeInTheDocument();
+    expect(screen.getByText("7 / 5.000 karakter")).toBeInTheDocument();
+    expect(screen.getByText("7 kredi")).toBeInTheDocument();
     fireEvent.keyDown(box(), { key: "Enter", ctrlKey: true });
     await waitFor(() =>
       expect(generate).toHaveBeenCalledWith(
@@ -82,6 +84,38 @@ describe("stüdyo yazma kutusu", () => {
     await waitFor(() => expect(box()).toHaveValue(""));
     expect(onBusy).toHaveBeenNthCalledWith(1, "tts");
     expect(onBusy).toHaveBeenLastCalledWith(null);
+  });
+
+  it("ses ayarları istekle gider ve tarayıcıda hatırlanır; varsayılan ayar gönderilmez", async () => {
+    generate.mockResolvedValue({
+      ok: true,
+      generation: {
+        id: "n3",
+        type: "tts",
+        text: "Selam",
+        voiceId: "defne",
+        cost: 5,
+        createdAt: "",
+      },
+    });
+    renderComposer();
+    fireEvent.change(box(), { target: { value: "Selam" } });
+    fireEvent.keyDown(box(), { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    expect(generate.mock.calls[0]![0]).toMatchObject({ settings: undefined });
+
+    fireEvent.click(screen.getByRole("button", { name: "Ses ayarları" }));
+    fireEvent.change(screen.getByLabelText("Hız"), { target: { value: "1.1" } });
+    expect(screen.getByRole("button", { name: "Ses ayarları (Özel ayar)" })).toBeInTheDocument();
+    fireEvent.change(box(), { target: { value: "Selam" } });
+    fireEvent.keyDown(box(), { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(2));
+    expect(generate.mock.calls[1]![0]).toMatchObject({
+      settings: { speed: 1.1, stability: 0.5, similarity: 0.75, style: 0 },
+    });
+    expect(JSON.parse(window.localStorage.getItem("trai.voice-settings")!)).toMatchObject({
+      speed: 1.1,
+    });
   });
 
   it("boş metin gönderilmez; Enter tek başına yeni satırdır", () => {

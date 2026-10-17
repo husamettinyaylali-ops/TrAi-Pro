@@ -5,6 +5,7 @@ import { balance } from "@/lib/credits";
 import { clock } from "@/lib/clock";
 import { LIMITS } from "@/lib/rate-limit";
 import type { ActionErrorCode, Generation, RateLimited } from "@/lib/types";
+import { normalizeVoiceSettings } from "@/lib/voice-settings";
 import { formatCents } from "@/lib/wallet";
 
 import { authenticateApiKey } from "./api-keys.server";
@@ -90,7 +91,20 @@ const rateLimited = (r: RateLimited) => fail("rate_limited", r.retryAfterMinutes
 const VIDEO_STYLES = ["cinematic", "anime", "3d", "documentary"] as const;
 
 const schemas = {
-  tts: z.object({ text: z.string().min(1).max(5_000), voice_id: z.string().min(1).max(80) }),
+  tts: z.object({
+    text: z.string().min(1).max(5_000),
+    voice_id: z.string().min(1).max(80),
+    // Verilmeyen ayar varsayılan kalır; aralık dışı değer kırpılır.
+    voice_settings: z
+      .object({
+        speed: z.number().finite(),
+        stability: z.number().finite(),
+        similarity: z.number().finite(),
+        style: z.number().finite(),
+      })
+      .partial()
+      .optional(),
+  }),
   images: z.object({
     prompt: z.string().min(1).max(400),
     count: z.union([z.literal(1), z.literal(2), z.literal(4)]).default(1),
@@ -110,6 +124,7 @@ function view(g: Generation, origin: string) {
     status: g.status === "pending" ? "pending" : g.status === "failed" ? "failed" : "completed",
     prompt: g.text,
     cost: g.cost,
+    ...(g.voiceSettings && { voice_settings: g.voiceSettings }),
     created_at: g.createdAt,
     files: Array.from(
       { length: count },
@@ -212,7 +227,11 @@ export async function handleApi(
         db,
         deps.speech,
         userId,
-        { text: body.text, voiceId: body.voice_id },
+        {
+          text: body.text,
+          voiceId: body.voice_id,
+          settings: body.voice_settings ? normalizeVoiceSettings(body.voice_settings) : undefined,
+        },
         now,
       );
       if (!res.ok)

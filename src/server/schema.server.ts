@@ -7,6 +7,8 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
+import type { VoiceSettings } from "@/lib/voice-settings";
+
 // Tarihler ISO-8601 UTC metni olarak saklanır; para birimi kuruş/sent tamsayısıdır.
 
 export const users = sqliteTable("users", {
@@ -154,6 +156,8 @@ export const generations = sqliteTable(
     projectId: text("project_id"),
     /** Kullanıcının verdiği ad; boşsa metin/istem gösterilir. */
     title: text("title"),
+    /** Seslendirme ayarları (hız, kararlılık, benzerlik, stil); varsayılansa boş. */
+    voiceSettings: text("voice_settings", { mode: "json" }).$type<VoiceSettings>(),
   },
   (t) => [
     index("generations_user_idx").on(t.userId),
