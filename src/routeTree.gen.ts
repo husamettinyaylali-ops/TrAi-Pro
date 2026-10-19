@@ -42,6 +42,7 @@ import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/cal
 import { Route as MediaAudioIdRouteImport } from './routes/media/audio/$id'
 import { Route as MediaProjectIdRouteImport } from './routes/media/project/$id'
 import { Route as MediaSubtitleIdRouteImport } from './routes/media/subtitle/$id'
+import { Route as MediaVoicePreviewIdRouteImport } from './routes/media/voice-preview/$id'
 import { Route as MediaFileIdIndexRouteImport } from './routes/media/file/$id/$index'
 
 const IndexRoute = IndexRouteImport.update({
@@ -209,6 +210,11 @@ const MediaSubtitleIdRoute = MediaSubtitleIdRouteImport.update({
   path: '/media/subtitle/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MediaVoicePreviewIdRoute = MediaVoicePreviewIdRouteImport.update({
+  id: '/media/voice-preview/$id',
+  path: '/media/voice-preview/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MediaFileIdIndexRoute = MediaFileIdIndexRouteImport.update({
   id: '/media/file/$id/$index',
   path: '/media/file/$id/$index',
@@ -249,6 +255,7 @@ export interface FileRoutesByFullPath {
   '/media/audio/$id': typeof MediaAudioIdRoute
   '/media/project/$id': typeof MediaProjectIdRoute
   '/media/subtitle/$id': typeof MediaSubtitleIdRoute
+  '/media/voice-preview/$id': typeof MediaVoicePreviewIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -285,6 +292,7 @@ export interface FileRoutesByTo {
   '/media/audio/$id': typeof MediaAudioIdRoute
   '/media/project/$id': typeof MediaProjectIdRoute
   '/media/subtitle/$id': typeof MediaSubtitleIdRoute
+  '/media/voice-preview/$id': typeof MediaVoicePreviewIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRoutesById {
@@ -322,6 +330,7 @@ export interface FileRoutesById {
   '/media/audio/$id': typeof MediaAudioIdRoute
   '/media/project/$id': typeof MediaProjectIdRoute
   '/media/subtitle/$id': typeof MediaSubtitleIdRoute
+  '/media/voice-preview/$id': typeof MediaVoicePreviewIdRoute
   '/media/file/$id/$index': typeof MediaFileIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -360,6 +369,7 @@ export interface FileRouteTypes {
     | '/media/audio/$id'
     | '/media/project/$id'
     | '/media/subtitle/$id'
+    | '/media/voice-preview/$id'
     | '/media/file/$id/$index'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -396,6 +406,7 @@ export interface FileRouteTypes {
     | '/media/audio/$id'
     | '/media/project/$id'
     | '/media/subtitle/$id'
+    | '/media/voice-preview/$id'
     | '/media/file/$id/$index'
   id:
     | '__root__'
@@ -432,6 +443,7 @@ export interface FileRouteTypes {
     | '/media/audio/$id'
     | '/media/project/$id'
     | '/media/subtitle/$id'
+    | '/media/voice-preview/$id'
     | '/media/file/$id/$index'
   fileRoutesById: FileRoutesById
 }
@@ -468,6 +480,7 @@ export interface RootRouteChildren {
   MediaAudioIdRoute: typeof MediaAudioIdRoute
   MediaProjectIdRoute: typeof MediaProjectIdRoute
   MediaSubtitleIdRoute: typeof MediaSubtitleIdRoute
+  MediaVoicePreviewIdRoute: typeof MediaVoicePreviewIdRoute
   MediaFileIdIndexRoute: typeof MediaFileIdIndexRoute
 }
 
@@ -704,6 +717,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MediaSubtitleIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/media/voice-preview/$id': {
+      id: '/media/voice-preview/$id'
+      path: '/media/voice-preview/$id'
+      fullPath: '/media/voice-preview/$id'
+      preLoaderRoute: typeof MediaVoicePreviewIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/media/file/$id/$index': {
       id: '/media/file/$id/$index'
       path: '/media/file/$id/$index'
@@ -759,6 +779,7 @@ const rootRouteChildren: RootRouteChildren = {
   MediaAudioIdRoute: MediaAudioIdRoute,
   MediaProjectIdRoute: MediaProjectIdRoute,
   MediaSubtitleIdRoute: MediaSubtitleIdRoute,
+  MediaVoicePreviewIdRoute: MediaVoicePreviewIdRoute,
   MediaFileIdIndexRoute: MediaFileIdIndexRoute,
 }
 export const routeTree = rootRouteImport

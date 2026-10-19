@@ -2110,9 +2110,13 @@ export async function createVoiceClone(
 }
 
 /** Klonu siler; sağlayıcıdaki ses de (varsa) kaldırılır. */
+/** Klonun seslendiren seçicideki örnek dosyası (dil başına; voice-preview.server.ts üretir). */
+export const clonePreviewKey = (userId: string, cloneId: string, lang: string) =>
+  `${userId}/${cloneId}-preview-${lang}.mp3`;
+
 export async function deleteVoiceClone(
   db: Db,
-  deps: { tts: TtsProvider | null },
+  deps: { tts: TtsProvider | null; storage?: FileStorage | undefined },
   userId: string,
   cloneId: string,
 ): Promise<Result<object, "invalidInput">> {
@@ -2135,6 +2139,13 @@ export async function deleteVoiceClone(
   await db
     .delete(voiceClones)
     .where(and(eq(voiceClones.id, cloneId), eq(voiceClones.userId, userId)));
+  // Seslendiren seçicideki örnek dosyaları da silinir (her dil için).
+  if (deps.storage) {
+    const storage = deps.storage;
+    await Promise.all(
+      ["tr", "en"].map((lang) => storage.remove(clonePreviewKey(userId, cloneId, lang))),
+    );
+  }
   return { ok: true };
 }
 

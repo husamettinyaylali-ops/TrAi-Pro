@@ -170,7 +170,7 @@ export const generations = sqliteTable(
      * düzenlenmiş görsel ya da sesten oluşturulan kısa video. Kredi harcanmaz
      * (cost 0); kaynak kayıt değişmez.
      */
-    editKind: text("edit_kind", { enum: ["trim", "merge", "image", "compose"] }),
+    editKind: text("edit_kind", { enum: ["trim", "merge", "image", "compose", "adjust"] }),
     /**
      * Düzenlenen kaynak üretim (kısa videoda sesi; birleştirmede boş). Kaynak
      * silinse de bu kayıt kalır.

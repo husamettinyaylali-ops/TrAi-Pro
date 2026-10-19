@@ -186,6 +186,15 @@ export function shiftCues(cues: Cue[], offset: number, duration: number): Cue[] 
   });
 }
 
+/** Hızı değişen sesin altyazısı: zamanlar `factor` ile çarpılır (1,25x hızda 0,8). */
+export function scaleCues(cues: Cue[], factor: number): Cue[] {
+  return cues.map((c) => ({
+    start: Math.round(c.start * factor),
+    end: Math.max(Math.round(c.start * factor) + 1, Math.round(c.end * factor)),
+    text: c.text,
+  }));
+}
+
 export const CUE_TEXT_MAX = 200;
 export const MAX_CUES = 5_000;
 

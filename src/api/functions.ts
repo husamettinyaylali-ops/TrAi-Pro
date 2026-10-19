@@ -545,6 +545,29 @@ export const mergeSpeech = createServerFn({ method: "POST" })
     return editor.mergeSpeech(await getDb(), fileStorage(), user.id, data, clock());
   });
 
+/**
+ * Üretim sonrası ücretsiz ses ayarı (hız, ses düzeyi, yumuşak geçiş): yeniden
+ * seslendirmeden yeni sürüm. Sunucuda ffmpeg yoksa kapalı.
+ */
+export const adjustAudio = createServerFn({ method: "POST" })
+  .validator(
+    parse(
+      z.object({
+        id,
+        // Aralık ve adım sunucuda denetlenir (validAdjust).
+        speed: z.number().finite(),
+        gainDb: z.number().int(),
+        fade: z.boolean(),
+      }),
+    ),
+  )
+  .handler(async ({ data }) => {
+    const user = await currentUser();
+    if (!user) return { ok: false as const, error: "unauthorized" as const };
+    if (!(await detectFfmpeg())) return { ok: false as const, error: "unavailable" as const };
+    return editor.adjustAudio(await getDb(), fileStorage(), ffmpegRunner(), user.id, data, clock());
+  });
+
 /** Düzenleyici: tarayıcıda düzenlenen görsel (FormData: sourceId, file); yeni sürüm, kredi harcanmaz. */
 export const saveImageEdit = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
@@ -752,7 +775,12 @@ export const deleteClone = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const user = await currentUser();
     if (!user) return { ok: false as const, error: "unauthorized" as const };
-    const res = await svc.deleteVoiceClone(await getDb(), { tts: ttsProvider() }, user.id, data.id);
+    const res = await svc.deleteVoiceClone(
+      await getDb(),
+      { tts: ttsProvider(), storage: fileStorage() },
+      user.id,
+      data.id,
+    );
     if (!res.ok) return res;
     return { ok: true as const, session: await payloadFor(user) };
   });

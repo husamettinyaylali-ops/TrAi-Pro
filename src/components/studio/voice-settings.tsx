@@ -13,6 +13,76 @@ import {
 
 const KEYS: VoiceSettingKey[] = ["speed", "stability", "similarity", "style"];
 
+/** Ayar değerinin gösterimi: hız "1,10x", diğerleri yüzde. */
+function useSettingFormat() {
+  const { locale } = useI18n();
+  return (k: VoiceSettingKey, v: number) =>
+    k === "speed"
+      ? `${new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)}x`
+      : new Intl.NumberFormat(locale, { style: "percent" }).format(v);
+}
+
+/**
+ * Hız, kararlılık, benzerlik ve stil kaydırıcıları. Aynı sayfada birden çok
+ * kez kullanılabilsin diye alan kimlikleri `idPrefix` ile ayrılır.
+ */
+export function VoiceSettingsFields({
+  value,
+  onChange,
+  idPrefix = "voice",
+}: {
+  value: VoiceSettings;
+  onChange: (next: VoiceSettings) => void;
+  idPrefix?: string;
+}) {
+  const { t } = useI18n();
+  const c = t.studio.voiceSettings;
+  const format = useSettingFormat();
+  const labels = {
+    speed: [c.speed, c.speedHint],
+    stability: [c.stability, c.stabilityHint],
+    similarity: [c.similarity, c.similarityHint],
+    style: [c.style, c.styleHint],
+  } as const;
+  return (
+    <>
+      {KEYS.map((k) => {
+        const [min, max] = VOICE_SETTING_RANGES[k];
+        const [label, hint] = labels[k];
+        const id = `${idPrefix}-${k}`;
+        return (
+          <div key={k}>
+            <div className="flex items-baseline justify-between text-sm">
+              <label htmlFor={id} className="font-medium">
+                {label}
+              </label>
+              <output htmlFor={id} className="tabular-nums text-muted-foreground">
+                {format(k, value[k])}
+              </output>
+            </div>
+            <input
+              id={id}
+              type="range"
+              min={min}
+              max={max}
+              step={VOICE_SETTING_STEP}
+              value={value[k]}
+              aria-describedby={`${id}-hint`}
+              onChange={(e) =>
+                onChange({ ...value, [k]: Number(Number(e.target.value).toFixed(2)) })
+              }
+              className="mt-1 h-6 w-full accent-violet"
+            />
+            <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+              {hint}
+            </p>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 /**
  * Yazma kutusundaki "Ses ayarları": hız, kararlılık, benzerlik ve stil
  * kaydırıcıları. Varsayılandan farklıysa düğmede işaret görünür.
@@ -27,19 +97,10 @@ export function VoiceSettingsControl({
   /** Gerçek servis bağlı değilse yalnız hızın uygulandığı söylenir. */
   live: boolean;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const c = t.studio.voiceSettings;
+  const format = useSettingFormat();
   const custom = !isDefaultVoiceSettings(value);
-  const format = (k: VoiceSettingKey, v: number) =>
-    k === "speed"
-      ? `${new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)}x`
-      : new Intl.NumberFormat(locale, { style: "percent" }).format(v);
-  const labels = {
-    speed: [c.speed, c.speedHint],
-    stability: [c.stability, c.stabilityHint],
-    similarity: [c.similarity, c.similarityHint],
-    style: [c.style, c.styleHint],
-  } as const;
 
   return (
     <Popover>
@@ -55,38 +116,7 @@ export function VoiceSettingsControl({
       </PopoverTrigger>
       <PopoverContent align="start" side="top" className="w-80 space-y-4">
         <p className="font-semibold">{c.open}</p>
-        {KEYS.map((k) => {
-          const [min, max] = VOICE_SETTING_RANGES[k];
-          const [label, hint] = labels[k];
-          return (
-            <div key={k}>
-              <div className="flex items-baseline justify-between text-sm">
-                <label htmlFor={`voice-${k}`} className="font-medium">
-                  {label}
-                </label>
-                <output htmlFor={`voice-${k}`} className="tabular-nums text-muted-foreground">
-                  {format(k, value[k])}
-                </output>
-              </div>
-              <input
-                id={`voice-${k}`}
-                type="range"
-                min={min}
-                max={max}
-                step={VOICE_SETTING_STEP}
-                value={value[k]}
-                aria-describedby={`voice-${k}-hint`}
-                onChange={(e) =>
-                  onChange({ ...value, [k]: Number(Number(e.target.value).toFixed(2)) })
-                }
-                className="mt-1 h-6 w-full accent-violet"
-              />
-              <p id={`voice-${k}-hint`} className="text-xs text-muted-foreground">
-                {hint}
-              </p>
-            </div>
-          );
-        })}
+        <VoiceSettingsFields value={value} onChange={onChange} />
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
           {!live && <p className="text-xs text-muted-foreground">{c.demoNote}</p>}
           <button

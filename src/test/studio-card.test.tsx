@@ -29,6 +29,12 @@ vi.mock("@tanstack/react-router", () => ({
     </a>
   ),
 }));
+vi.mock("@/lib/studio-config", () => ({
+  useStudioConfig: () => ({
+    isPending: false,
+    data: { tts: "demo", compose: { available: true, subtitles: true } },
+  }),
+}));
 vi.mock("@/lib/store", () => ({
   useApp: () => ({ generate, deleteGeneration, moveGeneration, renameGeneration: vi.fn() }),
   useProjects: () => ({ data: [] }),
@@ -294,6 +300,38 @@ describe("yazıya dökülen kayıt kartı", () => {
     // Başarısız işte indirilecek dosya ve kopyalanacak metin yok.
     expect(screen.queryByRole("button", { name: /İndir/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Metni kopyala" })).toBeNull();
+  });
+});
+
+describe("kartta ayarla", () => {
+  it("sesli kayıtta panel açılır ve kapanır", () => {
+    renderCard({ ...speech, audioUrl: "/media/audio/s1" });
+    const adjust = screen.getByRole("button", { name: "Ayarla" });
+    expect(adjust).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(adjust);
+    expect(adjust).toHaveAttribute("aria-expanded", "true");
+    const panel = screen.getByRole("region", { name: "Sesi ayarla" });
+    expect(adjust).toHaveAttribute("aria-controls", panel.id);
+    expect(screen.getByRole("group", { name: "Yeniden seslendir" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Kapat" }));
+    expect(screen.queryByRole("region", { name: "Sesi ayarla" })).toBeNull();
+  });
+
+  it("görselde ve başarısız işte ayarla yok", () => {
+    const { unmount } = render(
+      <I18nProvider>
+        <GenerationCard
+          g={{ id: "i1", type: "image", text: "kapak", fileUrls: ["/x"], cost: 1, createdAt: now }}
+          voices={[]}
+          showProject={false}
+          onEdit={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.queryByRole("button", { name: "Ayarla" })).toBeNull();
+    unmount();
+    renderCard({ ...speech, status: "failed" });
+    expect(screen.queryByRole("button", { name: "Ayarla" })).toBeNull();
   });
 });
 

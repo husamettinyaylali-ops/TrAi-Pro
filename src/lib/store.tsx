@@ -9,6 +9,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 import * as api from "@/api/functions";
 
+import type { AudioAdjust } from "./audio-adjust";
 import { useI18n, type Lang } from "./i18n";
 import type {
   Account,
@@ -117,6 +118,10 @@ interface Store {
     projectId?: string | undefined;
     title?: string | undefined;
   }) => Promise<Outcome<{ generation: Generation }, EditErrorCode> | RateLimited>;
+  /** Üretim sonrası ücretsiz ses ayarı (hız, ses düzeyi, yumuşak geçiş); yeni sürüm açılır. */
+  adjustAudio: (
+    input: { id: string } & AudioAdjust,
+  ) => Promise<Outcome<{ generation: Generation }, EditErrorCode> | RateLimited>;
   /** Düzenleyici: düzenlenmiş görsel (FormData: sourceId, file); yeni sürüm, kredi harcanmaz. */
   saveImageEdit: (
     form: FormData,
@@ -334,6 +339,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (res.ok && userId) {
           upsertHistory(qc, userId, res.generation, true);
           void qc.invalidateQueries({ queryKey: [PROJECTS] });
+        }
+        return res;
+      },
+      adjustAudio: async (input) => {
+        const res = await call(() => api.adjustAudio({ data: input }));
+        if (res.ok && userId) {
+          upsertHistory(qc, userId, res.generation, true);
+          if (res.generation.projectId) void qc.invalidateQueries({ queryKey: [PROJECTS] });
         }
         return res;
       },

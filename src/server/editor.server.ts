@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { and, count, eq, inArray } from "drizzle-orm";
 
+import { ADJUST_FADE_SECONDS, isNoAdjust, validAdjust, type AudioAdjust } from "@/lib/audio-adjust";
 import { LIMITS } from "@/lib/rate-limit";
 import { decodeEffect, encodeEffect, roundDuration } from "@/lib/sound-effects";
 import type { Generation, RateLimited } from "@/lib/types";
@@ -14,6 +15,7 @@ import {
   cuesToText,
   encodeCues,
   parseCues,
+  scaleCues,
   shiftCues,
   type Cue,
 } from "./captions.server";
@@ -338,6 +340,135 @@ export async function saveImageEdit(
       charges: null,
       cost: 0,
       editKind: "image",
+      sourceId: src.id,
+      createdAt: now.toISOString(),
+    },
+    now,
+  );
+  return { ok: true, generation };
+}
+
+/** Ayar ffmpeg'i bu süreyi aşarsa kesilir (en uzun kayıt 1 saattir). */
+const ADJUST_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * ffmpeg: hız (atempo, perde korunur), ses düzeyi (artışta taşma sınırlanır)
+ * ve başta/sonda yumuşak geçiş; çıktı 44,1 kHz MP3, kanal sayısı korunur
+ * (seslendirmelerle birleştirilebilsin). `seconds` kaynak sesin süresidir.
+ */
+export function adjustArgs(a: AudioAdjust, seconds: number, input: string, output: string) {
+  const filters: string[] = [];
+  if (a.speed !== 1) filters.push(`atempo=${a.speed}`);
+  if (a.gainDb !== 0) filters.push(`volume=${a.gainDb}dB`);
+  if (a.gainDb > 0) filters.push("alimiter=limit=0.97:level=0");
+  if (a.fade) {
+    const out = seconds / a.speed;
+    const d = Math.min(ADJUST_FADE_SECONDS, out / 4).toFixed(3);
+    const end = Math.max(0, out - Number(d)).toFixed(3);
+    filters.push(`afade=t=in:st=0:d=${d}`, `afade=t=out:st=${end}:d=${d}`);
+  }
+  return [
+    "-hide_banner",
+    "-nostdin",
+    "-y",
+    "-i",
+    input,
+    "-vn",
+    ...(filters.length ? ["-af", filters.join(",")] : []),
+    "-ar",
+    "44100",
+    "-c:a",
+    "libmp3lame",
+    "-b:a",
+    "128k",
+    "-map_metadata",
+    "-1",
+    "-id3v2_version",
+    "0",
+    "-write_xing",
+    "0",
+    output,
+  ];
+}
+
+/**
+ * Üretim sonrası ücretsiz ayar: ses yeniden seslendirilmeden ffmpeg ile
+ * işlenir (hız, ses düzeyi, yumuşak geçiş); altyazı zamanları hıza göre
+ * uyarlanır. Sonuç ücretsiz yeni sürümdür ("adjust"); kaynak değişmez.
+ */
+export async function adjustAudio(
+  db: Db,
+  storage: FileStorage,
+  run: FfmpegRun,
+  userId: string,
+  input: { id: string } & AudioAdjust,
+  now: Date,
+): Promise<EditResult> {
+  const adjust: AudioAdjust = { speed: input.speed, gainDb: input.gainDb, fade: input.fade };
+  if (!validAdjust(adjust) || isNoAdjust(adjust)) return { ok: false, error: "invalidInput" };
+  const src = await ownRow(db, userId, input.id);
+  if (!src || !isAudio(src) || !src.audioKey || src.status) {
+    return { ok: false, error: "notFound" };
+  }
+  const stop = await limited(db, userId, now);
+  if (stop) return stop;
+
+  const audio = await storage.read(src.audioKey);
+  const seconds = audio ? readMp3(audio)?.seconds : undefined;
+  if (!audio || !seconds) return { ok: false, error: "notFound" };
+
+  const dir = await mkdtemp(join(tmpdir(), "trai-adjust-"));
+  let out: Uint8Array;
+  try {
+    await writeFile(join(dir, "input.mp3"), audio);
+    await run(
+      adjustArgs(adjust, seconds, "input.mp3", "output.mp3"),
+      dir,
+      () => {},
+      AbortSignal.timeout(ADJUST_TIMEOUT_MS),
+    );
+    out = new Uint8Array(await readFile(join(dir, "output.mp3")));
+  } catch (err) {
+    console.error("[düzenleyici] ses ayarlanamadı:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "invalidInput" };
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+  if (!readMp3(out)) return { ok: false, error: "invalidInput" };
+
+  const id = randomUUID();
+  const audioKey = `${userId}/${id}.mp3`;
+  await storage.put(audioKey, out);
+  let captionsKey: string | null = null;
+  if (src.captionsKey) {
+    const raw = await storage.read(src.captionsKey);
+    const cues = (raw && parseCues(raw)) || [];
+    if (cues.length) {
+      captionsKey = `${userId}/${id}-captions.json`;
+      await storage.put(captionsKey, encodeCues(scaleCues(cues, 1 / adjust.speed)));
+    }
+  }
+  const generation = await recordVersion(
+    db,
+    userId,
+    {
+      ...src,
+      id,
+      audioKey,
+      captionsKey,
+      // Efektin süresi yeni hızla değişir; yumuşak geçiş kesintisiz döngüyü bozar.
+      style:
+        src.type === "sfx"
+          ? encodeEffect({
+              duration: roundDuration(seconds / adjust.speed),
+              loop: decodeEffect(src.style).loop && !adjust.fade,
+            })
+          : src.style,
+      status: null,
+      job: null,
+      charges: null,
+      cost: 0,
+      editKind: "adjust",
       sourceId: src.id,
       createdAt: now.toISOString(),
     },

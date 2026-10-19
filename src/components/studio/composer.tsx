@@ -22,7 +22,6 @@ import {
   Repeat,
   Sparkles,
   Timer,
-  UserRound,
 } from "lucide-react";
 
 import { EditBanner } from "@/components/labs/generation-ui";
@@ -49,10 +48,11 @@ import {
   normalizeVoiceSettings,
   type VoiceSettings,
 } from "@/lib/voice-settings";
-import { speak, stockVoices, stopSpeaking, type Voice } from "@/lib/voices";
+import { speak, stockVoices, stopSpeaking } from "@/lib/voices";
 
 import { TOOLS, useActionError, useVoices, type Tool } from "./hooks";
 import { TranscribePicker, type PickedRecording } from "./transcribe-picker";
+import { VoicePicker } from "./voice-picker";
 import { VoiceSettingsControl } from "./voice-settings";
 
 /** Son kullanılan ses ayarları bu tarayıcıda hatırlanır (yalnız kolaylık). */
@@ -233,18 +233,6 @@ export function Composer({
             ? mediaCost("image", count)
             : mediaCost("video", 1);
 
-  const voiceLabel = (v: Voice) => {
-    const kind = v.cloned
-      ? t.labs.tts.cloned
-      : v.gender === "male"
-        ? t.labs.tts.male
-        : v.gender === "female"
-          ? t.labs.tts.female
-          : null;
-    const lang = v.lang === "multi" ? t.labs.tts.multilingual : v.lang;
-    return [v.name, kind, lang].filter(Boolean).join(" · ");
-  };
-
   /** Üretilen sesi hemen dinletir; tarayıcı engellerse kullanıcı karttan dinler. */
   const play = (g: Generation) => {
     if (g.audioUrl) {
@@ -424,23 +412,14 @@ export function Composer({
             })}
           </div>
           {tool === "tts" && (
-            <label className={chip}>
-              <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden />
-              <span className="sr-only">{t.labs.tts.voice}</span>
-              <select
-                value={voiceId}
-                disabled={loading || serviceDown}
-                onChange={(e) => setVoiceId(e.target.value)}
-                className="max-w-[10rem] bg-transparent outline-none [&>option]:bg-popover"
-              >
-                {loading && <option value="">{t.loading}</option>}
-                {voices.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {voiceLabel(v)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <VoicePicker
+              voices={voices}
+              value={voiceId}
+              onChange={setVoiceId}
+              live={ttsLive}
+              loading={loading}
+              disabled={serviceDown}
+            />
           )}
           {tool === "tts" && (
             <VoiceSettingsControl value={settings} onChange={changeSettings} live={ttsLive} />

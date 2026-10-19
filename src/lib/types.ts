@@ -85,7 +85,7 @@ export interface Generation {
   /** Arka planda seslendirilen uzun metnin ilerlemesi (parça). */
   progress?: { done: number; total: number } | undefined;
   /** Düzenleyicide oluşturulan sürüm (ücretsiz): kırpma, birleştirme ya da görsel düzenleme. */
-  edit?: "trim" | "merge" | "image" | "compose" | undefined;
+  edit?: "trim" | "merge" | "image" | "compose" | "adjust" | undefined;
   /** Yazıya dökülen kaydın dili (ISO 639; sağlayıcının algıladığı ya da seçilen). */
   language?: string | undefined;
   /** Ses efektinin süresi (sn; null = model seçti) ve döngü. */

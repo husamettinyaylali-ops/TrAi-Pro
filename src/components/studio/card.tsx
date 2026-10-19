@@ -18,6 +18,7 @@ import {
   Play,
   RefreshCw,
   Scissors,
+  SlidersHorizontal,
   Square,
   Subtitles,
   TextCursorInput,
@@ -42,6 +43,7 @@ import { speak, stockVoices, stopSpeaking, type Voice } from "@/lib/voices";
 
 import { editorBlock } from "@/components/editor/utils";
 
+import { AdjustPanel } from "./adjust-panel";
 import { regenerateInput, useActionError } from "./hooks";
 
 const actBtn =
@@ -423,6 +425,10 @@ export function GenerationCard({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [adjusting, setAdjusting] = useState(false);
+  // Sesi olan kayıtlar (seslendirme, yazıya dökülen kayıt, efekt) üretimden sonra ayarlanır.
+  const audioKind = g.type === "tts" || g.type === "stt" || g.type === "sfx";
+  const adjustId = `adjust-${g.id}`;
   // Yeniden adlandırırken menü kapanınca odak ad alanında kalsın.
   const keepFocus = useRef(false);
   const Icon = icons[g.type];
@@ -532,6 +538,18 @@ export function GenerationCard({
                 {t.studio.openEditor}
               </Link>
             ))}
+          {audioKind && g.status !== "failed" && (
+            <button
+              type="button"
+              aria-expanded={adjusting}
+              aria-controls={adjusting ? adjustId : undefined}
+              onClick={() => setAdjusting((v) => !v)}
+              className={`${actBtn} ${adjusting ? "text-cyan" : ""}`}
+            >
+              <SlidersHorizontal className="h-4 w-4" aria-hidden />
+              {t.studio.adjust}
+            </button>
+          )}
           {/* Sesten oluşturulan videonun ve yazıya dökülen kaydın istemi yok. */}
           {g.edit !== "compose" && g.type !== "stt" && (
             <button type="button" onClick={() => onEdit(g)} className={actBtn}>
@@ -615,6 +633,9 @@ export function GenerationCard({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+      )}
+      {adjusting && g.status !== "pending" && (
+        <AdjustPanel g={g} voices={voices} id={adjustId} onClose={() => setAdjusting(false)} />
       )}
       {error && (
         <p role="alert" className="mt-2 text-sm text-destructive">
