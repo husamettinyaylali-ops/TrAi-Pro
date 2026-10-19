@@ -33,7 +33,6 @@ import type {
   TopUpErrorCode,
   TopUpIntent,
   TopUpMethod,
-  TranscribeErrorCode,
   UserData,
 } from "./types";
 
@@ -128,7 +127,7 @@ interface Store {
    */
   transcribe: (
     form: FormData,
-  ) => Promise<Outcome<{ generation: Generation }, TranscribeErrorCode> | RateLimited>;
+  ) => Promise<Outcome<{ generation: Generation }, ActionErrorCode> | RateLimited>;
   /** Kısa video oluşturucu: iş arka planda; kayıt "pending" döner, kredi harcanmaz. */
   composeVideo: (
     input: ComposeRequest,

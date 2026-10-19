@@ -38,6 +38,7 @@ import { getDb } from "@/server/db.server";
 import {
   imageDeps,
   receiptContext,
+  sfxDeps,
   speechDeps,
   transcribeDeps,
   videoDeps,
@@ -49,6 +50,7 @@ import { COMPOSE_MAX_IMAGES, detectFfmpeg, ffmpegRunner } from "@/server/compose
 import * as editor from "@/server/editor.server";
 import * as projectSvc from "@/server/projects.server";
 import { setupStatus, testIntegration } from "@/server/setup-check.server";
+import { generateSoundEffect } from "@/server/sound-effects.server";
 import { startTranscription } from "@/server/transcribe.server";
 import * as svc from "@/server/services.server";
 import { SESSION_COOKIE } from "@/server/session.server";
@@ -354,6 +356,14 @@ const generateSchema = z.discriminatedUnion("type", [
     styleIndex: z.number().int(),
     ...generationMeta,
   }),
+  z.object({
+    type: z.literal("sfx"),
+    text: z.string().max(1_000),
+    // Aralık sunucuda denetlenir (validDuration).
+    duration: z.number().finite().nullable(),
+    loop: z.boolean(),
+    ...generationMeta,
+  }),
 ]);
 
 export const getStudioConfig = createServerFn({ method: "GET" }).handler(
@@ -364,7 +374,10 @@ export const getStudioConfig = createServerFn({ method: "GET" }).handler(
     const compose = { available: Boolean(ffmpeg), subtitles: Boolean(ffmpeg?.subtitles) };
     const deps = speechDeps();
     const stt = Boolean(deps && ffmpeg);
-    if (!deps) return { tts: "demo", cloning: false, image, video, voices: [], compose, stt };
+    const sfx = Boolean(deps);
+    if (!deps) {
+      return { tts: "demo", cloning: false, image, video, voices: [], compose, stt, sfx };
+    }
     try {
       const voices = await deps.catalog();
       return {
@@ -375,10 +388,11 @@ export const getStudioConfig = createServerFn({ method: "GET" }).handler(
         voices: voices.map(({ id, name, gender }) => ({ id, name, gender })),
         compose,
         stt,
+        sfx,
       };
     } catch (err) {
       console.error("[ses] ses listesi alınamadı:", err instanceof Error ? err.message : err);
-      return { tts: "live", cloning: true, image, video, voices: [], compose, stt };
+      return { tts: "live", cloning: true, image, video, voices: [], compose, stt, sfx };
     }
   },
 );
@@ -397,6 +411,14 @@ export const generate = createServerFn({ method: "POST" })
         if (!res.ok) return res;
         return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
       }
+    }
+    if (data.type === "sfx") {
+      // Ses efektinin demo sonucu yoktur: servis bağlı değilse kapalıdır.
+      const deps = sfxDeps();
+      if (!deps) return { ok: false as const, error: "unavailable" as const };
+      const res = await generateSoundEffect(db, deps, user.id, data, clock());
+      if (!res.ok) return res;
+      return { ok: true as const, generation: res.generation, session: await payloadFor(user) };
     }
     if (data.type === "image") {
       // Servis bağlıyken örnek görsele düşülmez (sahte çıktıya kredi düşmesin).
@@ -448,7 +470,7 @@ export const listGenerations = createServerFn({ method: "POST" })
   .validator(
     parse(
       z.object({
-        type: z.enum(["tts", "stt", "image", "video", "audio"]).optional(),
+        type: z.enum(["tts", "stt", "sfx", "image", "video", "audio"]).optional(),
         projectId: id.optional(),
         cursor: z.string().max(120).regex(svc.HISTORY_CURSOR_RE).optional(),
       }),

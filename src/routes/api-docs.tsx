@@ -19,7 +19,9 @@ type FieldKey =
   | "style"
   | "file"
   | "language"
-  | "title";
+  | "title"
+  | "durationSeconds"
+  | "loop";
 const FIELD_NAMES: Record<FieldKey, string> = {
   text: "text",
   voiceId: "voice_id",
@@ -30,6 +32,8 @@ const FIELD_NAMES: Record<FieldKey, string> = {
   file: "file",
   language: "language",
   title: "title",
+  durationSeconds: "duration_seconds",
+  loop: "loop",
 };
 
 interface Endpoint {
@@ -38,6 +42,7 @@ interface Endpoint {
     | "voices"
     | "tts"
     | "transcriptions"
+    | "soundEffects"
     | "images"
     | "videos"
     | "generation"
@@ -108,6 +113,29 @@ const ENDPOINTS: Endpoint[] = [
         cost: 62,
         created_at: "2026-10-16T09:00:00.000Z",
         files: ["…/api/v1/generations/8a1d…/files/0"],
+      },
+      null,
+      2,
+    ),
+  },
+  {
+    key: "soundEffects",
+    method: "POST",
+    path: "/sound-effects",
+    fields: ["prompt", "durationSeconds", "loop"],
+    curl: (b) =>
+      `curl -X POST ${b}/sound-effects \\\n  ${jsonBody('{"prompt":"distant thunder in the rain","duration_seconds":5}')}`,
+    response: JSON.stringify(
+      {
+        id: "5b2e…",
+        type: "sfx",
+        status: "completed",
+        prompt: "distant thunder in the rain",
+        cost: 200,
+        duration_seconds: 5,
+        loop: false,
+        created_at: "2026-10-16T09:00:00.000Z",
+        files: ["…/api/v1/generations/5b2e…/files/0"],
       },
       null,
       2,

@@ -2,12 +2,13 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import {
   ArrowLeft,
+  AudioWaveform,
+  Captions,
   Clapperboard,
   Combine,
   Download,
   Film,
   ImageIcon,
-  Captions,
   Loader2,
   Mic,
   Trash2,
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/projects/$id")({
   component: ProjectPage,
 });
 
-const typeIcons = { tts: Mic, stt: Captions, image: ImageIcon, video: Film };
+const typeIcons = { tts: Mic, stt: Captions, sfx: AudioWaveform, image: ImageIcon, video: Film };
 const iconLink =
   "grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -312,7 +313,7 @@ function MaterialRow({
   );
 }
 
-const FILTERS = ["all", "tts", "stt", "image", "video"] as const;
+const FILTERS = ["all", "tts", "stt", "sfx", "image", "video"] as const;
 
 function Materials({ projectId }: { projectId: string }) {
   const { t } = useI18n();
@@ -413,6 +414,7 @@ function ProjectDetail() {
             f.num(project.counts.image),
             f.num(project.counts.video),
             project.counts.stt ? f.num(project.counts.stt) : undefined,
+            project.counts.sfx ? f.num(project.counts.sfx) : undefined,
           )}{" "}
           · {t.projects.updated(f.dateTime(project.updatedAt))}
         </p>

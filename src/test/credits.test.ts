@@ -6,6 +6,7 @@ import {
   creditsPerDollar,
   mediaCost,
   nextExpiry,
+  sfxCost,
   spend,
   sttCost,
   ttsCost,
@@ -75,6 +76,14 @@ describe("maliyet", () => {
     expect(sttCost(60)).toBe(60);
     expect(sttCost(60.2)).toBe(61);
     expect(sttCost(3600)).toBe(3600);
+  });
+
+  it("ses efektinde başlayan her saniye 40 kredi; süreyi model seçerse 200", () => {
+    expect(sfxCost(null)).toBe(200);
+    expect(sfxCost(0.5)).toBe(40);
+    expect(sfxCost(5)).toBe(200);
+    expect(sfxCost(5.2)).toBe(240);
+    expect(sfxCost(30)).toBe(1_200);
   });
 
   it("görsel 1, video 15 kredi", () => {

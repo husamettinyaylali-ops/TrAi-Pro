@@ -376,13 +376,16 @@ async function runTranscription(
     if (!job.cancelled) {
       console.error("[yazı] yazıya dökülemedi:", err instanceof Error ? err.message : err);
     }
-    const failed = await failGeneration(db, row);
-    if (failed.status === "failed") {
-      await db.update(generations).set({ audioKey: null }).where(eq(generations.id, row.id));
-      await Promise.all(
-        [row.audioKey, captionsKey].flatMap((k) => (k ? [deps.storage.remove(k)] : [])),
-      );
-    }
+    // Dosyalar kayıt başarısız görünmeden önce kaldırılır: kart olmayan sese bağlanmasın.
+    // Kayıt silinmişse dosyaları zaten silinmiştir; tekrar silmek zararsızdır.
+    await db
+      .update(generations)
+      .set({ audioKey: null, captionsKey: null })
+      .where(and(eq(generations.id, row.id), eq(generations.status, "pending")));
+    await Promise.all(
+      [row.audioKey, captionsKey].flatMap((k) => (k ? [deps.storage.remove(k)] : [])),
+    );
+    await failGeneration(db, row);
   } finally {
     transcribeJobs.delete(row.id);
   }

@@ -10,7 +10,7 @@ const createProject = vi.fn();
 const project = (
   id: string,
   name: string,
-  counts = { tts: 0, stt: 0, image: 0, video: 0 },
+  counts = { tts: 0, stt: 0, sfx: 0, image: 0, video: 0 },
 ): Project => ({
   id,
   name,
@@ -20,7 +20,7 @@ const project = (
   counts,
 });
 const projects = [
-  project("p1", "Bölüm 12", { tts: 3, stt: 0, image: 0, video: 1 }),
+  project("p1", "Bölüm 12", { tts: 3, stt: 0, sfx: 0, image: 0, video: 1 }),
   project("p2", "Kanal tanıtımı"),
 ];
 

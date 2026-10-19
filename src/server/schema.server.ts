@@ -122,11 +122,14 @@ export const generations = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** "stt": sesten yazıya; metin, yazıya dökülen konuşmadır. */
-    type: text("type", { enum: ["tts", "stt", "image", "video"] }).notNull(),
+    /** "stt": sesten yazıya (metin, yazıya dökülen konuşma); "sfx": ses efekti (metin, açıklama). */
+    type: text("type", { enum: ["tts", "stt", "sfx", "image", "video"] }).notNull(),
     text: text("text").notNull(),
     voiceId: text("voice_id"),
-    /** Videoda stil sırası; yazıya dökmede kaydın dili (ISO 639). */
+    /**
+     * Videoda stil sırası; yazıya dökmede kaydın dili (ISO 639); ses efektinde
+     * süre ve döngü (`encodeEffect`, ör. "5+loop").
+     */
     style: text("style"),
     images: text("images", { mode: "json" }).$type<number[]>(),
     /** Gerçek seslendirmede ses dosyasının depodaki anahtarı; demo üretimde boş. */

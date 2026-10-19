@@ -3,8 +3,11 @@ import type { VoiceSettings } from "./voice-settings";
 
 /** Siparişin ödeme biçimi. "balance": bakiyeden; diğerleri demo dönemin kayıtları. */
 export type PaymentMethod = "card" | "crypto" | "bank" | "balance";
-/** "stt": sesten yazıya (yüklenen kaydın sesi, metni ve altyazısı). */
-export type GenerationType = "tts" | "stt" | "image" | "video";
+/**
+ * "stt": sesten yazıya (yüklenen kaydın sesi, metni ve altyazısı); "sfx": ses
+ * efekti (açıklamadan kısa ses).
+ */
+export type GenerationType = "tts" | "stt" | "sfx" | "image" | "video";
 /** Geçmiş süzgeci: tür ya da "audio" (seslendirme ve yazıya dökülen kayıtlar birlikte). */
 export type HistoryType = GenerationType | "audio";
 
@@ -85,6 +88,8 @@ export interface Generation {
   edit?: "trim" | "merge" | "image" | "compose" | undefined;
   /** Yazıya dökülen kaydın dili (ISO 639; sağlayıcının algıladığı ya da seçilen). */
   language?: string | undefined;
+  /** Ses efektinin süresi (sn; null = model seçti) ve döngü. */
+  effect?: { duration: number | null; loop: boolean } | undefined;
   sourceId?: string | undefined;
   cost: number;
   createdAt: string;
@@ -164,6 +169,8 @@ export interface StudioConfig {
   compose: { available: boolean; subtitles: boolean };
   /** Sesten yazıya açık mı (ElevenLabs ve ffmpeg gerekir). */
   stt: boolean;
+  /** Ses efekti açık mı (ElevenLabs gerekir; demo sonucu yoktur). */
+  sfx: boolean;
 }
 
 export interface UserData {
@@ -190,6 +197,7 @@ export type GenerateInput = (
   | { type: "tts"; text: string; voiceId: string; settings?: VoiceSettings | undefined }
   | { type: "image"; text: string; count: number }
   | { type: "video"; text: string; styleIndex: number }
+  | { type: "sfx"; text: string; duration: number | null; loop: boolean }
 ) & { projectId?: string | undefined; title?: string | undefined };
 
 export type AuthErrorCode = "emailTaken" | "invalidCredentials";
@@ -224,10 +232,9 @@ export type ActionErrorCode =
   /** USD bakiye paket fiyatını karşılamıyor. */
   | "insufficientBalance"
   /** İstek ya da çıktı sağlayıcının güvenlik filtresine takıldı; kredi düşülmez. */
-  | "contentRejected";
-
-/** Sesten yazıya: üretim hataları ve sunucuda kapalı servis (ElevenLabs ya da ffmpeg yok). */
-export type TranscribeErrorCode = ActionErrorCode | "unavailable";
+  | "contentRejected"
+  /** Servis bu sunucuda kapalı (anahtar ya da ffmpeg yok); demo sonucu da yok. */
+  | "unavailable";
 
 export type TopUpErrorCode =
   | "unauthorized"

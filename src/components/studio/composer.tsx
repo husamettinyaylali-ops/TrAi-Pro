@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   AudioLines,
+  AudioWaveform,
   Captions,
   Clapperboard,
   Copy,
@@ -18,7 +19,9 @@ import {
   Languages,
   Loader2,
   Mic,
+  Repeat,
   Sparkles,
+  Timer,
   UserRound,
 } from "lucide-react";
 
@@ -30,10 +33,12 @@ import {
   STT_LANGUAGES,
   balance,
   mediaCost,
+  sfxCost,
   sttCost,
   ttsCost,
 } from "@/lib/credits";
 import { useFormat, useI18n } from "@/lib/i18n";
+import { SFX_DURATIONS } from "@/lib/sound-effects";
 import { splitForSpeech } from "@/lib/speech-text";
 import { useApp, type Generation } from "@/lib/store";
 import { useStudioConfig } from "@/lib/studio-config";
@@ -64,7 +69,14 @@ function loadSettings(): VoiceSettings {
   }
 }
 
-const toolIcons = { tts: Mic, clone: AudioLines, stt: Captions, image: ImageIcon, video: Film };
+const toolIcons = {
+  tts: Mic,
+  clone: AudioLines,
+  stt: Captions,
+  sfx: AudioWaveform,
+  image: ImageIcon,
+  video: Film,
+};
 const MAX_PROMPT = 400;
 const chip =
   "inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-3 text-sm focus-within:ring-2 focus-within:ring-ring";
@@ -112,6 +124,9 @@ export function Composer({
   const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
   const [recording, setRecording] = useState<PickedRecording | null>(null);
   const [language, setLanguage] = useState("");
+  const [sfxDuration, setSfxDuration] = useState<number | null>(null);
+  const [sfxLoop, setSfxLoop] = useState(false);
+  const toolsRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; packages?: boolean } | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -153,6 +168,10 @@ export function Composer({
       if (n && (IMAGE_COUNTS as readonly number[]).includes(n)) setCount(n);
     }
     if (editing.type === "video") setStyle(Number(editing.style ?? 0) || 0);
+    if (editing.type === "sfx") {
+      setSfxDuration(editing.effect?.duration ?? null);
+      setSfxLoop(editing.effect?.loop ?? false);
+    }
     setError(null);
     textRef.current?.focus();
   }, [editing]);
@@ -160,6 +179,14 @@ export function Composer({
   useEffect(() => {
     if (focusSignal) textRef.current?.focus();
   }, [focusSignal]);
+
+  // Dar ekranda araç çubuğu yatay kayar: seçili araç görünür alana getirilir.
+  useEffect(() => {
+    const bar = toolsRef.current;
+    const active = bar?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!bar || !active || bar.scrollWidth <= bar.clientWidth) return;
+    bar.scrollLeft = Math.max(0, active.offsetLeft - (bar.clientWidth - active.offsetWidth) / 2);
+  }, [tool]);
 
   // Metin alanı içeriğe göre uzar (en fazla 15 satır kadar).
   useLayoutEffect(() => {
@@ -187,9 +214,11 @@ export function Composer({
       ? ttsLive
       : tool === "stt"
         ? config.data?.stt === true
-        : media
-          ? config.data?.[tool] === "live"
-          : false;
+        : tool === "sfx"
+          ? config.data?.sfx === true
+          : media
+            ? config.data?.[tool] === "live"
+            : false;
   const serviceDown = tool === "tts" && ttsLive && !loading && voices.length === 0;
   const cost =
     tool === "tts"
@@ -198,9 +227,11 @@ export function Composer({
         ? recording
           ? sttCost(recording.seconds)
           : 0
-        : tool === "image"
-          ? mediaCost("image", count)
-          : mediaCost("video", 1);
+        : tool === "sfx"
+          ? sfxCost(sfxDuration)
+          : tool === "image"
+            ? mediaCost("image", count)
+            : mediaCost("video", 1);
 
   const voiceLabel = (v: Voice) => {
     const kind = v.cloned
@@ -278,9 +309,11 @@ export function Composer({
             settings: isDefaultVoiceSettings(settings) ? undefined : settings,
             ...meta,
           }
-        : tool === "image"
-          ? { type: "image", text: clean, count, ...meta }
-          : { type: "video", text: clean, styleIndex: style, ...meta };
+        : tool === "sfx"
+          ? { type: "sfx", text: clean, duration: sfxDuration, loop: sfxLoop, ...meta }
+          : tool === "image"
+            ? { type: "image", text: clean, count, ...meta }
+            : { type: "video", text: clean, styleIndex: style, ...meta };
     const res = await generate(input);
     setBusy(false);
     onBusy(null);
@@ -292,8 +325,9 @@ export function Composer({
     }
     setText("");
     onCancelEdit();
-    // Uzun metin arka planda seslendirilir; bitince kartta dinlenir.
-    if (res.generation.type === "tts" && res.generation.status !== "pending") play(res.generation);
+    // Uzun metin arka planda seslendirilir; bitince kartta dinlenir. Efekt hemen çalınır.
+    const g = res.generation;
+    if ((g.type === "tts" || g.type === "sfx") && g.status !== "pending") play(g);
   };
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -364,9 +398,10 @@ export function Composer({
         )}
         <div className="flex flex-wrap items-center gap-2 p-2.5">
           <div
+            ref={toolsRef}
             role="group"
             aria-label={t.studio.tools}
-            className="inline-flex rounded-full bg-muted p-1"
+            className="relative flex max-w-full overflow-x-auto rounded-full bg-muted p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             {TOOLS.map((k) => {
               const I = toolIcons[k];
@@ -377,7 +412,7 @@ export function Composer({
                   aria-pressed={tool === k}
                   onClick={() => onTool(k)}
                   title={t.studio.tool[k]}
-                  className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2.5 sm:min-h-9 sm:min-w-9 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3 ${tool === k ? "bg-gradient-brand text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2.5 sm:min-h-9 sm:min-w-9 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3 ${tool === k ? "bg-gradient-brand text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   <I className="h-4 w-4" aria-hidden />
                   {/* Dar ekranda yalnız seçili aracın adı görünür; diğerleri simge (ad ekran okuyucuda). */}
@@ -445,6 +480,41 @@ export function Composer({
               </select>
             </label>
           )}
+          {tool === "sfx" && (
+            <>
+              <label className={chip}>
+                <Timer className="h-4 w-4 text-muted-foreground" aria-hidden />
+                <span className="sr-only">{t.studio.sfx.duration}</span>
+                <select
+                  value={sfxDuration ?? ""}
+                  onChange={(e) => setSfxDuration(e.target.value ? Number(e.target.value) : null)}
+                  className="bg-transparent outline-none [&>option]:bg-popover"
+                >
+                  {/* Düzenlenen kaydın listede olmayan süresi (ör. kırpılmış) de seçilebilir kalır. */}
+                  {[
+                    ...SFX_DURATIONS,
+                    ...((SFX_DURATIONS as readonly (number | null)[]).includes(sfxDuration)
+                      ? []
+                      : [sfxDuration]),
+                  ].map((d) => (
+                    <option key={d ?? "auto"} value={d ?? ""}>
+                      {d === null ? t.studio.sfx.auto : t.studio.sfx.seconds(f.num(d))}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={`${chip} cursor-pointer`} title={t.studio.sfx.loopHint}>
+                <input
+                  type="checkbox"
+                  checked={sfxLoop}
+                  onChange={(e) => setSfxLoop(e.target.checked)}
+                  className="h-4 w-4 accent-violet"
+                />
+                <Repeat className="h-4 w-4 text-muted-foreground" aria-hidden />
+                {t.studio.sfx.loop}
+              </label>
+            </>
+          )}
           {tool === "video" && (
             <label className={chip}>
               <Clapperboard className="h-4 w-4 text-muted-foreground" aria-hidden />
@@ -473,7 +543,8 @@ export function Composer({
                   busy ||
                   serviceDown ||
                   (tool === "tts" && !voiceId) ||
-                  (tool === "stt" && (!recording || !live))
+                  (tool === "stt" && (!recording || !live)) ||
+                  (tool === "sfx" && !live)
                 }
                 title={t.studio.sendHint}
                 className="inline-flex min-h-11 items-center gap-2 rounded-full bg-gradient-brand px-5 font-semibold text-primary-foreground shadow-glow transition hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
@@ -495,9 +566,11 @@ export function Composer({
                 ? t.labs.tts.serviceDown
                 : tool === "stt"
                   ? t.studio.stt.unavailable
-                  : media && !hasPass
-                    ? t.studio.needsPass
-                    : t.labs.demoResult}
+                  : tool === "sfx"
+                    ? t.studio.sfx.unavailable
+                    : media && !hasPass
+                      ? t.studio.needsPass
+                      : t.labs.demoResult}
             </p>
           )}
       </form>

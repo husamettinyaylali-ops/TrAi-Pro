@@ -19,8 +19,8 @@ type Row = typeof generations.$inferSelect;
 
 const COPY = {
   tr: {
-    folders: { tts: "ses", stt: "yazi", image: "gorsel", video: "video" },
-    types: { tts: "Ses", stt: "Sesten yazı", image: "Görsel", video: "Video" },
+    folders: { tts: "ses", stt: "yazi", sfx: "efekt", image: "gorsel", video: "video" },
+    types: { tts: "Ses", stt: "Sesten yazı", sfx: "Ses efekti", image: "Görsel", video: "Video" },
     manifest: "icerik.txt",
     project: "Proje",
     exported: "Dışa aktarma",
@@ -36,8 +36,20 @@ const COPY = {
     truncated: (n: number) => `Arşive yalnız ilk ${n} üretim alındı.`,
   },
   en: {
-    folders: { tts: "audio", stt: "transcripts", image: "images", video: "video" },
-    types: { tts: "Audio", stt: "Transcript", image: "Image", video: "Video" },
+    folders: {
+      tts: "audio",
+      stt: "transcripts",
+      sfx: "sound-effects",
+      image: "images",
+      video: "video",
+    },
+    types: {
+      tts: "Audio",
+      stt: "Transcript",
+      sfx: "Sound effect",
+      image: "Image",
+      video: "Video",
+    },
     manifest: "contents.txt",
     project: "Project",
     exported: "Exported",

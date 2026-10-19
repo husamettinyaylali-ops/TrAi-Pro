@@ -6,11 +6,12 @@ import { clock } from "@/lib/clock";
 import { LIMITS } from "@/lib/rate-limit";
 import type { ActionErrorCode, Generation, RateLimited } from "@/lib/types";
 import { normalizeVoiceSettings } from "@/lib/voice-settings";
+import { SFX_MAX_SECONDS, SFX_MIN_SECONDS, SFX_PROMPT_MAX } from "@/lib/sound-effects";
 import { formatCents } from "@/lib/wallet";
 
 import { authenticateApiKey } from "./api-keys.server";
 import { getDb, type Db } from "./db.server";
-import { imageDeps, speechDeps, transcribeDeps, videoDeps } from "./deps.server";
+import { imageDeps, sfxDeps, speechDeps, transcribeDeps, videoDeps } from "./deps.server";
 import { fileStorage, type FileStorage } from "./file-storage.server";
 import { ownedFileResponse, ownedSubtitleResponse, subtitleFormat } from "./media.server";
 import { voiceClones } from "./schema.server";
@@ -27,6 +28,7 @@ import {
   type SpeechDeps,
   type VideoDeps,
 } from "./services.server";
+import { generateSoundEffect, type SfxDeps } from "./sound-effects.server";
 import { startTranscription, type TranscribeDeps } from "./transcribe.server";
 
 export interface ApiDeps {
@@ -38,6 +40,8 @@ export interface ApiDeps {
   video: VideoDeps | null;
   /** Sesten yazıya (ElevenLabs ve ffmpeg); yoksa kapalı. */
   transcribe?: () => Promise<TranscribeDeps | null>;
+  /** Ses efekti (ElevenLabs); yoksa kapalı. */
+  sfx?: SfxDeps | null;
 }
 
 function defaultDeps(): ApiDeps {
@@ -49,6 +53,7 @@ function defaultDeps(): ApiDeps {
     image: imageDeps(),
     video: videoDeps(),
     transcribe: transcribeDeps,
+    sfx: sfxDeps(),
   };
 }
 
@@ -92,7 +97,9 @@ const fromAction = (e: ActionErrorCode): ErrorCode =>
         ? "content_rejected"
         : e === "limit"
           ? "limit"
-          : "invalid_input";
+          : e === "unavailable"
+            ? "service_unavailable"
+            : "invalid_input";
 
 const rateLimited = (r: RateLimited) => fail("rate_limited", r.retryAfterMinutes * 60);
 
@@ -121,12 +128,22 @@ const schemas = {
     prompt: z.string().min(1).max(400),
     style: z.enum(VIDEO_STYLES).default("cinematic"),
   }),
+  soundEffects: z.object({
+    prompt: z.string().min(1).max(SFX_PROMPT_MAX),
+    // Verilmezse ya da null ise süreyi model seçer.
+    duration_seconds: z.number().min(SFX_MIN_SECONDS).max(SFX_MAX_SECONDS).nullable().default(null),
+    loop: z.boolean().default(false),
+  }),
 };
 
 /** Üretimin API görünümü; dosya adresleri API anahtarıyla indirilir. */
 function view(g: Generation, origin: string) {
   const count =
-    g.type === "tts" || g.type === "stt" ? (g.audioUrl ? 1 : 0) : (g.fileUrls?.length ?? 0);
+    g.type === "tts" || g.type === "stt" || g.type === "sfx"
+      ? g.audioUrl
+        ? 1
+        : 0
+      : (g.fileUrls?.length ?? 0);
   return {
     id: g.id,
     type: g.type,
@@ -136,6 +153,7 @@ function view(g: Generation, origin: string) {
       : { prompt: g.text }),
     cost: g.cost,
     ...(g.voiceSettings && { voice_settings: g.voiceSettings }),
+    ...(g.effect && { duration_seconds: g.effect.duration, loop: g.effect.loop }),
     ...(g.progress && { progress: g.progress }),
     created_at: g.createdAt,
     files: Array.from(
@@ -257,6 +275,25 @@ export async function handleApi(
         return res.error === "tooManyAttempts" ? rateLimited(res) : fail(fromAction(res.error));
       // Uzun metin arka planda seslendirilir: video gibi 202 ve "pending" döner.
       return json(view(res.generation, origin), res.generation.status === "pending" ? 202 : 201);
+    }
+
+    case "sound-effects": {
+      if (id) return fail("not_found");
+      const denied = only("POST");
+      if (denied) return denied;
+      if (!deps.sfx) return fail("service_unavailable");
+      const body = await readBody(request, schemas.soundEffects);
+      if (!body) return fail("invalid_input");
+      const res = await generateSoundEffect(
+        db,
+        deps.sfx,
+        userId,
+        { text: body.prompt, duration: body.duration_seconds, loop: body.loop },
+        now,
+      );
+      if (!res.ok)
+        return res.error === "tooManyAttempts" ? rateLimited(res) : fail(fromAction(res.error));
+      return json(view(res.generation, origin), 201);
     }
 
     case "images": {

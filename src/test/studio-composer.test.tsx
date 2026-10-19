@@ -22,6 +22,7 @@ const mediaGrant = {
 let grants: (typeof mediaGrant)[] = [];
 let ttsMode: "demo" | "live" = "demo";
 let sttOn = true;
+let sfxOn = true;
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => <a href={to}>{children}</a>,
@@ -43,6 +44,7 @@ vi.mock("@/lib/studio-config", () => ({
       video: "demo",
       voices: ttsMode === "live" ? [{ id: "v1", name: "Ayla", gender: "female" }] : [],
       stt: sttOn,
+      sfx: sfxOn,
     },
   }),
 }));
@@ -75,6 +77,7 @@ describe("stüdyo yazma kutusu", () => {
     grants = [];
     ttsMode = "demo";
     sttOn = true;
+    sfxOn = true;
     window.localStorage.clear();
   });
 
@@ -269,6 +272,57 @@ describe("stüdyo yazma kutusu", () => {
     });
     expect(await screen.findByText("a.mp3")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Yazıya dök" })).toBeDisabled();
+  });
+
+  it("ses efekti: süre ve döngüyle üretir, ücret süreye göre; düzeltmede seçenekler gelir", async () => {
+    generate.mockResolvedValue({
+      ok: true,
+      generation: { id: "e1", type: "sfx", text: "yağmur", cost: 200, createdAt: "" },
+    });
+    renderComposer({ tool: "sfx", projectId: "p1" });
+    const prompt = screen.getByRole("textbox", { name: /Efekti anlat/ });
+    expect(screen.getByText("200 kredi")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "5" } });
+    expect(screen.getByText("200 kredi")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "10" } });
+    expect(screen.getByText("400 kredi")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Döngü" }));
+    fireEvent.change(prompt, { target: { value: "  yağmur  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Efekt üret" }));
+    await waitFor(() =>
+      expect(generate).toHaveBeenCalledWith({
+        type: "sfx",
+        text: "yağmur",
+        duration: 10,
+        loop: true,
+        projectId: "p1",
+        title: undefined,
+      }),
+    );
+    cleanup();
+
+    // Kırpılmış efektin listede olmayan süresi de seçili gelir.
+    renderComposer({
+      tool: "sfx",
+      editing: {
+        id: "e2",
+        type: "sfx",
+        text: "dalga",
+        effect: { duration: 3.4, loop: false },
+        cost: 160,
+        createdAt: "",
+      },
+    });
+    expect(screen.getByRole("textbox", { name: /Efekti anlat/ })).toHaveValue("dalga");
+    expect(screen.getByRole("combobox")).toHaveValue("3.4");
+    expect(screen.getByText("160 kredi")).toBeInTheDocument();
+  });
+
+  it("ses efekti kapalı sunucuda gönderilmez ve nedeni yazılır", () => {
+    sfxOn = false;
+    renderComposer({ tool: "sfx" });
+    expect(screen.getByText("Ses efekti bu sunucuda şu an kapalı.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Efekt üret" })).toBeDisabled();
   });
 
   it("araç seçimi bildirilir; klon aracında metin alanı yoktur", () => {

@@ -295,57 +295,60 @@ export function AudioEditor({ g }: { g: Generation }) {
         ) : null}
       </section>
 
-      <section
-        aria-labelledby="captions-title"
-        className="glass glow-border space-y-3 rounded-3xl p-4 sm:p-6"
-      >
-        <h2 id="captions-title" className="text-lg font-semibold">
-          {e.audio.captions}
-        </h2>
-        {cues === null ? (
-          <div role="status" aria-label={t.loading} className="shimmer h-24 rounded-2xl" />
-        ) : cues.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{e.audio.noCaptions}</p>
-        ) : (
-          <>
-            <p className="text-sm text-muted-foreground">{e.audio.captionsHint}</p>
-            {dropped > 0 && (
-              <p className="text-sm text-magenta">{e.audio.dropped(f.num(dropped))}</p>
-            )}
-            <ol className="space-y-1.5">
-              {visible.map(({ c, i }) => {
-                const from = range ? Math.max(0, c.start - range[0]) : c.start;
-                const to = range ? Math.min(range[1], c.end) - range[0] : c.end;
-                const active = head !== null && head >= c.start && head < c.end;
-                return (
-                  <li
-                    key={i}
-                    className={`grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)] items-center gap-2 rounded-xl px-2 py-1 transition ${active ? "bg-cyan/10" : ""}`}
-                  >
-                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                      {clock(from)} → {clock(to)}
-                    </span>
-                    <label htmlFor={`cue-${i}`} className="sr-only">
-                      {e.audio.lineLabel(i + 1)}
-                    </label>
-                    <textarea
-                      id={`cue-${i}`}
-                      rows={2}
-                      maxLength={CUE_MAX}
-                      value={texts[i] ?? c.text}
-                      onChange={(ev) => {
-                        const v = ev.target.value;
-                        setTexts((x) => ({ ...x, [i]: v }));
-                      }}
-                      className={`${field} resize-none py-2`}
-                    />
-                  </li>
-                );
-              })}
-            </ol>
-          </>
-        )}
-      </section>
+      {/* Ses efektinin konuşması, dolayısıyla altyazısı yoktur. */}
+      {g.type !== "sfx" && (
+        <section
+          aria-labelledby="captions-title"
+          className="glass glow-border space-y-3 rounded-3xl p-4 sm:p-6"
+        >
+          <h2 id="captions-title" className="text-lg font-semibold">
+            {e.audio.captions}
+          </h2>
+          {cues === null ? (
+            <div role="status" aria-label={t.loading} className="shimmer h-24 rounded-2xl" />
+          ) : cues.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{e.audio.noCaptions}</p>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">{e.audio.captionsHint}</p>
+              {dropped > 0 && (
+                <p className="text-sm text-magenta">{e.audio.dropped(f.num(dropped))}</p>
+              )}
+              <ol className="space-y-1.5">
+                {visible.map(({ c, i }) => {
+                  const from = range ? Math.max(0, c.start - range[0]) : c.start;
+                  const to = range ? Math.min(range[1], c.end) - range[0] : c.end;
+                  const active = head !== null && head >= c.start && head < c.end;
+                  return (
+                    <li
+                      key={i}
+                      className={`grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)] items-center gap-2 rounded-xl px-2 py-1 transition ${active ? "bg-cyan/10" : ""}`}
+                    >
+                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                        {clock(from)} → {clock(to)}
+                      </span>
+                      <label htmlFor={`cue-${i}`} className="sr-only">
+                        {e.audio.lineLabel(i + 1)}
+                      </label>
+                      <textarea
+                        id={`cue-${i}`}
+                        rows={2}
+                        maxLength={CUE_MAX}
+                        value={texts[i] ?? c.text}
+                        onChange={(ev) => {
+                          const v = ev.target.value;
+                          setTexts((x) => ({ ...x, [i]: v }));
+                        }}
+                        className={`${field} resize-none py-2`}
+                      />
+                    </li>
+                  );
+                })}
+              </ol>
+            </>
+          )}
+        </section>
+      )}
 
       {saved ? (
         <SavedNotice g={saved} />
@@ -365,7 +368,12 @@ export function AudioEditor({ g }: { g: Generation }) {
             {saving ? e.saving : e.save}
           </button>
           <p className="text-sm text-muted-foreground">
-            {!trimmed && !edited ? e.audio.unchanged : e.free}
+            {/* Altyazısız seste (efekt ya da zamanlaması olmayan ses) yalnız kırpma kalır. */}
+            {!trimmed && !edited
+              ? cues?.length
+                ? e.audio.unchanged
+                : e.audio.unchangedTrim
+              : e.free}
           </p>
         </div>
       )}

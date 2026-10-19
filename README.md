@@ -34,6 +34,7 @@ Yapay zeka ses, video ve görsel servislerini tek hesapta sunan, kredi tabanlı 
 - Ödeme: her yöntem kendi anahtarları `.env`'e yazılınca açılır (aşağıdaki kurulumlar). Hiçbiri açık değilse geliştirmede yalnız demo bakiye vardır ve ödeme sayfası bunu belirtir.
 - Seslendirme ve ses klonlama: `ELEVENLABS_API_KEY` varsa gerçek; yoksa seslendirme tarayıcının konuşma sentezini kullanır, klonda yalnız ad kaydedilir.
 - Sesten yazı: `ELEVENLABS_API_KEY` ve sunucuda ffmpeg varsa açık; yoksa araç kapalı olduğunu söyler (demo sonucu yoktur).
+- Ses efekti: `ELEVENLABS_API_KEY` varsa açık; yoksa araç kapalı olduğunu söyler (demo sonucu yoktur).
 - Görsel: `FAL_KEY` varsa gerçek (fal.ai); yoksa örnek görseller.
 - Video: `FAL_KEY` varsa gerçek (fal.ai, Kling); yoksa örnek görseller. Stüdyo, hangi kısımların demo olduğunu belirtir.
 
@@ -93,13 +94,13 @@ Görselle aynı `FAL_KEY` kullanılır; model varsayılan olarak Kling 1.6 stand
 
 ## Stüdyo, projeler ve üretimlerin düzeltilmesi
 
-- **Stüdyo düzeni** (`/labs`), yapay zeka uygulamalarındaki gibi: solda projeler (yeni proje, arama, "Tüm üretimler", krediler; dar ekranda soldan açılan çekmece), ortada seçili projenin akışı (sohbet gibi en yenisi altta, gün ayırıcılı, en üstte daha eski üretimler), altta sabit yazma kutusu (araç: Ses, Klon, Sesten yazı, Görsel, Video; araca göre ses, dil, adet ya da stil; maliyet; Ctrl/Cmd + Enter gönderir). Araç `?tab=`, proje `?project=` ile adreste tutulur. Klon aracında ana alanda ses klonları yönetilir.
+- **Stüdyo düzeni** (`/labs`), yapay zeka uygulamalarındaki gibi: solda projeler (yeni proje, arama, "Tüm üretimler", krediler; dar ekranda soldan açılan çekmece), ortada seçili projenin akışı (sohbet gibi en yenisi altta, gün ayırıcılı, en üstte daha eski üretimler), altta sabit yazma kutusu (araç: Ses, Klon, Sesten yazı, Ses efekti, Görsel, Video; araca göre ses, dil, süre, adet ya da stil; maliyet; Ctrl/Cmd + Enter gönderir; dar ekranda araç çubuğu yatay kayar). Araç `?tab=`, proje `?project=` ile adreste tutulur. Klon aracında ana alanda ses klonları yönetilir.
 - **Proje:** kullanıcının çalışma alanı (ad, serbest not; kullanıcı başına en fazla 100). Seçiliyken yeni üretimler o projeye kaydedilir ve akış yalnız onu gösterir; "Tüm üretimler" her kaydı projesiyle gösterir. Üst çubukta proje notu, tümünü indir (ZIP) ve projeyi aç vardır.
 - **Her üretim kartında** doğrudan: _İndir_ (demo üretimde nedenini söyleyerek kapalı), _Editörde aç_ (gerçek seslendirmede), _Metni düzenle_ / _İstemi düzenle_ (metin/istem, ses, adet ya da stil yazma kutusuna gelir; üretince yeni sürüm kaydedilir, eskisi silinmez ve kredi yeniden harcanır; yeni sürüm eski kaydın projesinde ve adıyla kalır), _Yeniden üret_ (aynı ayarlarla, tek tıkla), _Metni kopyala_, _Taşı_; menüde _Yeniden adlandır_ ve _Sil_.
 - **Düzenleyici** (`/editor/:id`): seslendirmeyi baştan ve sondan kırpma (dalga üzerinde, tarayıcıda çözülen sesten; 24 MB'ı aşan seste dalga çizilmez), sessiz başı ve sonu otomatik bulma, seçimi dinleme ve altyazı metnini düzeltme. Kırpma sunucuda MP3 çerçeve sınırında, yeniden kodlamadan yapılır (~26 ms hassasiyet, kalite kaybı yok); altyazı yeni başlangıca kayar. Sonuç projede yeni bir kart olarak açılır ("Kırpıldı"), kredi harcanmaz, kaynak kayıt değişmez. **Görsel düzenleyici** (aynı sayfa, gerçek görselde): kırpma oranı (özgün, 1:1, 16:9, 9:16, 4:5) ve yakınlaştırma; alan sürükleyerek ya da ok tuşlarıyla kaydırılır; sağa/sola döndürme, yatay çevirme ve kapak yazısı (boyut, üst/orta/alt). Önizleme kaydedilecek görselin aynısıdır; görsel tarayıcıda hazırlanır (en uzun kenar en çok 4096 px), JPEG ya da PNG olarak yüklenir ve sunucuda tür ilk baytlardan doğrulanır (en çok 15 MB). Sonuç ücretsiz yeni kayıttır ("Düzenlendi"). Video düzenleme yoktur (sunucuda video aracı gerektirir).
   **Sesleri birleştir** (`/editor/merge`, stüdyo üst çubuğu ve proje sayfasından): projedeki gerçek seslendirmeler eskiden yeniye listelenir; seçilenler gösterilen sırayla, araya istenirse 0,5–2 sn sessizlik konarak tek MP3'te birleşir (yeniden kodlamadan; sessizlik aynı biçimde sıfır çerçevelerdir), altyazılar da kayarak birleşir. En çok 30 ses ve toplam 150 MB; sonuç ücretsiz yeni kayıttır ("Birleştirildi"), yeniden üretilemez. Kullanıcı başına saatte 60 düzenleme.
 - **Proje sayfası** (`/projects/:id`): ad ve not düzenleme, projedeki üretimler (türe göre süzülür; dinleme, önizleme, indirme, menü), stüdyoda açma ve silme. Proje silinince üretimler silinmez, projesiz kalır.
-- **Tümünü indir (ZIP)** (`/media/project/:id`, yalnız sahibine): gerçek dosyalar tür klasörlerinde (`ses/`, `yazi/`, `gorsel/`, `video/`; `?lang=en` ile İngilizce; yazıya dökülen kayıtta ses, `.srt` ve `.txt`), sonda proje notu, metinler ve dosya listesini içeren `icerik.txt`. Dosyalar sıkıştırılmadan akış olarak eklenir (medya zaten sıkıştırılmıştır; bellekte bir anda tek dosya durur); en fazla 300 üretim, 4 GB'a yaklaşınca kalan dosyalar atlanıp listede belirtilir. Kullanıcı başına saatte 20 arşiv.
+- **Tümünü indir (ZIP)** (`/media/project/:id`, yalnız sahibine): gerçek dosyalar tür klasörlerinde (`ses/`, `yazi/`, `efekt/`, `gorsel/`, `video/`; `?lang=en` ile İngilizce; yazıya dökülen kayıtta ses, `.srt` ve `.txt`), sonda proje notu, metinler ve dosya listesini içeren `icerik.txt`. Dosyalar sıkıştırılmadan akış olarak eklenir (medya zaten sıkıştırılmıştır; bellekte bir anda tek dosya durur); en fazla 300 üretim, 4 GB'a yaklaşınca kalan dosyalar atlanıp listede belirtilir. Kullanıcı başına saatte 20 arşiv.
 
 ## Ödeme makbuzları
 
@@ -113,7 +114,7 @@ Kripto yöntemlerde benzersizlik için eklenen kuruşlar kullanıcıda kalır: b
 
 Kullanıcılar Hesabım sayfasından API anahtarı oluşturur (en fazla 5 etkin anahtar, e-postası doğrulanmış hesap) ve `/api/v1` uç noktalarını `Authorization: Bearer trai_…` başlığıyla çağırır. Belgeler: `/api-docs`.
 
-- Uç noktalar: `GET me`, `GET voices`, `POST tts`, `POST transcriptions` (multipart, 202), `POST images`, `POST videos` (202, kuyruk), `GET generations/:id`, `GET generations/:id/files/:sıra`, `GET generations/:id/subtitles`.
+- Uç noktalar: `GET me`, `GET voices`, `POST tts`, `POST transcriptions` (multipart, 202), `POST sound-effects`, `POST images`, `POST videos` (202, kuyruk), `GET generations/:id`, `GET generations/:id/files/:sıra`, `GET generations/:id/subtitles`.
 - Kredi, fiyat, sınır ve "hata/redde kredi düşmez" kuralları stüdyoyla aynı servis fonksiyonlarından geçer. Ek olarak anahtar başına dakikada 120 istek.
 - Anahtarın kendisi saklanmaz (SHA-256 özeti); kullanıcı oluştururken bir kez görür. İptal edilen anahtar ve silinen hesabın anahtarları kabul edilmez.
 - Hatalar `{"error":{"code","message"}}` biçiminde, uygun HTTP durumuyla döner; ilgili servis bu sunucuda açık değilse 503.
@@ -156,6 +157,15 @@ Stüdyoda **Sesten yazı** aracı (API'de `POST /api/v1/transcriptions`): kullan
 - **Ücret:** kaydın başlayan her saniyesi 1 Ses AI kredisi (dakikası 60; `sttCost`, `src/lib/credits.ts`). Kredi iş başlayınca düşer; servis hata verirse ya da kayıtta konuşma bulunamazsa iade edilir ve ses dosyası silinir. ElevenLabs'in yazıya dökme ücreti seslendirmeye göre düşüktür; fiyat yayından önce gözden geçirilmeli.
 - **Kart:** metin (uzunsa daraltılmış), dil, ses; indirme menüsünde metin (TXT), SRT, VTT ve MP3. _Editörde aç_ ile altyazı metni düzeltilip kayıt kırpılabilir; düzeltme metne de yansır. Yazıya dökülen kayıtlar seslendirmelerle birleştirilebilir ve kısa video oluşturucuda ses olarak seçilebilir.
 - **Sınırlar:** kullanıcı başına saatte 30 dosya, aynı anda 2 bekleyen iş. Sunucu iş sürerken yeniden başlarsa yarım kalan iş iade edilir.
+
+## Ses efekti
+
+Stüdyoda **Ses efekti** aracı (API'de `POST /api/v1/sound-effects`): açıklamadan kısa ses (ElevenLabs `eleven_text_to_sound_v2`, MP3 44,1 kHz).
+
+- **Seçenekler:** süre (otomatik ya da 0,5–30 sn; yazma kutusunda 2, 5, 10, 15, 30 sn) ve döngü (kesintisiz tekrar edecek biçimde, arka plan sesi için). Kayıtta `style` sütununda durur (`encodeEffect`, ör. `5+loop`).
+- **Ücret:** süre verilirse başlayan her saniye 40, süreyi model seçerse 200 Ses AI kredisi (`sfxCost`, `src/lib/credits.ts`). ElevenLabs'in API ücreti bundan düşüktür (yardım belgelerinde saniyede 11, otomatik 100 kredi olarak geçiyor); fiyat yer tutucudur, yayından önce gözden geçirilmeli. Kredi yalnız servis geçerli bir MP3 döndürünce düşer.
+- **Kart:** ses, süre ve döngü künyede; indirme, _İstemi düzenle_, _Yeniden üret_ (aynı süre ve döngüyle). Düzenleyicide kırpılabilir (kırpılan efektin süresi güncellenir, döngü yalnız tüm ses kaldıysa korunur). Konuşma olmadığı için birleştirme ve kısa videoda listelenmez.
+- **Sınır:** kullanıcı başına 10 dakikada 30 efekt.
 
 ## Görsel üretimi (fal.ai) kurulumu
 

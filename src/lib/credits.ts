@@ -119,6 +119,17 @@ export function sttCost(seconds: number): number {
   return Math.max(1, Math.ceil(seconds - 1e-6));
 }
 
+/**
+ * Ses efekti (Ses AI kredisi): süresi seçilen efektte başlayan her saniye 40
+ * kredi; süreyi model seçerse 200 kredi. Fiyat yer tutucudur.
+ */
+export const SFX_CREDITS_PER_SECOND = 40;
+export const SFX_AUTO_CREDITS = 200;
+export function sfxCost(duration: number | null): number {
+  if (duration === null) return SFX_AUTO_CREDITS;
+  return Math.max(1, Math.ceil(duration - 1e-6)) * SFX_CREDITS_PER_SECOND;
+}
+
 export function mediaCost(type: MediaType, count: number): number {
   return MEDIA_COST[type] * Math.max(0, Math.floor(count));
 }

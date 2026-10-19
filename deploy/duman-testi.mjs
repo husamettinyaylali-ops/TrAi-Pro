@@ -7,8 +7,8 @@
  *   node deploy/duman-testi.mjs https://alanadiniz.com --anahtar trai_… --uret   (gerçek üretim, kredi harcar)
  *
  * Anahtar TRAI_KEY ortam değişkeninden de okunur; Hesabım > API anahtarları'ndan oluşturulur.
- * --uret ~10 Ses AI kredisi (kısa seslendirme ve onun yazıya dökülmesi) ve 1 Video & Görsel
- * kredisi (bir görsel) harcar;
+ * --uret ~50 Ses AI kredisi (kısa seslendirme, onun yazıya dökülmesi ve 1 sn'lik ses efekti)
+ * ve 1 Video & Görsel kredisi (bir görsel) harcar;
  * --video ayrıca 15 kredilik bir video üretip bitmesini bekler (birkaç dakika).
  * Bağımlılığı yoktur (Node 18+). Başarısız kontrol varsa çıkış kodu 1'dir.
  */
@@ -232,6 +232,17 @@ if (!key) {
         }
       }
       throw new Error("3 dakikada bitmedi");
+    });
+
+    await check("Ses efekti (40 kredi)", async () => {
+      const r = await api("/sound-effects", {
+        method: "POST",
+        body: JSON.stringify({ prompt: "a single soft door knock", duration_seconds: 1 }),
+        timeout: 120_000,
+      });
+      if (r.status === 503) throw new Skip("bu sunucuda kapalı (ELEVENLABS_API_KEY yok)");
+      await expectStatus(r, 201);
+      return download((await r.json()).files[0]);
     });
 
     await check("Görsel (1 kredi)", async () => {

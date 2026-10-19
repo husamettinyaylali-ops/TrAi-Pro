@@ -9,7 +9,7 @@ import type { GenerateInput, GenerationType } from "@/lib/types";
 import { stockVoices, type Voice } from "@/lib/voices";
 
 /** Stüdyo araçları (yazma kutusundaki seçim; ?tab= ile aynı). */
-export const TOOLS = ["tts", "clone", "stt", "image", "video"] as const;
+export const TOOLS = ["tts", "clone", "stt", "sfx", "image", "video"] as const;
 export type Tool = (typeof TOOLS)[number];
 
 /**
@@ -74,7 +74,9 @@ export function useActionError() {
           : t.labs.video.tooMany;
     }
     if (res.error === "invalidInput" && type === "stt") return t.studio.stt.invalid;
-    if (res.error === "unavailable") return t.studio.stt.unavailable;
+    if (res.error === "unavailable") {
+      return type === "sfx" ? t.studio.sfx.unavailable : t.studio.stt.unavailable;
+    }
     if (res.error === "network") return t.auth.errors.network;
     return t.labs.failed;
   };
@@ -160,6 +162,15 @@ export function regenerateInput(g: Generation): GenerateInput | null {
   }
   if (g.type === "video") {
     return { type: "video", text: g.text, styleIndex: Number(g.style ?? 0) || 0, ...meta };
+  }
+  if (g.type === "sfx") {
+    return {
+      type: "sfx",
+      text: g.text,
+      duration: g.effect?.duration ?? null,
+      loop: g.effect?.loop ?? false,
+      ...meta,
+    };
   }
   return null;
 }

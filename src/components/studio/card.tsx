@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
+  AudioWaveform,
   Captions,
   Check,
   ChevronDown,
@@ -46,7 +47,7 @@ import { regenerateInput, useActionError } from "./hooks";
 const actBtn =
   "inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40";
 const item = "min-h-11";
-const icons = { tts: Mic, stt: Captions, image: ImageIcon, video: Film };
+const icons = { tts: Mic, stt: Captions, sfx: AudioWaveform, image: ImageIcon, video: Film };
 
 /** Panoya kopyalar; Clipboard API yoksa ya da izin vermezse seçip kopyalama yoluna düşer. */
 async function copyText(text: string): Promise<boolean> {
@@ -278,6 +279,17 @@ function CardBody({ g, voice }: { g: Generation; voice: Voice | undefined }) {
     );
   }
   if (g.type === "stt") return <TranscriptBody g={g} />;
+  if (g.type === "sfx") {
+    return g.audioUrl ? (
+      <audio
+        controls
+        preload="none"
+        src={g.audioUrl}
+        className="w-full"
+        aria-label={`${t.labs.tts.play}: ${g.title ?? g.text.slice(0, 60)}`}
+      />
+    ) : null;
+  }
   if (g.type === "tts") {
     if (g.audioUrl) {
       return (
@@ -428,9 +440,19 @@ export function GenerationCard({
       ? [voice?.name ?? t.labs.tts.unknownVoice, tuned].filter(Boolean).join(" · ")
       : g.type === "stt"
         ? [t.labs.tabs.stt, g.language && f.language(g.language)].filter(Boolean).join(" · ")
-        : g.type === "image"
-          ? t.studio.images(f.num(g.fileUrls?.length || g.images?.length || 1))
-          : (t.labs.video.styles[Number(g.style)] ?? t.studio.tool.video);
+        : g.type === "sfx"
+          ? [
+              t.labs.tabs.sfx,
+              g.effect?.duration
+                ? t.studio.sfx.seconds(f.num(g.effect.duration))
+                : t.studio.sfx.auto,
+              g.effect?.loop && t.studio.sfx.loop,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : g.type === "image"
+            ? t.studio.images(f.num(g.fileUrls?.length || g.images?.length || 1))
+            : (t.labs.video.styles[Number(g.style)] ?? t.studio.tool.video);
   const meta = g.edit ? `${kind} · ${t.studio.editTag[g.edit]}` : kind;
 
   const regenerate = async () => {

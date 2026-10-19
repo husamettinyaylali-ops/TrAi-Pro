@@ -49,7 +49,7 @@ function TopBar({
         </h1>
         <p className="truncate text-xs text-muted-foreground">
           {project
-            ? `${t.projects.counts(f.num(project.counts.tts), f.num(project.counts.image), f.num(project.counts.video), project.counts.stt ? f.num(project.counts.stt) : undefined)} · ${t.projects.updated(f.dateTime(project.updatedAt))}`
+            ? `${t.projects.counts(f.num(project.counts.tts), f.num(project.counts.image), f.num(project.counts.video), project.counts.stt ? f.num(project.counts.stt) : undefined, project.counts.sfx ? f.num(project.counts.sfx) : undefined)} · ${t.projects.updated(f.dateTime(project.updatedAt))}`
             : t.studio.allSub}
         </p>
       </div>

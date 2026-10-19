@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { and, count, eq, inArray } from "drizzle-orm";
 
 import { LIMITS } from "@/lib/rate-limit";
+import { decodeEffect, encodeEffect, roundDuration } from "@/lib/sound-effects";
 import type { Generation, RateLimited } from "@/lib/types";
 
 import {
@@ -54,8 +55,10 @@ type EditResult = Result<{ generation: Generation }, EditErrorCode> | RateLimite
 /** Kırpılan ses en az bu kadar sürer. */
 export const MIN_TRIM_MS = 500;
 
-/** Sesi ve metni olan kayıt: seslendirme ya da yazıya dökülen kayıt. */
+/** Sesi ve metni olan kayıt: seslendirme ya da yazıya dökülen kayıt (birleştirilir, videoda kullanılır). */
 const isSpeech = (row: GenerationRow) => row.type === "tts" || row.type === "stt";
+/** Ses dosyası olan kayıt (kırpılır): konuşma ya da ses efekti. */
+const isAudio = (row: GenerationRow) => isSpeech(row) || row.type === "sfx";
 
 async function ownRow(db: Db, userId: string, id: string) {
   return db
@@ -75,7 +78,7 @@ async function limited(db: Db, userId: string, now: Date): Promise<RateLimited |
 
 /** Yeni sürümün kaydı: kaynaktan metin, ses ve ayarlar; proje ve ad sahiplik denetimiyle. */
 async function recordVersion(db: Db, userId: string, row: GenerationRow, now: Date) {
-  await chargeAndRecord(db, userId, isSpeech(row) ? "voice" : "media", 0, row, now, {
+  await chargeAndRecord(db, userId, isAudio(row) ? "voice" : "media", 0, row, now, {
     projectId: row.projectId ?? undefined,
     title: row.title ?? undefined,
   });
@@ -96,7 +99,7 @@ export async function trimSpeech(
   now: Date,
 ): Promise<EditResult> {
   const src = await ownRow(db, userId, input.id);
-  if (!src || !isSpeech(src) || !src.audioKey || src.status) {
+  if (!src || !isAudio(src) || !src.audioKey || src.status) {
     return { ok: false, error: "notFound" };
   }
   const { startMs, endMs } = input;
@@ -141,6 +144,15 @@ export async function trimSpeech(
       id,
       // Yazıya dökülen kaydın metni altyazının kendisidir: düzeltme ve kırpma metne de yansır.
       text: src.type === "stt" && shifted.length ? cuesToText(shifted) : src.text,
+      // Kırpılan efektin süresi yeni uzunluktur; döngü yalnız tüm ses kaldıysa korunur.
+      style:
+        src.type === "sfx"
+          ? encodeEffect({
+              duration: roundDuration(cut.seconds),
+              loop:
+                decodeEffect(src.style).loop && cut.offset === 0 && cut.seconds >= cut.total - 1e-6,
+            })
+          : src.style,
       audioKey,
       captionsKey,
       status: null,

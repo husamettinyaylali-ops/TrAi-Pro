@@ -297,6 +297,56 @@ describe("yazıya dökülen kayıt kartı", () => {
   });
 });
 
+describe("ses efekti kartı", () => {
+  it("süre ve döngü künyede; ses dinlenir, indirilir; istemi düzenlenir ve aynı ayarlarla yeniden üretilir", async () => {
+    const effect: Generation = {
+      id: "e1",
+      type: "sfx",
+      text: "uzaktan gök gürültüsü",
+      effect: { duration: 5, loop: true },
+      audioUrl: "/media/audio/e1",
+      cost: 200,
+      projectId: "p1",
+      createdAt: now,
+    };
+    generate.mockResolvedValueOnce({ ok: true, generation: { ...effect, id: "e2" } });
+    const onEdit = renderCard(effect);
+    expect(screen.getByText(/Ses Efekti · 5 sn · Döngü · 200 kr/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Dinle: uzaktan gök/)).toHaveAttribute("src", "/media/audio/e1");
+    expect(screen.getByRole("link", { name: "İndir" })).toHaveAttribute(
+      "href",
+      "/media/audio/e1?download=1",
+    );
+    expect(screen.getByRole("link", { name: "Editörde aç" })).toHaveAttribute("href", "/editor/e1");
+    fireEvent.click(screen.getByRole("button", { name: "İstemi düzenle" }));
+    expect(onEdit).toHaveBeenCalledWith(effect);
+    fireEvent.click(screen.getByRole("button", { name: "Yeniden üret" }));
+    await waitFor(() =>
+      expect(generate).toHaveBeenCalledWith({
+        type: "sfx",
+        text: "uzaktan gök gürültüsü",
+        duration: 5,
+        loop: true,
+        projectId: "p1",
+        title: undefined,
+      }),
+    );
+  });
+
+  it("süreyi model seçtiyse künyede otomatik yazar", () => {
+    renderCard({
+      id: "e3",
+      type: "sfx",
+      text: "kuşlar",
+      effect: { duration: null, loop: false },
+      audioUrl: "/media/audio/e3",
+      cost: 200,
+      createdAt: now,
+    });
+    expect(screen.getByText(/Ses Efekti · Otomatik süre · 200 kr/)).toBeInTheDocument();
+  });
+});
+
 describe("yeniden üretim girdisi", () => {
   it("ses, adet ve stil kayıttan; ses kimliği yoksa yeniden üretilemez", () => {
     expect(regenerateInput({ ...speech, voiceId: undefined })).toBeNull();

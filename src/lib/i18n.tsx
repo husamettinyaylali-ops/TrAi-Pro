@@ -66,6 +66,7 @@ const tr = {
     costRows: [
       ["Metinden ses", "1 karakter = 1 kredi"],
       ["Sesten yazı (altyazı)", "Kaydın 1 saniyesi = 1 kredi (dakikası 60)"],
+      ["Ses efekti", "Saniye başına 40 kredi; süreyi yapay zeka seçerse 200 kredi"],
       ["Görsel üretimi", "Görsel başına 1 kredi"],
       ["Video üretimi", "Video başına 15 kredi (5 saniye)"],
       ["Ses klonlama", "Ücretsiz, hesap başına 5 ses"],
@@ -155,6 +156,7 @@ const tr = {
     suggest: {
       tts: "Seslendirme yap",
       stt: "Kaydını yazıya dök",
+      sfx: "Ses efekti üret",
       image: "Kapak görseli üret",
       video: "Kısa video üret",
     },
@@ -167,6 +169,7 @@ const tr = {
     editText: {
       tts: "Metni düzenle",
       stt: "Metni düzenle",
+      sfx: "İstemi düzenle",
       image: "İstemi düzenle",
       video: "İstemi düzenle",
     },
@@ -185,13 +188,27 @@ const tr = {
     move: "Taşı",
     more: "Diğer işlemler",
     tools: "Araç",
-    tool: { tts: "Ses", clone: "Klon", stt: "Sesten yazı", image: "Görsel", video: "Video" },
+    tool: {
+      tts: "Ses",
+      clone: "Klon",
+      stt: "Sesten yazı",
+      sfx: "Ses efekti",
+      image: "Görsel",
+      video: "Video",
+    },
     placeholder: {
       tts: "Seslendirmek istediğin metni yaz…",
+      sfx: "Efekti anlat: yağmurda uzaktan gelen gök gürültüsü",
       image: "Görseli anlat: neon İstanbul, gün batımı, sinematik",
       video: "Videoyu anlat: drone ile Boğaz üzerinde gün doğumu",
     },
-    send: { tts: "Seslendir", stt: "Yazıya dök", image: "Görsel üret", video: "Video üret" },
+    send: {
+      tts: "Seslendir",
+      stt: "Yazıya dök",
+      sfx: "Efekt üret",
+      image: "Görsel üret",
+      video: "Video üret",
+    },
     sendHint: "Göndermek için Ctrl + Enter",
     cloneHint: "Ses klonlarını yukarıda yönet; hazır klonlar Ses aracında listelenir.",
     images: (n: string) => `${n} görsel`,
@@ -203,10 +220,19 @@ const tr = {
     countParts: {
       tts: (n: string) => `${n} ses`,
       stt: (n: string) => `${n} yazı`,
+      sfx: (n: string) => `${n} efekt`,
       image: (n: string) => `${n} görsel`,
       video: (n: string) => `${n} video`,
     },
     noItems: "Henüz üretim yok",
+    sfx: {
+      duration: "Süre",
+      auto: "Otomatik süre",
+      seconds: (n: string) => `${n} sn`,
+      loop: "Döngü",
+      loopHint: "Kesintisiz tekrar edecek şekilde üretir (arka plan sesi için).",
+      unavailable: "Ses efekti bu sunucuda şu an kapalı.",
+    },
     stt: {
       pick: "Ses ya da video dosyası seç",
       drop: "ya da buraya sürükle",
@@ -280,6 +306,7 @@ const tr = {
       dropped: (n: string) => `${n} satır kırpılan bölümde kalıyor ve yeni sürüme girmeyecek.`,
       lineLabel: (n: number) => `${n}. altyazı satırı`,
       unchanged: "Kaydetmek için aralığı daralt ya da altyazıyı düzelt.",
+      unchangedTrim: "Kaydetmek için aralığı daralt.",
     },
     merge: {
       title: "Sesleri birleştir",
@@ -419,7 +446,7 @@ const tr = {
       },
       tts: {
         title: "Ses üretimi (ElevenLabs)",
-        desc: "Gerçek seslendirme, MP3 indirme, ses klonlama ve sesten yazıya. Yoksa stüdyo demo kipte çalışır.",
+        desc: "Gerçek seslendirme, MP3 indirme, ses klonlama, sesten yazı ve ses efekti. Yoksa stüdyo demo kipte çalışır (sesten yazı ve ses efekti kapalı).",
         docs: "Ses üretimi (ElevenLabs) kurulumu",
       },
       fal: {
@@ -528,8 +555,8 @@ const tr = {
     sub: "Üretimlerini projelerde topla. Stüdyoda bir proje seçince yeni üretimler oraya kaydedilir.",
     empty: "Henüz proje yok. İlk projeni oluştur.",
     loadError: "Projeler yüklenemedi.",
-    counts: (tts: string, image: string, video: string, stt?: string) =>
-      `${tts} ses · ${image} görsel · ${video} video${stt ? ` · ${stt} yazı` : ""}`,
+    counts: (tts: string, image: string, video: string, stt?: string, sfx?: string) =>
+      `${tts} ses · ${image} görsel · ${video} video${stt ? ` · ${stt} yazı` : ""}${sfx ? ` · ${sfx} efekt` : ""}`,
     updated: (d: string) => `Son etkinlik: ${d}`,
     openStudio: "Stüdyoda aç",
     back: "Tüm projeler",
@@ -566,6 +593,7 @@ const tr = {
       tts: "Metinden Ses",
       clone: "Ses Klonlama",
       stt: "Sesten Yazı",
+      sfx: "Ses Efekti",
       image: "Görsel",
       video: "Video",
     },
@@ -908,7 +936,7 @@ const tr = {
 
   apiDocs: {
     title: "API Belgeleri",
-    sub: "Seslendirme, sesten yazı, görsel ve video üretimini kendi uygulamandan kullan.",
+    sub: "Seslendirme, sesten yazı, ses efekti, görsel ve video üretimini kendi uygulamandan kullan.",
     introTitle: "Başlarken",
     intro:
       "API, stüdyodaki krediler ve fiyatlarla çalışır. Hesabım sayfasından bir API anahtarı oluştur ve her istekte gönder. Yanıtlar JSON'dur.",
@@ -921,6 +949,8 @@ const tr = {
       me: "Kredilerin (ses ve video/görsel) ve USD bakiyen.",
       voices: "Seslendirmede kullanabileceğin hazır sesler ve kendi ses klonların.",
       tts: 'Metni sese çevirir (MP3) ve altyazısını hazırlar. Boşluklar dahil karakter başına 1 Ses AI kredisi. 5.000 karaktere kadar metin hemen döner (201); daha uzunu arka planda seslendirilir ve 202 ile "pending" döner.',
+      soundEffects:
+        "Açıklamadan ses efekti üretir (MP3, 44,1 kHz) ve hemen döner (201). Süre verilirse başlayan her saniye 40, süreyi model seçerse 200 Ses AI kredisi.",
       transcriptions:
         'Ses ya da video dosyasını (multipart/form-data) yazıya döker: metin, dil, SRT/VTT altyazı ve kaydın MP3 sesi. Kaydın her saniyesi 1 Ses AI kredisi; en çok 1 saat, dosya en çok 125 MB. 202 ile "pending" döner; metin yanıttaki transcript alanına gelir.',
       images:
@@ -946,6 +976,9 @@ const tr = {
       language:
         "İsteğe bağlı kayıt dili (ISO 639-1): tr, en, de, fr, es, it, pt, nl, ru, ar, az, ja. Verilmezse algılanır.",
       title: "İsteğe bağlı kayıt adı; verilmezse dosya adı kullanılır.",
+      durationSeconds:
+        "İsteğe bağlı süre, 0,5–30 saniye (ondalık bire yuvarlanır). Verilmezse ya da null ise süreyi model seçer.",
+      loop: "İsteğe bağlı; true ise kesintisiz tekrar edecek şekilde üretilir (varsayılan false).",
     },
     responseTitle: "Örnek yanıt",
     videoFlowTitle: "Video, uzun seslendirme ve yazıya dökme akışı",
@@ -978,6 +1011,7 @@ const tr = {
       "Görsel: 10 dakikada 30 istek.",
       "Video: saatte 10 istek; aynı anda en fazla 3 video.",
       "Sesten yazı: saatte 30 istek; aynı anda en fazla 2 kayıt.",
+      "Ses efekti: 10 dakikada 30 istek.",
       "Sınır aşılınca 429 ve Retry-After (saniye) döner.",
     ],
     creditsTitle: "Krediler",
@@ -1201,6 +1235,7 @@ const en: Dict = {
     costRows: [
       ["Text to speech", "1 character = 1 credit"],
       ["Speech to text (subtitles)", "1 second of recording = 1 credit (60 per minute)"],
+      ["Sound effects", "40 credits per second; 200 credits if the AI picks the length"],
       ["Image generation", "1 credit per image"],
       ["Video generation", "15 credits per video (5 seconds)"],
       ["Voice cloning", "Free, up to 5 voices per account"],
@@ -1290,6 +1325,7 @@ const en: Dict = {
     suggest: {
       tts: "Generate speech",
       stt: "Transcribe a recording",
+      sfx: "Make a sound effect",
       image: "Make a cover image",
       video: "Make a short video",
     },
@@ -1299,7 +1335,13 @@ const en: Dict = {
     downloadSrt: "Subtitles (SRT)",
     downloadVtt: "Subtitles (VTT)",
     downloadTxt: "Text (TXT)",
-    editText: { tts: "Edit text", stt: "Edit text", image: "Edit prompt", video: "Edit prompt" },
+    editText: {
+      tts: "Edit text",
+      stt: "Edit text",
+      sfx: "Edit prompt",
+      image: "Edit prompt",
+      video: "Edit prompt",
+    },
     openEditor: "Open in editor",
     editorUnavailable: "Demo results have no file to edit",
     editTag: { trim: "Trimmed", merge: "Merged", image: "Edited", compose: "Short video" },
@@ -1310,15 +1352,24 @@ const en: Dict = {
     move: "Move",
     more: "More actions",
     tools: "Tool",
-    tool: { tts: "Voice", clone: "Clone", stt: "Transcribe", image: "Image", video: "Video" },
+    tool: {
+      tts: "Voice",
+      clone: "Clone",
+      stt: "Transcribe",
+      sfx: "Sound FX",
+      image: "Image",
+      video: "Video",
+    },
     placeholder: {
       tts: "Type the text you want spoken…",
+      sfx: "Describe the effect: distant thunder in the rain",
       image: "Describe the image: neon Istanbul, sunset, cinematic",
       video: "Describe the video: drone sunrise over the Bosphorus",
     },
     send: {
       tts: "Generate speech",
       stt: "Transcribe file",
+      sfx: "Generate effect",
       image: "Generate image",
       video: "Generate video",
     },
@@ -1333,10 +1384,19 @@ const en: Dict = {
     countParts: {
       tts: (n) => `${n} audio`,
       stt: (n) => `${n} transcripts`,
+      sfx: (n) => `${n} sound effects`,
       image: (n) => `${n} images`,
       video: (n) => `${n} videos`,
     },
     noItems: "No results yet",
+    sfx: {
+      duration: "Length",
+      auto: "Automatic length",
+      seconds: (n) => `${n} s`,
+      loop: "Loop",
+      loopHint: "Generates it to repeat seamlessly (for background sound).",
+      unavailable: "Sound effects are currently off on this server.",
+    },
     stt: {
       pick: "Choose an audio or video file",
       drop: "or drop it here",
@@ -1411,6 +1471,7 @@ const en: Dict = {
       dropped: (n) => `${n} lines fall in the cut part and won't be in the new version.`,
       lineLabel: (n) => `Subtitle line ${n}`,
       unchanged: "Narrow the range or fix the subtitles to save.",
+      unchangedTrim: "Narrow the range to save.",
     },
     merge: {
       title: "Merge audio",
@@ -1550,7 +1611,7 @@ const en: Dict = {
       },
       tts: {
         title: "Speech (ElevenLabs)",
-        desc: "Real speech, MP3 downloads, voice cloning and speech to text. Without it the studio runs in demo mode.",
+        desc: "Real speech, MP3 downloads, voice cloning, speech to text and sound effects. Without it the studio runs in demo mode (speech to text and sound effects are off).",
         docs: "Ses üretimi (ElevenLabs) kurulumu",
       },
       fal: {
@@ -1657,8 +1718,8 @@ const en: Dict = {
     sub: "Group your results into projects. Pick a project in the studio and new results are saved there.",
     empty: "No projects yet. Create your first one.",
     loadError: "Couldn't load your projects.",
-    counts: (tts, image, video, stt) =>
-      `${tts} audio · ${image} images · ${video} videos${stt ? ` · ${stt} transcripts` : ""}`,
+    counts: (tts, image, video, stt, sfx) =>
+      `${tts} audio · ${image} images · ${video} videos${stt ? ` · ${stt} transcripts` : ""}${sfx ? ` · ${sfx} sound effects` : ""}`,
     updated: (d) => `Last activity: ${d}`,
     openStudio: "Open in studio",
     back: "All projects",
@@ -1695,6 +1756,7 @@ const en: Dict = {
       tts: "Text to Speech",
       clone: "Voice Cloning",
       stt: "Speech to Text",
+      sfx: "Sound Effects",
       image: "Image",
       video: "Video",
     },
@@ -2041,7 +2103,7 @@ const en: Dict = {
 
   apiDocs: {
     title: "API Docs",
-    sub: "Use voice, speech to text, image and video generation from your own app.",
+    sub: "Use voice, speech to text, sound effects, image and video generation from your own app.",
     introTitle: "Getting started",
     intro:
       "The API uses the same credits and prices as the Studio. Create an API key on the My Account page and send it with every request. Responses are JSON.",
@@ -2054,6 +2116,8 @@ const en: Dict = {
       me: "Your credits (voice and video/image) and USD balance.",
       voices: "Stock voices and your own voice clones available for speech.",
       tts: 'Turns text into speech (MP3) and prepares its subtitles. 1 Voice AI credit per character, spaces included. Texts up to 5,000 characters return right away (201); longer ones are voiced in the background and return 202 with "pending".',
+      soundEffects:
+        "Generates a sound effect from a description (MP3, 44.1 kHz) and returns right away (201). With a length: 40 Voice AI credits per started second; if the model picks the length: 200.",
       transcriptions:
         'Transcribes an audio or video file (multipart/form-data): text, language, SRT/VTT subtitles and the recording as MP3. 1 Voice AI credit per second of recording; up to 1 hour, files up to 125 MB. Returns 202 with "pending"; the text arrives in the transcript field.',
       images:
@@ -2079,6 +2143,9 @@ const en: Dict = {
       language:
         "Optional recording language (ISO 639-1): tr, en, de, fr, es, it, pt, nl, ru, ar, az, ja. Detected if omitted.",
       title: "Optional name for the recording; the file name is used if omitted.",
+      durationSeconds:
+        "Optional length, 0.5–30 seconds (rounded to one decimal). If omitted or null, the model picks the length.",
+      loop: "Optional; if true, it's generated to repeat seamlessly (default false).",
     },
     responseTitle: "Example response",
     videoFlowTitle: "Video, long speech and transcription flow",
@@ -2111,6 +2178,7 @@ const en: Dict = {
       "Images: 30 requests per 10 minutes.",
       "Video: 10 requests per hour; at most 3 videos at once.",
       "Speech to text: 30 requests per hour; at most 2 recordings at once.",
+      "Sound effects: 30 requests per 10 minutes.",
       "When a limit is hit you get 429 and Retry-After (seconds).",
     ],
     creditsTitle: "Credits",

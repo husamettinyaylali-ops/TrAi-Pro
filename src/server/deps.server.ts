@@ -13,6 +13,7 @@ import {
   type SpeechDeps,
   type VideoDeps,
 } from "./services.server";
+import { sfxProvider, type SfxDeps } from "./sound-effects.server";
 import { sttProvider, type TranscribeDeps } from "./transcribe.server";
 import { cachedVoices, publicVoices, ttsProvider, voiceAllowList } from "./tts.server";
 import { videoProvider } from "./video.server";
@@ -37,6 +38,12 @@ export function speechDeps(): SpeechDeps | null {
         voiceAllowList(),
       ),
   };
+}
+
+/** ElevenLabs bağlıysa ses efekti bağımlılıkları. */
+export function sfxDeps(): SfxDeps | null {
+  const sfx = sfxProvider();
+  return sfx ? { sfx, storage: fileStorage() } : null;
 }
 
 /** ElevenLabs bağlı ve sunucuda ffmpeg varsa sesten yazıya bağımlılıkları. */

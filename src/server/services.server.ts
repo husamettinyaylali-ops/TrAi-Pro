@@ -33,6 +33,7 @@ import {
 import { clock } from "@/lib/clock";
 import { findPackage, signupBonus } from "@/lib/packages";
 import { GENERATION_TITLE_MAX } from "@/lib/projects";
+import { decodeEffect } from "@/lib/sound-effects";
 import {
   isDefaultVoiceSettings,
   normalizeVoiceSettings,
@@ -409,9 +410,10 @@ export const toGeneration = (g: GenerationRow): Generation => ({
   type: g.type,
   text: g.text,
   voiceId: g.voiceId ?? undefined,
-  // Yazıya dökmede "style" sütunu kaydın dilini tutar.
-  style: g.type === "stt" ? undefined : (g.style ?? undefined),
+  // Yazıya dökmede "style" sütunu kaydın dilini, ses efektinde süre ve döngüyü tutar.
+  style: g.type === "stt" || g.type === "sfx" ? undefined : (g.style ?? undefined),
   language: g.type === "stt" ? (g.style ?? undefined) : undefined,
+  effect: g.type === "sfx" ? decodeEffect(g.style) : undefined,
   images: g.images ?? undefined,
   audioUrl: g.audioKey ? `/media/audio/${g.id}` : undefined,
   fileUrls: g.files?.map((_, i) => `/media/file/${g.id}/${i}`),
@@ -1130,6 +1132,9 @@ async function planGeneration(db: Db, userId: string, input: GenerateInput): Pro
         },
       };
     }
+    // Ses efektinin demo sonucu yoktur; servis bağlı değilse istek buraya gelmez.
+    case "sfx":
+      return null;
   }
 }
 

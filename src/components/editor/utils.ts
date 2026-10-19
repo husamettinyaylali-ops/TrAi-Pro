@@ -8,14 +8,15 @@ export const smallBtn =
 
 /**
  * Düzenleyicide açılamayan kaydın nedeni; açılabilirse null. Gerçek dosyası
- * olan seslendirme, yazıya dökülen kayıt ve görsel düzenlenir (demo üretimde
- * dosya yok); video henüz yok.
+ * olan seslendirme, yazıya dökülen kayıt, ses efekti ve görsel düzenlenir
+ * (demo üretimde dosya yok); video henüz yok.
  */
 export function editorBlock(g: Generation): "pending" | "failed" | "demo" | "unsupported" | null {
   if (g.status === "pending") return "pending";
   if (g.status === "failed") return "failed";
   if (g.type === "video") return "unsupported";
-  if (g.type === "tts" || g.type === "stt" ? !g.audioUrl : !g.fileUrls?.length) return "demo";
+  const audio = g.type === "tts" || g.type === "stt" || g.type === "sfx";
+  if (audio ? !g.audioUrl : !g.fileUrls?.length) return "demo";
   return null;
 }
 

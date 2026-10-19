@@ -1,6 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Captions, Film, ImageIcon, Mic } from "lucide-react";
+import { ArrowLeft, AudioWaveform, Captions, Film, ImageIcon, Mic } from "lucide-react";
 
 import { AudioEditor } from "@/components/editor/audio-editor";
 import { ImageEditor } from "@/components/editor/image-editor";
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/editor/$id")({
   component: EditorPage,
 });
 
-const typeIcons = { tts: Mic, stt: Captions, image: ImageIcon, video: Film };
+const typeIcons = { tts: Mic, stt: Captions, sfx: AudioWaveform, image: ImageIcon, video: Film };
 
 function EditorBody() {
   const { t } = useI18n();
@@ -94,7 +94,7 @@ function EditorBody() {
         <Panel>
           <p className="text-center text-muted-foreground">{t.editor.unavailable[block]}</p>
         </Panel>
-      ) : g.type === "tts" || g.type === "stt" ? (
+      ) : g.type === "tts" || g.type === "stt" || g.type === "sfx" ? (
         <AudioEditor key={g.id} g={g} />
       ) : (
         <ImageEditor key={g.id} g={g} />

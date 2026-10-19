@@ -96,9 +96,9 @@ describe("projeler", () => {
 
     const list = await listProjects(db, a);
     expect(list.map((p) => p.name)).toEqual(["Eski", "Yeni"]);
-    expect(list[0]!.counts).toEqual({ tts: 1, stt: 0, image: 0, video: 0 });
+    expect(list[0]!.counts).toEqual({ tts: 1, stt: 0, sfx: 0, image: 0, video: 0 });
     expect(list[0]!.updatedAt).toBe(at(5).toISOString());
-    expect(list[1]!.counts).toEqual({ tts: 0, stt: 0, image: 0, video: 0 });
+    expect(list[1]!.counts).toEqual({ tts: 0, stt: 0, sfx: 0, image: 0, video: 0 });
     expect((await getProject(db, a, second.id))?.counts.tts).toBe(0);
 
     const inProject = await listGenerations(db, a, { projectId: first.id });

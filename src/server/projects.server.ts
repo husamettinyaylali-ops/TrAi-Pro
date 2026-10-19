@@ -11,7 +11,13 @@ import { generations, projects } from "./schema.server";
 type Result<T, E extends string> = ({ ok: true } & T) | { ok: false; error: E };
 type ProjectRow = typeof projects.$inferSelect;
 
-const noCounts = (): Record<GenerationType, number> => ({ tts: 0, stt: 0, image: 0, video: 0 });
+const noCounts = (): Record<GenerationType, number> => ({
+  tts: 0,
+  stt: 0,
+  sfx: 0,
+  image: 0,
+  video: 0,
+});
 
 const toProject = (
   { userId: _u, ...p }: ProjectRow,
